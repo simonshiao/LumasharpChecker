@@ -1,0 +1,22 @@
+# Visual Studio and .NET build output
+.vs/
+**/bin/
+**/obj/
+*.user
+*.suo
+
+# Python bytecode and local virtual environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Machine-local settings and user profiles
+/config.json
+/app-settings.json
+/profile/*
+!/profile/.gitkeep
+/recipes/
+
+# Runtime logs
+*.log

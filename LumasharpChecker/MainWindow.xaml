@@ -1,0 +1,743 @@
+<Window x:Class="LumasharpChecker.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+        xmlns:vm="clr-namespace:LumasharpChecker.viewmodel"
+        mc:Ignorable="d"
+        Title="LumasharpChecker" Height="860" Width="1240"
+        MinHeight="660" MinWidth="1040"
+        FontFamily="Microsoft JhengHei UI"
+        FontSize="13"
+        Foreground="{DynamicResource Text}"
+        Background="{DynamicResource Bg}">
+
+    <Window.Resources>
+        <vm:PathToImageConverter x:Key="ImageConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+        <!-- Shared visual tokens from ChaoMcpHub's Apple-inspired design system. -->
+        <SolidColorBrush x:Key="Bg" Color="#F5F5F7"/>
+        <SolidColorBrush x:Key="Surface" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SurfaceSubtle" Color="#F8F8FA"/>
+        <SolidColorBrush x:Key="Line" Color="#D9D9DE"/>
+        <SolidColorBrush x:Key="Text" Color="#1D1D1F"/>
+        <SolidColorBrush x:Key="Muted" Color="#6E6E73"/>
+        <SolidColorBrush x:Key="Blue" Color="#007AFF"/>
+        <SolidColorBrush x:Key="BlueSoft" Color="#E8F2FF"/>
+        <SolidColorBrush x:Key="Green" Color="#34C759"/>
+        <SolidColorBrush x:Key="Orange" Color="#FF9F0A"/>
+        <SolidColorBrush x:Key="Red" Color="#FF3B30"/>
+        <DropShadowEffect x:Key="CardShadow" Color="#301D1D1F" Direction="270" ShadowDepth="3" BlurRadius="18" Opacity="0.08"/>
+        <Style TargetType="GroupBox">
+            <Setter Property="Margin" Value="0,0,0,14"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="GroupBox">
+                        <Border Background="{StaticResource Surface}"
+                                BorderBrush="{StaticResource Line}"
+                                BorderThickness="1"
+                                CornerRadius="16"
+                                Padding="16"
+                                Effect="{StaticResource CardShadow}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <ContentPresenter ContentSource="Header"
+                                                  Margin="0,0,0,13"
+                                                  RecognizesAccessKey="True"
+                                                  TextElement.FontSize="15"
+                                                  TextElement.FontWeight="SemiBold"
+                                                  TextElement.Foreground="{StaticResource Text}"/>
+                                <ContentPresenter Grid.Row="1"
+                                                  ContentSource="Content"
+                                                  Margin="{TemplateBinding Padding}"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="FontFamily" Value="Microsoft JhengHei UI"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="Padding" Value="11,8"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="InputChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                SnapsToDevicePixels="True"
+                                TextElement.Foreground="{TemplateBinding Foreground}"
+                                TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                TextElement.FontSize="{TemplateBinding FontSize}">
+                            <ScrollViewer x:Name="PART_ContentHost"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="InputChrome" Property="BorderBrush" Value="{StaticResource Blue}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="InputChrome" Property="Opacity" Value="0.55"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="FontFamily" Value="Microsoft JhengHei UI"/>
+            <Setter Property="Height" Value="38"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="FontFamily" Value="Microsoft JhengHei UI"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Padding" Value="14,8"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                              RecognizesAccessKey="True"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="#FFF1F1F5"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#FFC9C9D0"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.76"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="ButtonBorder" Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="DestructiveButtonStyle" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style TargetType="ToggleButton">
+            <Setter Property="Height" Value="36"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Background" Value="{StaticResource Surface}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+            <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border x:Name="ToggleBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1"
+                                CornerRadius="17">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="{StaticResource BlueSoft}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="ToggleBorder" Property="Background" Value="{StaticResource BlueSoft}"/>
+                                <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource Blue}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Muted}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Margin" Value="0,0,0,5"/>
+        </Style>
+        <Style x:Key="ReadOnlyValue" TargetType="TextBlock">
+            <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
+            <Setter Property="Padding" Value="10,7"/>
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+        <Style x:Key="ResultValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Setter Property="Margin" Value="0,3,0,0"/>
+            <Setter Property="FontSize" Value="13"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Background="{StaticResource Bg}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Background="{StaticResource Bg}" Padding="22,20,22,16">
+            <DockPanel LastChildFill="True">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="光衰與影像品質檢測"
+                               Foreground="{StaticResource Text}"
+                               FontSize="28"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="設定檢測基準、檢視影像區域，並執行單張或批次檢測。"
+                               Foreground="{StaticResource Muted}"
+                               FontSize="12"
+                               Margin="1,6,0,0"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding SaveSettingsMessage}"
+                               Foreground="{StaticResource Muted}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Margin="0,0,52,0"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <ToggleButton Grid.RowSpan="2"
+                      Panel.ZIndex="30"
+                      Content="&#xE713;"
+                      IsChecked="{Binding IsSettingsPanelOpen, Mode=TwoWay}"
+                      Width="34"
+                      HorizontalAlignment="Right"
+                      VerticalAlignment="Top"
+                      Margin="0,8,12,0"
+                      FontFamily="Segoe MDL2 Assets"
+                      ToolTip="設定"
+                      Foreground="{StaticResource Blue}"/>
+
+        <Border Grid.RowSpan="2"
+                Panel.ZIndex="20"
+                Width="360"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                Margin="0,48,12,0"
+                Background="White"
+                BorderBrush="{StaticResource Line}"
+                BorderThickness="1"
+                CornerRadius="16"
+                Padding="14"
+                Effect="{StaticResource CardShadow}"
+                Visibility="{Binding IsSettingsPanelOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TabControl FlowDirection="RightToLeft">
+                <TabItem Header="檢測">
+                    <StackPanel Margin="10" FlowDirection="LeftToRight">
+                        <TextBlock Text="檢測項目" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox ItemsSource="{Binding InspectionModeItems}"
+                                  SelectedItem="{Binding DetectionMode, Mode=TwoWay}"
+                                  Margin="0,0,0,10"/>
+                        <TextBlock Text="亮度模式只判定亮度，不計算銳利度與紅色 ROI。"
+                                   Foreground="{StaticResource Muted}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </TabItem>
+                <TabItem Header="顯示">
+                    <StackPanel Margin="10" FlowDirection="LeftToRight">
+                        <CheckBox Content="顯示右側 ROI 資訊"
+                                  IsChecked="{Binding ShowRoiPanel, Mode=TwoWay}"
+                                  Margin="0,2,0,10"/>
+                        <TextBlock Text="全部結果縮圖" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox ItemsSource="{Binding BatchPreviewModeItems}"
+                                  SelectedItem="{Binding BatchPreviewMode, Mode=TwoWay}"/>
+                    </StackPanel>
+                </TabItem>
+                <TabItem Header="站別">
+                    <StackPanel Margin="10" FlowDirection="LeftToRight">
+                        <TextBlock Text="目前站數" Style="{StaticResource FieldLabel}"/>
+                        <ComboBox ItemsSource="{Binding StationCountOptions}"
+                                  SelectedItem="{Binding StationCount, Mode=TwoWay}"
+                                  Margin="0,0,0,10"/>
+                        <TextBlock Text="Recipe 會保存站數與各站設定。由 10 站切回 8 站時，第 9、10 站資料會保留，之後可再切回使用。"
+                                   Foreground="{StaticResource Muted}"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </TabItem>
+            </TabControl>
+        </Border>
+
+        <Grid Grid.Row="1" Margin="22,0,22,20">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="292"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="326"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <GroupBox Header="Recipe / 站別">
+                        <StackPanel Margin="0">
+                            <ComboBox ItemsSource="{Binding Recipes}"
+                                      DisplayMemberPath="Name"
+                                      SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}"
+                                      ToolTip="選取要載入的多站 Recipe">
+                                <i:Interaction.Triggers>
+                                    <i:EventTrigger EventName="SelectionChanged">
+                                        <i:InvokeCommandAction Command="{Binding LoadSelectedRecipeCommand}"/>
+                                    </i:EventTrigger>
+                                </i:Interaction.Triggers>
+                            </ComboBox>
+                            <Grid Margin="0,8,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Command="{Binding CreateRecipeCommand}" Content="新增 Recipe" Padding="5,6"/>
+                                <Button Grid.Column="2" Command="{Binding DeleteRecipeCommand}" Content="刪除 Recipe" Padding="5,6" Style="{StaticResource DestructiveButtonStyle}"/>
+                                <Button Grid.Column="4" Command="{Binding CloseRecipeCommand}" Content="關閉 Recipe" Padding="5,6" IsEnabled="{Binding IsRecipeActive}"/>
+                            </Grid>
+                            <TextBlock Text="{Binding CurrentInspectionName}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,4"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock Text="{Binding StationStatusMessage}"
+                                       Foreground="{StaticResource Muted}"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Margin="0,0,0,8"/>
+                            <ItemsControl ItemsSource="{Binding StationSlots}"
+                                          Visibility="{Binding IsRecipeActive, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Button Content="{Binding ButtonText}"
+                                                Width="58"
+                                                MinHeight="32"
+                                                Margin="0,0,5,5"
+                                                Padding="3"
+                                                Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding Number}"
+                                                ToolTip="按站別切換；✓ 代表已有設定，+ 代表尚未設定">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="設定檔">
+                        <StackPanel Margin="0">
+                            <ComboBox ItemsSource="{Binding Items}"
+                                      DisplayMemberPath="Name"
+                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
+                                <i:Interaction.Triggers>
+                                    <i:EventTrigger EventName="SelectionChanged">
+                                        <i:InvokeCommandAction Command="{Binding SelectionChangedCommand}"/>
+                                    </i:EventTrigger>
+                                </i:Interaction.Triggers>
+                            </ComboBox>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                    <Button Command="{Binding AddNewProfileCommand}"
+                                        Content="建立新設定檔"/>
+                                <Button Grid.Column="2"
+                                        Command="{Binding DeleteSelectedProfileCommand}"
+                                        Style="{StaticResource DestructiveButtonStyle}"
+                                        Content="刪除設定檔"/>
+                            </Grid>
+                            <Button Command="{Binding ApplyLibraryProfileToStationCommand}"
+                                    Content="套用所選設定檔至本站"
+                                    Margin="0,8,0,0"
+                                    Visibility="{Binding IsRecipeActive, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                    IsEnabled="{Binding CanApplyLibraryProfileToStation}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="亮度規格">
+                        <StackPanel Margin="0">
+                            <TextBlock Text="判定方式" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox ItemsSource="{Binding LimitModeItems}"
+                                      SelectedItem="{Binding BrightnessLimitMode, Mode=TwoWay}"
+                                      Margin="0,0,0,8"/>
+                            <TextBlock Text="基準值 / 標準差" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Style="{StaticResource ReadOnlyValue}" Margin="0,0,0,8">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} / σ {1:F2}">
+                                        <Binding Path="BrightnessBaseValue"/>
+                                        <Binding Path="CurrentProfile.BrightnessSigma"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <Grid Margin="0,0,0,8"
+                                  Visibility="{Binding IsBrightnessPercentMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="下限偏差 %" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding BrightnessPercentLower, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="上限偏差 %" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding BrightnessPercentUpper, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"/>
+                                </StackPanel>
+                            </Grid>
+                            <Grid Margin="0,0,0,8"
+                                  Visibility="{Binding IsBrightnessFixedMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="8"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="固定下限" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding BrightnessFixedMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="固定上限" Style="{StaticResource FieldLabel}"/>
+                                    <TextBox Text="{Binding BrightnessFixedMax, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"/>
+                                </StackPanel>
+                            </Grid>
+                            <TextBlock Style="{StaticResource ReadOnlyValue}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="有效範圍: {0:F2} ~ {1:F2}">
+                                        <Binding Path="EffectiveBrightnessMin"/>
+                                        <Binding Path="EffectiveBrightnessMax"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="銳利度規格"
+                              Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Margin="0">
+                            <TextBlock Text="判定方式" Style="{StaticResource FieldLabel}"/>
+                            <ComboBox ItemsSource="{Binding LimitModeItems}"
+                                      SelectedItem="{Binding SharpnessLimitMode, Mode=TwoWay}"
+                                      Margin="0,0,0,8"/>
+                            <TextBlock Text="基準值 / 標準差" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Style="{StaticResource ReadOnlyValue}" Margin="0,0,0,8">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} / σ {1:F2}">
+                                        <Binding Path="SharpnessBaseValue"/>
+                                        <Binding Path="CurrentProfile.SharpnessSigma"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <StackPanel Visibility="{Binding IsSharpnessPercentMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="下限偏差 %" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding SharpnessPercentLower, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"
+                                         Margin="0,0,0,8"/>
+                            </StackPanel>
+                            <StackPanel Visibility="{Binding IsSharpnessFixedMode, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock Text="固定下限" Style="{StaticResource FieldLabel}"/>
+                                <TextBox Text="{Binding SharpnessFixedMin, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F2}"
+                                         Margin="0,0,0,8"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding EffectiveSharpnessMin, StringFormat='有效下限: {0:F2}'}"
+                                       Style="{StaticResource ReadOnlyValue}"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <Button Command="{Binding SaveInspectionSettingsCommand}"
+                            Content="儲存檢測設定"
+                            Margin="0,0,0,8"/>
+                </StackPanel>
+            </ScrollViewer>
+
+            <Grid Grid.Column="1" Margin="12,0">
+                <Border Background="{StaticResource Surface}"
+                        BorderBrush="{StaticResource Line}"
+                        BorderThickness="1"
+                        CornerRadius="16"
+                        Padding="8"
+                        Effect="{StaticResource CardShadow}">
+                    <Viewbox Stretch="Uniform">
+                        <Grid>
+                            <Image Source="{Binding DisplayImage}" Stretch="None"/>
+                            <Canvas>
+                                <Rectangle Stroke="#FF43A047"
+                                           StrokeThickness="{Binding StrokeThickness}"
+                                           Width="{Binding RectWidth}"
+                                           Height="{Binding RectHeight}"
+                                           Canvas.Left="{Binding RectX}"
+                                           Canvas.Top="{Binding RectY}"/>
+                                <Rectangle Stroke="#FF039BE5"
+                                           StrokeThickness="{Binding StrokeThickness2}"
+                                           Width="{Binding RectWidth2}"
+                                           Height="{Binding RectHeight2}"
+                                           Canvas.Left="{Binding RectX2}"
+                                           Canvas.Top="{Binding RectY2}"/>
+                                <Rectangle Stroke="#FFE53935"
+                                           Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                           StrokeThickness="{Binding StrokeThickness3}"
+                                           Width="{Binding RectWidth3}"
+                                           Height="{Binding RectHeight3}"
+                                           Canvas.Left="{Binding RectX3}"
+                                           Canvas.Top="{Binding RectY3}"/>
+                            </Canvas>
+                        </Grid>
+                    </Viewbox>
+                </Border>
+            </Grid>
+
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <StackPanel>
+                    <GroupBox Header="ROI"
+                              Visibility="{Binding IsRoiPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <StackPanel Margin="0">
+                            <TextBlock Text="定位框（綠色）" Style="{StaticResource FieldLabel}"/>
+                            <TextBlock Style="{StaticResource ResultValue}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                                        <Binding Path="CurrentProfile.PatternMatchRoiX"/>
+                                        <Binding Path="CurrentProfile.PatternMatchRoiY"/>
+                                        <Binding Path="CurrentProfile.PatternMatchRoiW"/>
+                                        <Binding Path="CurrentProfile.PatternMatchRoiH"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <TextBlock Text="亮度檢測框（藍色）" Style="{StaticResource FieldLabel}" Margin="0,8,0,3"/>
+                            <TextBlock Style="{StaticResource ResultValue}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiX"/>
+                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiY"/>
+                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiW"/>
+                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiH"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <TextBlock Text="銳利度檢測框（紅色）"
+                                       Style="{StaticResource FieldLabel}"
+                                       Margin="0,8,0,3"
+                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Style="{StaticResource ResultValue}"
+                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiX"/>
+                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiY"/>
+                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiW"/>
+                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiH"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <TextBlock Text="圖片尺寸" Style="{StaticResource FieldLabel}" Margin="0,8,0,3"/>
+                            <TextBlock Style="{StaticResource ResultValue}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="W: {0:F0} H: {1:F0} px">
+                                        <Binding Path="CurrentProfile.ImageWidth"/>
+                                        <Binding Path="CurrentProfile.ImageHeight"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="基準摘要">
+                        <StackPanel Margin="0">
+                            <TextBlock Text="{Binding DetectionMode, StringFormat='檢測模式: {0}'}" Style="{StaticResource ResultValue}"/>
+                            <TextBlock Text="{Binding ImageSizeSummary}" Style="{StaticResource ResultValue}"/>
+                            <TextBlock Style="{StaticResource ResultValue}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="亮度平均 / σ: {0:F2} / {1:F2}">
+                                        <Binding Path="CurrentProfile.BrightnessMean"/>
+                                        <Binding Path="CurrentProfile.BrightnessSigma"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <TextBlock Text="{Binding BrightnessCvSummary}" Style="{StaticResource ResultValue}"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,6,0,2">
+                                <TextBlock Text="百分位數"
+                                           Style="{StaticResource FieldLabel}"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,0"/>
+                                <ComboBox ItemsSource="{Binding BaselinePercentileItems}"
+                                          SelectedItem="{Binding SelectedBaselinePercentile, Mode=TwoWay}"
+                                          Width="78"/>
+                            </StackPanel>
+                            <TextBlock Text="{Binding BrightnessPercentileSummary}" Style="{StaticResource ResultValue}"/>
+                            <TextBlock Text="{Binding BrightnessRoiAreaSummary}" Style="{StaticResource ResultValue}"/>
+                            <TextBlock Text="{Binding CurrentProfile.SharpnessMean, StringFormat='銳利度平均: {0:F2}'}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding CurrentProfile.SharpnessSigma, StringFormat='銳利度 σ: {0:F2}'}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding SharpnessCvSummary}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding SharpnessPercentileSummary}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding SharpnessRoiAreaSummary}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding CurrentProfile.ModifyDateTime, StringFormat='編輯時間: {0}'}" Style="{StaticResource ResultValue}" Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+
+                    <GroupBox Header="測試圖片">
+                        <StackPanel Margin="0">
+                            <Button Command="{Binding TestImageCommand}" Content="載入資料夾批次測試"/>
+                            <Button Command="{Binding TestSingleImageCommand}"
+                                    Content="載入單張圖片測試"
+                                    Margin="0,6,0,0"/>
+                            <Button Command="{Binding ExportTestImagesCommand}"
+                                    Content="匯出 Excel 報表"
+                                    Margin="0,6,0,0"/>
+                            <Button Command="{Binding ShowTestImageResultsCommand}"
+                                    Content="檢視全部結果"
+                                    Margin="0,6,0,0"/>
+                            <Border Background="{StaticResource SurfaceSubtle}"
+                                    BorderBrush="{StaticResource Line}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="8"
+                                    Margin="0,8,0,0"
+                                    Visibility="{Binding IsAnalyzingTestImages, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel>
+                                    <TextBlock Text="{Binding AnalysisProgressText}"
+                                               Style="{StaticResource ResultValue}"
+                                               TextWrapping="Wrap"/>
+                                    <ProgressBar Minimum="0"
+                                                 Maximum="{Binding AnalysisProgressMaximum}"
+                                                 Value="{Binding AnalysisProgressValue}"
+                                                 Height="8"
+                                                 Margin="0,6,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <TextBlock Text="{Binding TestImageInfo}" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                            <Border Background="{StaticResource SurfaceSubtle}"
+                                    BorderBrush="{StaticResource Line}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="8"
+                                    Margin="0,0,0,8">
+                                <StackPanel>
+                                    <TextBlock Text="總結果" FontWeight="SemiBold" Foreground="{StaticResource Text}" Margin="0,0,0,4"/>
+                                    <TextBlock Style="{StaticResource ResultValue}">
+                                        <TextBlock.Text>
+                                            <MultiBinding StringFormat="總判定 OK / NG: {0} / {1}">
+                                                <Binding Path="OverallOkCount"/>
+                                                <Binding Path="OverallNgCount"/>
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                </StackPanel>
+                            </Border>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                <Button Command="{Binding PreviousTestImageCommand}"
+                                        Content="上一張"
+                                        IsEnabled="{Binding CanNavigatePrevious}"
+                                        Width="84"
+                                        Margin="2"/>
+                                <Button Command="{Binding NextTestImageCommand}"
+                                        Content="下一張"
+                                        IsEnabled="{Binding CanNavigateNext}"
+                                        Width="84"
+                                        Margin="2"/>
+                            </StackPanel>
+                            <Separator Margin="0,8"/>
+                            <TextBlock Style="{StaticResource ResultValue}">
+                                <Run Text="亮度: "/>
+                                <Run Text="{Binding TestImageBrightness, StringFormat={}{0:F2}}" Foreground="{Binding BrightnessColor}"/>
+                                <Run Text=" ("/>
+                                <Run Text="{Binding TestImageBrightnessDeltaPercentText, Mode=OneWay}" Foreground="{Binding BrightnessColor}"/>
+                                <Run Text=")"/>
+                            </TextBlock>
+                            <TextBlock Style="{StaticResource ResultValue}"
+                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <Run Text="銳利度: "/>
+                                <Run Text="{Binding TestImageSharpness, StringFormat={}{0:F2}}" Foreground="{Binding SharpnessColor}"/>
+                            </TextBlock>
+                            <TextBlock Text="亮度檢測 ROI（藍色）" Style="{StaticResource FieldLabel}" Margin="0,8,0,3"/>
+                            <TextBlock Style="{StaticResource ResultValue}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                                        <Binding Path="TestImageBrightnessROI.X"/>
+                                        <Binding Path="TestImageBrightnessROI.Y"/>
+                                        <Binding Path="TestImageBrightnessROI.Width"/>
+                                        <Binding Path="TestImageBrightnessROI.Height"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <TextBlock Text="銳利度檢測 ROI（紅色）"
+                                       Style="{StaticResource FieldLabel}"
+                                       Margin="0,8,0,3"
+                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Style="{StaticResource ResultValue}"
+                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                                        <Binding Path="TestImageSharpnessROI.X"/>
+                                        <Binding Path="TestImageSharpnessROI.Y"/>
+                                        <Binding Path="TestImageSharpnessROI.Width"/>
+                                        <Binding Path="TestImageSharpnessROI.Height"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                            <TextBlock Text="{Binding TestImageMatchFailed}"
+                                       Foreground="Red"
+                                       FontWeight="Bold"
+                                       TextWrapping="Wrap"
+                                       Margin="0,8,0,0"/>
+                        </StackPanel>
+                    </GroupBox>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+    </Grid>
+</Window>

@@ -1,0 +1,261 @@
+<Window x:Class="LumasharpChecker.view.StatisticResultWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:LumasharpChecker.view"
+        mc:Ignorable="d"
+        Title="StatisticResultWindow" Height="600" Width="900">
+    <!--<Window.Resources>
+        <local:InverseBooleanConverter x:Key="InverseBooleanConverter" />
+    </Window.Resources>-->
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="9*"/>
+            <RowDefinition Height="1*"/>
+        </Grid.RowDefinitions>
+        <Button Grid.Row="1" Content="Close" Click="Button_Click" ></Button>
+        <TabControl Grid.RowSpan="1">
+            <TabItem Header="亮度">
+                <Grid Background="#FFE5E5E5">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="9*"/>
+                        <RowDefinition Height="1*"/>
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="7*"/>
+                        <ColumnDefinition Width="3*"/>
+                    </Grid.ColumnDefinitions>
+                    <lvc:CartesianChart 
+                        Series="{Binding S1}"
+                        Sections="{Binding Se1}"
+                        ZoomMode="Y">
+
+                    </lvc:CartesianChart>
+                    <StackPanel Grid.Column="1" Margin="3,3,3,3" Grid.RowSpan="2">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="處理圖片數量:"/>
+                            <TextBlock Grid.Column="1" Text="{Binding AnalysisResult.BrightnessValues.Count, Mode=OneWay}"/>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="信賴區間:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Brightness.Bootstrap.Lower" />
+                                        <Binding Path="AnalysisResult.Brightness.Bootstrap.Upper" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="百分位數範圍:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Brightness.Percentile.Lower" />
+                                        <Binding Path="AnalysisResult.Brightness.Percentile.Upper" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="IQR範圍:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Brightness.IQR.Lower" />
+                                        <Binding Path="AnalysisResult.Brightness.IQR.Upper" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="全距:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Brightness.Min" />
+                                        <Binding Path="AnalysisResult.Brightness.Max" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="平均值 / 標準差:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} / {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Brightness.Mean"/>
+                                        <Binding Path="AnalysisResult.Brightness.Sigma"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="±3σ範圍:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Brightness.ThreeSigmaLower"/>
+                                        <Binding Path="AnalysisResult.Brightness.ThreeSigmaUpper"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <!--<GroupBox Header="閥值設定範圍" Margin="0,10,0,5">
+                            <StackPanel>
+                                <RadioButton Content="使用最大/最小值" IsChecked="{Binding UseMaxMinRange, Mode=TwoWay}" />
+                                <RadioButton Content="使用 ±3σ 範圍" IsChecked="{Binding UseMaxMinRange, Mode=TwoWay, Converter={StaticResource InverseBooleanConverter}}" />
+                            </StackPanel>
+                        </GroupBox>-->
+                    </StackPanel>
+                </Grid>
+
+            </TabItem>
+            <TabItem Header="銳利度(焦距)">
+                <Grid Background="#FFE5E5E5">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="21*"/>
+                        <ColumnDefinition Width="605*"/>
+                        <ColumnDefinition Width="268*"/>
+                    </Grid.ColumnDefinitions>
+                    <lvc:CartesianChart
+                        Series="{Binding S2}"
+                        Sections="{Binding Se}"
+                        ZoomMode="Y" Grid.ColumnSpan="3" Margin="0,0,268,0">
+                    </lvc:CartesianChart>
+                    <StackPanel Grid.Column="2" Margin="3,3,3,3">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="處理圖片數量:"/>
+                            <TextBlock Grid.Column="1" Text="{Binding AnalysisResult.SharpnessValues.Count, Mode=OneWay}"/>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="信賴區間:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Sharpness.Bootstrap.Lower" />
+                                        <Binding Path="AnalysisResult.Sharpness.Bootstrap.Upper" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="百分位數範圍:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Sharpness.Percentile.Lower" />
+                                        <Binding Path="AnalysisResult.Sharpness.Percentile.Upper" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="IQR範圍:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Sharpness.IQR.Lower" />
+                                        <Binding Path="AnalysisResult.Sharpness.IQR.Upper" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="全距:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Sharpness.Min" />
+                                        <Binding Path="AnalysisResult.Sharpness.Max" />
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="平均值 / 標準差:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} / {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Sharpness.Mean"/>
+                                        <Binding Path="AnalysisResult.Sharpness.Sigma"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="±3σ範圍:"/>
+                            <TextBlock Grid.Column="1">
+                                <TextBlock.Text>
+                                    <MultiBinding StringFormat="{}{0:F2} ~ {1:F2}" Mode="OneWay">
+                                        <Binding Path="AnalysisResult.Sharpness.ThreeSigmaLower"/>
+                                        <Binding Path="AnalysisResult.Sharpness.ThreeSigmaUpper"/>
+                                    </MultiBinding>
+                                </TextBlock.Text>
+                            </TextBlock>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </TabItem>
+        </TabControl>
+    </Grid>
+</Window>

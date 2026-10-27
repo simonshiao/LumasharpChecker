@@ -7,6 +7,7 @@
 - `LumasharpChecker/`：WPF 應用程式原始碼、圖示及空白 LiteDB 初始資料庫。專案檔會將 `Resources/Mydata.db` 複製到建置輸出，因此此資源需保留在版本庫。
 - `lumasharp_cognex_analyzer_ux_roi_export.py`：PySide6 / pandas 工具原始碼。
 - `USER_GUIDE.md`：WPF 應用程式操作說明。
+- `HANDOFF.md`：目前實作狀態、建置方式與待完成驗收清單。
 - `config.json`、`app-settings.json`、`profile/` 與 `recipes/`：執行時的本機設定、使用者設定檔及多站 Recipe，不納入 Git。
 
 ## 多站 Recipe
@@ -42,4 +43,3 @@ python .\lumasharp_cognex_analyzer_ux_roi_export.py
 ## Git 注意事項
 
 本機 `config.json`、`profile/`、`.vs/`、`bin/`、`obj/` 和 Python 快取都已排除。首次提交前，請確認 Git 使用者姓名與信箱已正確設定，並檢視 `git status` 中的檔案。
-
