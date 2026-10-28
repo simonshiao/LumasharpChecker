@@ -208,6 +208,14 @@
             <Setter Property="Margin" Value="0,3,0,0"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
+        <Style x:Key="TestActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="48"/>
+            <Setter Property="MinHeight" Value="0"/>
+            <Setter Property="Padding" Value="4,3"/>
+            <Setter Property="Margin" Value="3"/>
+            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
+            <Setter Property="FontSize" Value="16"/>
+        </Style>
     </Window.Resources>
 
     <Grid Background="{StaticResource Bg}">
@@ -399,6 +407,7 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Border Background="{StaticResource Surface}"
                         BorderBrush="{StaticResource Line}"
@@ -507,6 +516,29 @@
                         </ItemsControl>
                     </StackPanel>
                 </Border>
+                <Border Grid.Row="2" Margin="0,8,0,0" Padding="8,6"
+                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                        BorderThickness="1" CornerRadius="14">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Button Command="{Binding PreviousTestImageCommand}"
+                                Content="&#xE892;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                Width="42" Height="36" MinHeight="0" Padding="0" Margin="2"
+                                IsEnabled="{Binding CanNavigatePrevious}" ToolTip="上一張圖片"/>
+                        <Button x:Name="TestImageCountButton"
+                                Click="OpenTestImagePicker_Click"
+                                Padding="12,6" Margin="4,2"
+                                ToolTip="選擇圖片；目前只切換預覽，不會執行檢測">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding TestImageInfo}" FontWeight="SemiBold"/>
+                                <TextBlock Text=" &#xE70D;" FontFamily="Segoe MDL2 Assets" Margin="5,0,0,0"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Command="{Binding NextTestImageCommand}"
+                                Content="&#xE893;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                Width="42" Height="36" MinHeight="0" Padding="0" Margin="2"
+                                IsEnabled="{Binding CanNavigateNext}" ToolTip="下一張圖片"/>
+                    </StackPanel>
+                </Border>
             </Grid>
 
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
@@ -517,16 +549,80 @@
 
                     <GroupBox Header="測試圖片">
                         <StackPanel Margin="0">
-                            <Button Command="{Binding TestImageCommand}" Content="載入資料夾批次測試"/>
-                            <Button Command="{Binding TestSingleImageCommand}"
-                                    Content="載入單張圖片測試"
-                                    Margin="0,6,0,0"/>
-                            <Button Command="{Binding ExportTestImagesCommand}"
-                                    Content="匯出 Excel 報表"
-                                    Margin="0,6,0,0"/>
-                            <Button Command="{Binding ShowTestImageResultsCommand}"
-                                    Content="檢視全部結果"
-                                    Margin="0,6,0,0"/>
+                            <UniformGrid Columns="2" HorizontalAlignment="Stretch">
+                                <Button Style="{StaticResource TestActionButton}"
+                                        Command="{Binding TestImageCommand}"
+                                        ToolTip="只載入資料夾清單與預覽，不執行測試"
+                                        AutomationProperties.Name="選擇資料夾">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
+                                            <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
+                                                  Fill="#E8F2FF" Stroke="#007AFF" StrokeThickness="1.5"/>
+                                        </Viewbox>
+                                        <TextBlock Text="選擇資料夾" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource TestActionButton}"
+                                        Command="{Binding StartContinuousTestCommand}"
+                                        ToolTip="開始連續測試清單中的所有圖片"
+                                        AutomationProperties.Name="連續測試">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
+                                            <Grid Width="24" Height="24">
+                                                <Ellipse Stroke="#34C759" StrokeThickness="2.5"/>
+                                                <Path Data="M9,6 L18,12 L9,18 Z" Fill="#34C759"/>
+                                            </Grid>
+                                        </Viewbox>
+                                        <TextBlock Text="連續測試" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource TestActionButton}"
+                                        Command="{Binding TestSingleImageCommand}"
+                                        ToolTip="選擇並測試單張圖片"
+                                        AutomationProperties.Name="單張測試">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
+                                            <Grid Width="24" Height="20">
+                                                <Border BorderBrush="#007AFF" BorderThickness="1.7" CornerRadius="2"/>
+                                                <Ellipse Width="3.5" Height="3.5" Fill="#007AFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,3,0,0"/>
+                                                <Path Data="M3,17 L9,10 L13,14 L17,8 L22,17 Z" Fill="#B9D8FF" Stroke="#007AFF" StrokeThickness="1.2"/>
+                                            </Grid>
+                                        </Viewbox>
+                                        <TextBlock Text="單張測試" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource TestActionButton}"
+                                        Command="{Binding ExportTestImagesCommand}"
+                                        ToolTip="匯出 Excel 檢測報表"
+                                        AutomationProperties.Name="匯出 Excel 報表">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
+                                            <Grid Width="20" Height="22">
+                                                <Path Data="M3,1 L13,1 L18,6 L18,21 L3,21 Z M13,1 L13,6 L18,6"
+                                                      Fill="#F8F8FA" Stroke="#6E6E73" StrokeThickness="1.4"/>
+                                                <Path Data="M10,7 L10,15 M7,12 L10,15 L13,12"
+                                                      Stroke="#007AFF" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                                            </Grid>
+                                        </Viewbox>
+                                        <TextBlock Text="匯出報表" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                                <Button Style="{StaticResource TestActionButton}"
+                                        Command="{Binding ShowTestImageResultsCommand}"
+                                        ToolTip="檢視全部檢測結果"
+                                        AutomationProperties.Name="檢視全部結果">
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
+                                            <StackPanel Width="22" VerticalAlignment="Center">
+                                                <Border Height="2" Background="#007AFF" Margin="0,2"/>
+                                                <Border Height="2" Background="#6E6E73" Margin="0,2"/>
+                                                <Border Height="2" Background="#6E6E73" Margin="0,2"/>
+                                            </StackPanel>
+                                        </Viewbox>
+                                        <TextBlock Text="檢視結果" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </Button>
+                            </UniformGrid>
                             <Border Background="{StaticResource SurfaceSubtle}"
                                     BorderBrush="{StaticResource Line}"
                                     BorderThickness="1"
@@ -545,7 +641,6 @@
                                                  Margin="0,6,0,0"/>
                                 </StackPanel>
                             </Border>
-                            <TextBlock Text="{Binding TestImageInfo}" HorizontalAlignment="Center" FontWeight="SemiBold" Margin="0,8,0,4"/>
                             <Border Background="{StaticResource SurfaceSubtle}"
                                     BorderBrush="{StaticResource Line}"
                                     BorderThickness="1"
@@ -564,18 +659,6 @@
                                     </TextBlock>
                                 </StackPanel>
                             </Border>
-                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                <Button Command="{Binding PreviousTestImageCommand}"
-                                        Content="上一張"
-                                        IsEnabled="{Binding CanNavigatePrevious}"
-                                        Width="84"
-                                        Margin="2"/>
-                                <Button Command="{Binding NextTestImageCommand}"
-                                        Content="下一張"
-                                        IsEnabled="{Binding CanNavigateNext}"
-                                        Width="84"
-                                        Margin="2"/>
-                            </StackPanel>
                             <Separator Margin="0,8"/>
                             <TextBlock Style="{StaticResource ResultValue}">
                                 <Run Text="亮度: "/>
