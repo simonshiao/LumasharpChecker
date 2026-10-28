@@ -30,7 +30,7 @@
         <SolidColorBrush x:Key="Red" Color="#E95765"/>
         <DropShadowEffect x:Key="CardShadow" Color="#226CA0" Direction="270" ShadowDepth="2" BlurRadius="14" Opacity="0.1"/>
         <Style TargetType="GroupBox">
-            <Setter Property="Margin" Value="0,0,0,14"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="FontSize" Value="15"/>
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
@@ -40,16 +40,15 @@
                         <Border Background="{StaticResource Surface}"
                                 BorderBrush="{StaticResource Line}"
                                 BorderThickness="1"
-                                CornerRadius="16"
-                                Padding="16"
-                                Effect="{StaticResource CardShadow}">
+                                CornerRadius="6"
+                                Padding="12">
                             <Grid>
                                 <Grid.RowDefinitions>
                                     <RowDefinition Height="Auto"/>
                                     <RowDefinition Height="*"/>
                                 </Grid.RowDefinitions>
                                 <ContentPresenter ContentSource="Header"
-                                                  Margin="0,0,0,13"
+                                                  Margin="0,0,0,9"
                                                   RecognizesAccessKey="True"
                                                   TextElement.FontSize="15"
                                                   TextElement.FontWeight="SemiBold"
@@ -196,9 +195,9 @@
             <Setter Property="Margin" Value="0,0,0,5"/>
         </Style>
         <Style x:Key="ReadOnlyValue" TargetType="TextBlock">
-            <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
-            <Setter Property="Padding" Value="10,7"/>
-            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Background" Value="#F4F7F9"/>
+            <Setter Property="Padding" Value="9,6"/>
+            <Setter Property="MinHeight" Value="31"/>
             <Setter Property="Foreground" Value="{StaticResource Text}"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
@@ -261,7 +260,7 @@
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="9">
+                                CornerRadius="4">
                             <ContentPresenter/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -310,13 +309,10 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="HudChrome" CornerRadius="10"
+                        <Border x:Name="HudChrome" CornerRadius="6"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}">
-                            <Border.Effect>
-                                <DropShadowEffect Color="#41B9E2" BlurRadius="12" ShadowDepth="1" Opacity="0.17"/>
-                            </Border.Effect>
                             <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
                                               RecognizesAccessKey="True"/>
                         </Border>
@@ -546,7 +542,7 @@
             </StackPanel>
         </Border>
 
-        <Grid x:Name="InspectionPage" Grid.Column="1" Grid.Row="1" Margin="22,0,22,20"
+        <Grid x:Name="InspectionPage" Grid.Column="1" Grid.Row="1" Margin="15,7,15,12"
               Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
@@ -554,21 +550,20 @@
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="350"/>
+                <ColumnDefinition Width="322"/>
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0" Margin="0,0,12,0">
+            <Grid Grid.Column="0" Margin="0,0,10,0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <Border Background="{StaticResource Surface}"
-                        BorderBrush="{StaticResource Line}"
+                <Border Background="#111F2C"
+                        BorderBrush="#638EA3"
                         BorderThickness="1"
-                        CornerRadius="16"
-                        Padding="8"
-                        Effect="{StaticResource CardShadow}"
+                        CornerRadius="7"
+                        Padding="5"
                         PreviewMouseWheel="MainImage_PreviewMouseWheel">
                     <Viewbox Stretch="Uniform">
                         <Grid>
@@ -606,9 +601,9 @@
                         </Grid>
                     </Viewbox>
                 </Border>
-                <Border Grid.Row="1" Margin="0,10,0,0" Padding="10,8"
+                <Border Grid.Row="1" Margin="0,7,0,0" Padding="9,6"
                         Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                        BorderThickness="1" CornerRadius="14">
+                        BorderThickness="1" CornerRadius="6">
                     <StackPanel>
                         <DockPanel Margin="2,0,2,6">
                             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
@@ -616,20 +611,19 @@
                                         IsEnabled="{Binding IsRecipeActive}"
                                         Content="新增參數"
                                         AutomationProperties.Name="新增本站參數"
-                                        ToolTip="直接使用目前站別已設定的全部 OK 圖片計算；沒有 OK 圖庫或少於 2 張時才以檔案總管選取資料夾。"
-                                        Margin="0,0,8,0" Padding="12,5"
+                                        ToolTip="使用本站 OK 圖建立參數，1 張即可。"
+                                        Margin="0,0,6,0" Padding="10,4"
                                         Background="{StaticResource BlueSoft}"
                                         BorderBrush="{StaticResource Blue}"/>
                                 <Button Command="{Binding ResetCurrentParametersCommand}"
                                         IsEnabled="{Binding CanEditRoi}"
                                         Content="重設參數"
                                         ToolTip="直接使用目前站別的全部 OK 圖片重算；缺少有效圖庫才用檔案總管選取資料夾。"
-                                        Padding="12,5">
+                                        Padding="10,4">
                                 </Button>
                             </StackPanel>
-                            <TextBlock Text="站別" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
-                                       FontSize="11" Margin="12,0,8,0" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock Text="站" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Muted}" Margin="2,2,0,0"/>
                         </DockPanel>
                         <ItemsControl ItemsSource="{Binding StationSlots}">
                             <ItemsControl.ItemsPanel>
@@ -638,7 +632,7 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="2,0">
-                                        <Button Content="{Binding Number}" Padding="0" MinWidth="0" MinHeight="36"
+                                        <Button Content="{Binding Number}" Padding="0" MinWidth="0" MinHeight="32"
                                                 Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding Number}"
                                                 IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -664,9 +658,9 @@
                         </ItemsControl>
                     </StackPanel>
                 </Border>
-                <Border Grid.Row="2" Margin="0,8,0,0" Padding="8,6"
+                <Border Grid.Row="2" Margin="0,6,0,0" Padding="7,4"
                         Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                        BorderThickness="1" CornerRadius="14">
+                        BorderThickness="1" CornerRadius="6">
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
@@ -772,24 +766,18 @@
                 <StackPanel>
                     <!-- 避免將可編輯閾值作為單站頁預設內容；檢測員先看本站狀態與結果。 -->
                     <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                            BorderThickness="1" CornerRadius="12" Padding="15,13"
-                            Margin="0,0,0,12" Effect="{StaticResource CardShadow}">
+                            BorderThickness="1" CornerRadius="7" Padding="14,12"
+                            Margin="0,0,0,10">
                         <StackPanel>
                             <DockPanel Margin="0,0,0,9">
-                                <TextBlock Text="本站檢測" FontSize="16" FontWeight="SemiBold"
+                                <TextBlock Text="判定範圍" FontSize="15" FontWeight="SemiBold"
                                            Foreground="{StaticResource Text}"/>
                                 <TextBlock DockPanel.Dock="Right" Text="{Binding DetectionMode}"
                                            FontSize="11" Foreground="{StaticResource Blue}"
                                            VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             </DockPanel>
-                            <TextBlock Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未選擇配方}"
-                                       Foreground="{StaticResource Muted}" FontSize="12"
-                                       TextTrimming="CharacterEllipsis" Margin="0,0,0,7"
-                                       ToolTip="{Binding CurrentRecipe.Name}"/>
-                            <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
-                                       TextWrapping="Wrap" FontSize="12" Margin="0,0,0,11"/>
-                            <Border Background="{StaticResource SurfaceSubtle}" CornerRadius="8" Padding="10,9"
-                                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                            <Border Background="#F7FAFC" CornerRadius="5" Padding="10,10"
+                                    BorderBrush="#DEE8ED" BorderThickness="1">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*"/>
@@ -797,10 +785,10 @@
                                         <ColumnDefinition Width="*"/>
                                     </Grid.ColumnDefinitions>
                                     <StackPanel>
-                                        <TextBlock Text="亮度有效範圍" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="亮度" Style="{StaticResource FieldLabel}"/>
                                         <StackPanel Visibility="{Binding HasCurrentProfile, Converter={StaticResource BooleanToVisibilityConverter}}">
                                             <TextBlock Text="{Binding EffectiveBrightnessMin, StringFormat={}{0:F2}}"
-                                                       FontSize="16" Foreground="{StaticResource Text}"
+                                                       FontSize="20" Foreground="{StaticResource Text}"
                                                        FontWeight="SemiBold"/>
                                             <TextBlock Text="{Binding EffectiveBrightnessMax, StringFormat=至 {0:F2}}"
                                                        FontSize="12" Foreground="{StaticResource Muted}"/>
@@ -820,16 +808,13 @@
                                         </TextBlock>
                                     </StackPanel>
                                     <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                                        <TextBlock Text="已判定圖片" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="已判定" Style="{StaticResource FieldLabel}"/>
                                         <TextBlock Text="{Binding TotalTestImageCount, StringFormat={}{0:N0} 張}"
-                                                   FontSize="21" FontWeight="SemiBold"
+                                                   FontSize="20" FontWeight="SemiBold"
                                                    Foreground="{StaticResource Blue}"/>
                                     </StackPanel>
                                 </Grid>
                             </Border>
-                            <TextBlock Text="修改亮度與銳利度的判定條件，請展開下方「進階判定設定」。"
-                                       Foreground="{StaticResource Muted}" FontSize="11"
-                                       Margin="0,10,0,0" TextWrapping="Wrap"/>
                         </StackPanel>
                     </Border>
                     <Expander x:Name="AdvancedSettingsExpander" IsExpanded="False"
@@ -837,14 +822,11 @@
                               Margin="0,0,0,5">
                         <Expander.Header>
                             <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="進階判定設定" FontWeight="SemiBold" FontSize="14"
+                                <TextBlock Text="參數設定" FontWeight="SemiBold" FontSize="13"
                                            Foreground="{StaticResource Text}"/>
-                                <TextBlock Text="  · 亮度／銳利度閾值"
-                                           Foreground="{StaticResource Muted}" FontSize="11"
-                                           VerticalAlignment="Center"/>
                             </StackPanel>
                         </Expander.Header>
-                        <StackPanel Margin="0,13,0,0">
+                        <StackPanel Margin="0,9,0,0">
                     <GroupBox Header="亮度規格">
                         <StackPanel Margin="0">
                             <TextBlock Text="判定方式" Style="{StaticResource FieldLabel}"/>
@@ -944,84 +926,96 @@
                 </StackPanel>
             </ScrollViewer>
 
-            <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="檢測結果" Margin="0,10,0,0">
+            <!-- Dark machine telemetry strip: not a pastel dashboard, actions remain clickable. -->
+            <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                    Background="#0B2232" BorderBrush="#2D596D" BorderThickness="1"
+                    CornerRadius="7" Padding="18,12">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0" Background="{StaticResource SurfaceSubtle}"
-                            BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8"
-                            Padding="7,4" Margin="0,0,0,7"
-                            Visibility="{Binding IsAnalyzingTestImages, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <DockPanel>
-                            <TextBlock Text="{Binding AnalysisProgressText}" FontSize="11"
-                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
-                            <ProgressBar Minimum="0" Maximum="{Binding AnalysisProgressMaximum}"
-                                         Value="{Binding AnalysisProgressValue}" Height="8" MinWidth="120"
-                                         VerticalAlignment="Center"/>
-                        </DockPanel>
-                    </Border>
-                    <Grid Grid.Row="1">
+                    <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="2*"/>
-                            <ColumnDefinition Width="12"/>
                             <ColumnDefinition Width="1*"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="1*"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="1*"/>
+                            <ColumnDefinition Width="1"/>
+                            <ColumnDefinition Width="1.35*"/>
                         </Grid.ColumnDefinitions>
-                        <Grid Grid.Column="0">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock Text="檢測良率" FontWeight="SemiBold" Margin="0,0,0,5"/>
-                            <Grid Grid.Row="1">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="6"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Button Grid.Column="0" Style="{StaticResource YieldCardButtonStyle}"
-                                        Background="#EAF7EE" BorderBrush="#B7E4C7"
-                                        Command="{Binding ShowTestImageResultsByStatusCommand}"
-                                        CommandParameter="OK" ToolTip="檢視 OK 檢測結果" AutomationProperties.Name="檢視 OK 結果">
-                                    <DockPanel Margin="7,4">
-                                        <TextBlock Text="OK" Foreground="#248A3D" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                        <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                                            <TextBlock Text="{Binding OverallOkCount}" Foreground="#248A3D" FontWeight="SemiBold" FontSize="16" TextAlignment="Right"/>
-                                            <TextBlock Text="{Binding OverallOkRateText}" Foreground="#248A3D" FontSize="10" TextAlignment="Right"/>
-                                        </StackPanel>
-                                    </DockPanel>
-                                </Button>
-                                <Button Grid.Column="2" Style="{StaticResource YieldCardButtonStyle}"
-                                        Background="#FFF0EF" BorderBrush="#FFD1CE"
-                                        Command="{Binding ShowTestImageResultsByStatusCommand}"
-                                        CommandParameter="NG" ToolTip="檢視 NG 檢測結果" AutomationProperties.Name="檢視 NG 結果">
-                                    <DockPanel Margin="7,4">
-                                        <TextBlock Text="NG" Foreground="#D32F2F" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                                        <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
-                                            <TextBlock Text="{Binding OverallNgCount}" Foreground="#D32F2F" FontWeight="SemiBold" FontSize="16" TextAlignment="Right"/>
-                                            <TextBlock Text="{Binding OverallNgRateText}" Foreground="#D32F2F" FontSize="10" TextAlignment="Right"/>
-                                        </StackPanel>
-                                    </DockPanel>
-                                </Button>
-                            </Grid>
-                            <TextBlock Grid.Row="2" Text="{Binding TotalTestImageCount, StringFormat=已判定 {0} 張}"
-                                       Foreground="{StaticResource Muted}" FontSize="10" Margin="0,4,0,0"/>
-                        </Grid>
-                        <Border Grid.Column="1" Width="1" Background="{StaticResource Line}"/>
-                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
-                            <TextBlock Style="{StaticResource ResultValue}">
-                                <Run Text="亮度: "/>
-                                <Run Text="{Binding TestImageBrightness, StringFormat={}{0:F2}}" Foreground="{Binding BrightnessColor}"/>
-                                <Run Text=" ("/>
-                                <Run Text="{Binding TestImageBrightnessDeltaPercentText, Mode=OneWay}" Foreground="{Binding BrightnessColor}"/>
-                                <Run Text=")"/>
-                            </TextBlock>
+                        <Button Grid.Column="0" Style="{StaticResource YieldCardButtonStyle}"
+                                Background="Transparent" BorderBrush="Transparent"
+                                Command="{Binding ShowTestImageResultsByStatusCommand}"
+                                CommandParameter="OK" ToolTip="檢視 OK 結果"
+                                AutomationProperties.Name="檢視 OK 結果">
+                            <DockPanel Margin="9,2,12,2">
+                                <TextBlock Text="OK" Foreground="#6AD4B0" FontSize="12"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                                    <TextBlock Text="{Binding OverallOkCount}" Foreground="#EAF8FF"
+                                               FontFamily="Consolas" FontSize="24"
+                                               TextAlignment="Right" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding OverallOkRateText}" Foreground="#74CFAF"
+                                               FontFamily="Consolas" FontSize="11" TextAlignment="Right"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Button>
+                        <Border Grid.Column="1" Background="#3E6071" Margin="0,8"/>
+                        <Button Grid.Column="2" Style="{StaticResource YieldCardButtonStyle}"
+                                Background="Transparent" BorderBrush="Transparent"
+                                Command="{Binding ShowTestImageResultsByStatusCommand}"
+                                CommandParameter="NG" ToolTip="檢視 NG 結果"
+                                AutomationProperties.Name="檢視 NG 結果">
+                            <DockPanel Margin="12,2">
+                                <TextBlock Text="NG" Foreground="#FF9099" FontSize="12"
+                                           FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                                    <TextBlock Text="{Binding OverallNgCount}" Foreground="#EAF8FF"
+                                               FontFamily="Consolas" FontSize="24"
+                                               TextAlignment="Right" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding OverallNgRateText}" Foreground="#FF9AA1"
+                                               FontFamily="Consolas" FontSize="11" TextAlignment="Right"/>
+                                </StackPanel>
+                            </DockPanel>
+                        </Button>
+                        <Border Grid.Column="3" Background="#3E6071" Margin="0,8"/>
+                        <StackPanel Grid.Column="4" Margin="14,3,10,3" VerticalAlignment="Center">
+                            <TextBlock Text="已判定" Foreground="#8FAEBE" FontSize="11"/>
+                            <TextBlock Text="{Binding TotalTestImageCount, StringFormat={}{0:N0}}"
+                                       Foreground="#EAF8FF" FontFamily="Consolas"
+                                       FontSize="24" FontWeight="SemiBold"/>
+                        </StackPanel>
+                        <Border Grid.Column="5" Background="#3E6071" Margin="0,8"/>
+                        <StackPanel Grid.Column="6" Margin="16,3,0,3" VerticalAlignment="Center">
+                            <TextBlock Text="亮度" Foreground="#8FAEBE" FontSize="11"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Bottom">
+                                <TextBlock Text="{Binding TestImageBrightness, StringFormat={}{0:F2}}"
+                                           Foreground="#EAF8FF" FontFamily="Consolas"
+                                           FontSize="24" FontWeight="SemiBold"/>
+                                <TextBlock Text="{Binding TestImageBrightnessDeltaPercentText}"
+                                           Foreground="#7EC3DC" FontFamily="Consolas"
+                                           FontSize="11" Margin="10,0,0,4"/>
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
+                    <Grid Grid.Row="1" Margin="9,9,9,0"
+                          Visibility="{Binding IsAnalyzingTestImages, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="{Binding AnalysisProgressText}" Foreground="#A5C5D1"
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                        <ProgressBar Grid.Column="1" Minimum="0"
+                                     Maximum="{Binding AnalysisProgressMaximum}"
+                                     Value="{Binding AnalysisProgressValue}" Height="4"
+                                     Foreground="#1CBDE3" Background="#335568"
+                                     BorderThickness="0" VerticalAlignment="Center"/>
+                    </Grid>
                 </Grid>
-            </GroupBox>
+            </Border>
         </Grid>
 
         <!-- 八／十站共覽：使用同一 Recipe／站別狀態，不另建第二份資料。 -->
@@ -1107,46 +1101,43 @@
                                     </Grid>
                                     <!-- Chao8Side's dark camera viewport and thin cyan border. -->
                                     <Border Grid.Row="1" Background="{StaticResource HudCameraGradient}"
-                                            CornerRadius="7" BorderBrush="{StaticResource HudAccent}"
-                                            BorderThickness="1.5" Margin="0,0,0,9" ClipToBounds="True">
+                                            CornerRadius="4" BorderBrush="#2A88AE"
+                                            BorderThickness="1" Margin="0,0,0,9" ClipToBounds="True">
                                         <Grid>
                                             <Image Source="{Binding PreviewImage}" Stretch="Uniform" Margin="4"/>
                                         </Grid>
                                     </Border>
-                                    <Grid Grid.Row="2" Margin="0,1,0,8">
+                                    <!-- Single shared telemetry strip, no stacked pastel KPI cards. -->
+                                    <Grid Grid.Row="2" Margin="0,2,0,7" Background="#0D2737">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/><ColumnDefinition Width="6"/>
-                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="1*"/>
+                                            <ColumnDefinition Width="1"/>
+                                            <ColumnDefinition Width="1*"/>
+                                            <ColumnDefinition Width="1"/>
+                                            <ColumnDefinition Width="1.2*"/>
                                         </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" CornerRadius="6" Background="#E4FAF1" Padding="7,5">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="OK" Foreground="#078F5A" FontSize="10" FontWeight="Bold"
-                                                           HorizontalAlignment="Center"/>
-                                                <TextBlock Text="{Binding BatchOkText}" Foreground="#078F5A" FontSize="19"
-                                                           FontWeight="Bold" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Grid.Column="2" CornerRadius="6" Background="#FFF0F2" Padding="7,5">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="NG" Foreground="#D74758" FontSize="10" FontWeight="Bold"
-                                                           HorizontalAlignment="Center"/>
-                                                <TextBlock Text="{Binding BatchNgText}" Foreground="#D74758" FontSize="19"
-                                                           FontWeight="Bold" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <Border Grid.Column="4" CornerRadius="6" Background="#E7F7FF" Padding="7,5">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="良率" Foreground="{StaticResource HudTextSoft}" FontSize="10"
-                                                           FontWeight="Bold" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="{Binding BatchYield}" Foreground="{StaticResource HudAccentStrong}"
-                                                           FontSize="18" FontWeight="Bold" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
+                                        <StackPanel Grid.Column="0" Margin="10,8" VerticalAlignment="Center">
+                                            <TextBlock Text="OK" Foreground="#64D6AD" FontSize="10"/>
+                                            <TextBlock Text="{Binding BatchOkText}" Foreground="#F0FAFE"
+                                                       FontFamily="Consolas" FontWeight="SemiBold" FontSize="21"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="1" Background="#315062" Margin="0,9"/>
+                                        <StackPanel Grid.Column="2" Margin="10,8" VerticalAlignment="Center">
+                                            <TextBlock Text="NG" Foreground="#FF8796" FontSize="10"/>
+                                            <TextBlock Text="{Binding BatchNgText}" Foreground="#F0FAFE"
+                                                       FontFamily="Consolas" FontWeight="SemiBold" FontSize="21"/>
+                                        </StackPanel>
+                                        <Border Grid.Column="3" Background="#315062" Margin="0,9"/>
+                                        <StackPanel Grid.Column="4" Margin="10,8" VerticalAlignment="Center">
+                                            <TextBlock Text="良率" Foreground="#8FB7C9" FontSize="10"/>
+                                            <TextBlock Text="{Binding BatchYield}" Foreground="#58D7F4"
+                                                       FontFamily="Consolas" FontWeight="SemiBold" FontSize="19"/>
+                                        </StackPanel>
                                     </Grid>
-                                    <ProgressBar Grid.Row="3" Height="4" Minimum="0" Maximum="100"
-                                                 Value="{Binding BatchYieldValue, Mode=OneWay}" Foreground="{StaticResource HudOk}"
-                                                 Background="#D9EFF6" BorderThickness="0" Margin="1,0,1,0"
+                                    <ProgressBar Grid.Row="3" Height="3" Minimum="0" Maximum="100"
+                                                 Value="{Binding BatchYieldValue, Mode=OneWay}"
+                                                 Foreground="#18BFD7"
+                                                 Background="#C5DDE5" BorderThickness="0" Margin="0"
                                                  IsHitTestVisible="False"/>
                                 </Grid>
                             </Button>
