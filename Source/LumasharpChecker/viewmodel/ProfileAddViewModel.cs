@@ -35,7 +35,9 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(SampleCountText));
         }
 
-        public string SampleCountText => $"已載入 {_imagesFiles?.Count ?? 0} 張基準圖片；計算將使用所有樣本，畫面僅預覽其中一張。";
+        public string SampleCountText => _imagesFiles?.Count == 1
+            ? "已載入 1 張 OK 圖片，可建立基準；單張不能代表統計變異，請依實際需求調整允收範圍。"
+            : $"已載入 {_imagesFiles?.Count ?? 0} 張基準圖片；計算將使用全部樣本，畫面僅預覽其中一張。";
 
         public void InitializeForReset(List<string> imagesFiles, string detectionMode, ProfileData profile, Action<ProfileData, string> resetCompleted)
         {
@@ -135,10 +137,10 @@ namespace LumasharpChecker.viewmodel
                 var ar = await ip.CalculateReferenceValues(_imagesFiles);
                 if (ar == null) return;
                 int successCount = ar.BrightnessValues?.Count ?? 0;
-                if (successCount < 2)
+                if (successCount < 1)
                 {
-                    System.Windows.MessageBox.Show($"只有 {successCount} 張圖片成功完成定位與亮度計算，至少需要 2 張。請調整 ROI 或重選圖片資料夾。",
-                        "有效樣本不足", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
+                    System.Windows.MessageBox.Show("沒有圖片成功完成定位與亮度計算，請檢查 ROI 或重選圖片資料夾。",
+                        "計算失敗", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Warning);
                     return;
                 }
                 if (successCount < _imagesFiles.Count)

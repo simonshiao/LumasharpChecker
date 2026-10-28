@@ -1,62 +1,28 @@
 <Window x:Class="LumasharpChecker.DatabaseSetupWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="圖庫" Width="1040" Height="720" MinWidth="840" MinHeight="550"
+        Title="圖庫" Width="1000" Height="650" MinWidth="800" MinHeight="520"
         WindowStartupLocation="CenterOwner" FontFamily="Microsoft JhengHei UI" FontSize="13"
         Foreground="{DynamicResource Text}" Background="{DynamicResource Bg}">
-    <Window.Resources>
-        <Style x:Key="GalleryTile" TargetType="Button">
-            <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="BorderBrush" Value="#BCDCEB"/>
-            <Setter Property="Background" Value="#071D2C"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Tile" CornerRadius="7" ClipToBounds="True"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                Background="{TemplateBinding Background}">
-                            <ContentPresenter HorizontalAlignment="Stretch"
-                                              VerticalAlignment="Stretch"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Tile" Property="BorderBrush" Value="#11B8ED"/>
-                                <Setter TargetName="Tile" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Tile" Property="BorderBrush" Value="#0078B8"/>
-                                <Setter TargetName="Tile" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
-    <Grid Margin="19,15,19,15">
+    <Grid Margin="19,16,19,14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
-
-        <DockPanel Margin="3,0,3,12">
-            <TextBlock DockPanel.Dock="Right" Text="{Binding CurrentRecipe.Name, TargetNullValue=未選擇 Recipe}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                       MaxWidth="400" Foreground="{DynamicResource Muted}"
+        <DockPanel Margin="2,0,2,14">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未選擇 Recipe}"
+                       VerticalAlignment="Center" FontSize="12" MaxWidth="350"
+                       Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"
                        ToolTip="{Binding CurrentRecipe.Name}"/>
-            <TextBlock Text="圖庫" FontSize="22" FontWeight="SemiBold"/>
+            <TextBlock Text="圖庫" FontWeight="SemiBold" FontSize="21"
+                       Foreground="{DynamicResource Text}"/>
         </DockPanel>
 
         <Border Grid.Row="1" Background="{DynamicResource Surface}" CornerRadius="9"
-                BorderBrush="{DynamicResource Line}" BorderThickness="1"
-                Padding="10,8" Margin="0,0,0,10"
-                IsEnabled="{Binding IsRecipeActive}">
+                BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="11,8"
+                Margin="0,0,0,12" IsEnabled="{Binding IsRecipeActive}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -65,131 +31,112 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="批次" FontWeight="SemiBold"
-                           VerticalAlignment="Center" Margin="0,0,10,0"/>
-                <TextBlock Grid.Column="1" Text="{Binding DatabaseDayFolderDisplay}"
-                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
-                           Foreground="{DynamicResource Muted}" FontSize="11"
-                           ToolTip="{Binding DatabaseDayFolderDisplay}"/>
-                <Button Grid.Column="2" Content="套用…" Margin="10,0,0,0"
+                           VerticalAlignment="Center" Margin="0,0,11,0"/>
+                <TextBox Grid.Column="1" IsReadOnly="True" VerticalContentAlignment="Center"
+                         Text="{Binding DatabaseDayFolderDisplay, Mode=OneWay}"
+                         ToolTip="{Binding DatabaseDayFolderDisplay}"
+                         AutomationProperties.Name="目前批次圖庫資料夾"/>
+                <Button Grid.Column="2" Content="套用…" Margin="9,0,0,0"
                         Command="{Binding SelectDatabaseDayFolderCommand}"
                         Style="{DynamicResource HudSecondaryButton}"
-                        AutomationProperties.Name="批次選取所有站別圖庫"
-                        ToolTip="批次指定所有站別 OK／NG 資料夾"/>
+                        AutomationProperties.Name="批次選取所有站別圖庫"/>
                 <Button Grid.Column="3" Content="匯入…" Margin="6,0,0,0"
                         Command="{Binding ImportTrainingImageCommand}"
-                        AutomationProperties.Name="匯入 TrainingImage"
-                        ToolTip="匯入 TrainingImage 測試圖片"/>
+                        AutomationProperties.Name="匯入 TrainingImage"/>
             </Grid>
         </Border>
 
-        <!-- 以真實圖庫縮圖為主；點照片即可改選資料夾。 -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      IsEnabled="{Binding IsRecipeActive}">
-            <ItemsControl ItemsSource="{Binding StationDatabasePaths}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate><UniformGrid Columns="4"/></ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Background="{DynamicResource Surface}" CornerRadius="10"
-                                BorderBrush="{DynamicResource Line}" BorderThickness="1"
-                                Padding="10,9,10,11" Margin="4,3,4,8">
-                            <Grid>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="*"/>
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="{Binding Number}" FontSize="21"
-                                           FontWeight="SemiBold" Foreground="{DynamicResource Text}"
-                                           Margin="2,0,0,7"/>
-                                <Grid Grid.Row="1" Height="138">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="7"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Button Grid.Column="0" Style="{StaticResource GalleryTile}"
-                                            Click="ChooseOkFolder_Click"
-                                            AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 OK 圖庫}"
-                                            ToolTip="{Binding OkPath}">
-                                        <Grid ClipToBounds="True">
-                                            <Image Source="{Binding OkPreviewImage}" Stretch="UniformToFill"/>
-                                            <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets"
-                                                       Foreground="#75A5B8" FontSize="30"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding OkPreviewImage}" Value="{x:Null}">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <Border Background="#CE061A27" HorizontalAlignment="Stretch"
-                                                    VerticalAlignment="Top" Padding="6,5,5,5">
-                                                <DockPanel>
-                                                    <Ellipse DockPanel.Dock="Right" Width="7" Height="7"
-                                                             Fill="{Binding OkStatusBrush}" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="OK" Foreground="#75E3B5"
-                                                               FontSize="11" FontWeight="Bold"/>
-                                                </DockPanel>
-                                            </Border>
+        <Border Grid.Row="2" Background="{DynamicResource Surface}" CornerRadius="9"
+                BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                Padding="13,12" IsEnabled="{Binding IsRecipeActive}">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+                <Grid Margin="1,0,4,7">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="46"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="站" Foreground="{DynamicResource Muted}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Grid.Column="1" Text="OK" FontWeight="SemiBold"
+                               Foreground="#078F5A"/>
+                    <TextBlock Grid.Column="3" Text="NG" FontWeight="SemiBold"
+                               Foreground="#D74758"/>
+                </Grid>
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding StationDatabasePaths}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0"
+                                        Padding="1,5" MinHeight="46">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="46"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="14"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="{Binding Number}"
+                                                   FontWeight="SemiBold" FontSize="18"
+                                                   Foreground="{DynamicResource Blue}"
+                                                   VerticalAlignment="Center"/>
+                                        <Grid Grid.Column="1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Width="7" Height="7" Fill="{Binding OkStatusBrush}"
+                                                     VerticalAlignment="Center" Margin="0,0,8,0"
+                                                     ToolTip="{Binding OkStatus}"/>
+                                            <TextBox Grid.Column="1" Text="{Binding OkPathDisplay, Mode=OneWay}"
+                                                     IsReadOnly="True" VerticalContentAlignment="Center"
+                                                     ToolTip="{Binding OkPath}" FontSize="11"
+                                                     Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 OK 路徑}"/>
+                                            <Button Grid.Column="2" Content="選擇" Click="ChooseOkFolder_Click"
+                                                    Style="{DynamicResource HudSecondaryButton}"
+                                                    Margin="6,0,1,0" MinHeight="30" Padding="10,4"
+                                                    AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 OK 圖庫}"/>
                                         </Grid>
-                                    </Button>
-                                    <Button Grid.Column="2" Style="{StaticResource GalleryTile}"
-                                            Click="ChooseNgFolder_Click"
-                                            AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 NG 圖庫}"
-                                            ToolTip="{Binding NgPath}">
-                                        <Grid ClipToBounds="True">
-                                            <Image Source="{Binding NgPreviewImage}" Stretch="UniformToFill"/>
-                                            <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets"
-                                                       Foreground="#75A5B8" FontSize="30"
-                                                       HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding NgPreviewImage}" Value="{x:Null}">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
-                                            <Border Background="#CE061A27" HorizontalAlignment="Stretch"
-                                                    VerticalAlignment="Top" Padding="6,5,5,5">
-                                                <DockPanel>
-                                                    <Ellipse DockPanel.Dock="Right" Width="7" Height="7"
-                                                             Fill="{Binding NgStatusBrush}" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="NG" Foreground="#FF9EAB"
-                                                               FontSize="11" FontWeight="Bold"/>
-                                                </DockPanel>
-                                            </Border>
+                                        <Grid Grid.Column="3">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Width="7" Height="7" Fill="{Binding NgStatusBrush}"
+                                                     VerticalAlignment="Center" Margin="0,0,8,0"
+                                                     ToolTip="{Binding NgStatus}"/>
+                                            <TextBox Grid.Column="1" Text="{Binding NgPathDisplay, Mode=OneWay}"
+                                                     IsReadOnly="True" VerticalContentAlignment="Center"
+                                                     ToolTip="{Binding NgPath}" FontSize="11"
+                                                     Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 NG 路徑}"/>
+                                            <Button Grid.Column="2" Content="選擇" Click="ChooseNgFolder_Click"
+                                                    Margin="6,0,1,0" MinHeight="30" Padding="10,4"
+                                                    AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 NG 圖庫}"/>
                                         </Grid>
-                                    </Button>
-                                </Grid>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
 
-        <DockPanel Grid.Row="3" Margin="4,10,4,0">
+        <DockPanel Grid.Row="3" Margin="2,12,2,0">
             <Button DockPanel.Dock="Right" Content="完成" MinWidth="96"
                     Click="Done_Click" Style="{DynamicResource HudPrimaryButton}"
                     Margin="12,0,0,0"/>
-            <TextBlock Text="{Binding DatabaseSaveMessage}"
-                       VerticalAlignment="Center" FontSize="11"
-                       Foreground="{DynamicResource Muted}"
-                       TextTrimming="CharacterEllipsis"
-                       ToolTip="{Binding DatabaseSaveMessage}"
+            <TextBlock Text="{Binding DatabaseSaveMessage}" FontSize="11"
+                       Foreground="{DynamicResource Muted}" VerticalAlignment="Center"
+                       TextTrimming="CharacterEllipsis" ToolTip="{Binding DatabaseSaveMessage}"
                        AutomationProperties.Name="圖庫儲存狀態"/>
         </DockPanel>
     </Grid>

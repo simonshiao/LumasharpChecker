@@ -83,35 +83,6 @@ namespace LumasharpChecker.viewmodel
             OkDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
         public Brush NgStatusBrush => string.IsNullOrWhiteSpace(NgPath) ? Brushes.LightGray :
             NgDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
-        // 圖像式圖庫：只載入每個目錄的一張低解析度預覽；不複製、不修改來源圖片。
-        public BitmapImage? OkPreviewImage => LoadFolderPreview(OkPath);
-        public BitmapImage? NgPreviewImage => LoadFolderPreview(NgPath);
-
-        private static BitmapImage? LoadFolderPreview(string folder)
-        {
-            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
-            try
-            {
-                string? file = Directory.EnumerateFiles(folder)
-                    .Where(name => new[] { ".jpg", ".jpeg", ".png", ".bmp" }
-                        .Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
-                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
-                    .FirstOrDefault();
-                if (file == null) return null;
-                var preview = new BitmapImage();
-                preview.BeginInit();
-                preview.UriSource = new Uri(file);
-                preview.CacheOption = BitmapCacheOption.OnLoad;
-                preview.DecodePixelWidth = 140;
-                preview.EndInit();
-                preview.Freeze();
-                return preview;
-            }
-            catch (IOException) { return null; }
-            catch (UnauthorizedAccessException) { return null; }
-            catch (NotSupportedException) { return null; }
-            catch (System.Runtime.InteropServices.COMException) { return null; }
-        }
     }
 
     public static class BatchPreviewModes
@@ -1419,7 +1390,7 @@ namespace LumasharpChecker.viewmodel
                 return;
             }
 
-            // 已設定且有至少兩張 OK 圖片就直接全數使用，不額外要求選資料夾。
+            // 已設定且至少有一張 OK 圖片就直接使用，不額外要求選資料夾。
             List<string> files;
             try
             {
@@ -1547,16 +1518,15 @@ namespace LumasharpChecker.viewmodel
             if (Directory.Exists(configuredFolder))
             {
                 var existingImages = EnumerateOkImages(configuredFolder);
-                if (existingImages.Count >= 2)
+                if (existingImages.Count >= 1)
                 {
                     selectedFolder = configuredFolder;
                     return existingImages;
                 }
-                // 已設定路徑但無足夠樣本：不能拿 1 張算標準差，改請使用者重新選資料夾。
+                // 已設定路徑但沒有圖片才要求重選；單張可建立基準。
                 MessageBox.Show(
-                    $"第 {stationNumber:00} 站目前 OK 圖庫只有 {existingImages.Count} 張圖片，" +
-                    "至少需要 2 張。請改選包含多張 OK 圖片的資料夾。",
-                    "OK 樣本不足", MessageBoxButton.OK, MessageBoxImage.Information);
+                    $"第 {stationNumber:00} 站 OK 圖庫沒有可用圖片，請選擇至少包含 1 張圖片的資料夾。",
+                    "OK 圖庫沒有圖片", MessageBoxButton.OK, MessageBoxImage.Information);
             }
 
             // .NET Framework 4.7.2 使用 Windows IFileOpenDialog：檔案總管式網址列／路徑貼上。
@@ -1576,10 +1546,10 @@ namespace LumasharpChecker.viewmodel
             string okSubFolder = Path.Combine(folder, "OK");
             if (Directory.Exists(okSubFolder)) folder = okSubFolder;
             var images = EnumerateOkImages(folder);
-            if (images.Count < 2)
+            if (images.Count < 1)
             {
-                MessageBox.Show($"選取的資料夾只有 {images.Count} 張圖片，至少需要 2 張才能建立統計基準。",
-                    "OK 樣本不足", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("選取的資料夾沒有可用圖片。至少放入 1 張 OK 圖片即可新增參數。",
+                    "OK 圖庫沒有圖片", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return new List<string>();
             }
             selectedFolder = folder;
