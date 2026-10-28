@@ -9,10 +9,10 @@
     <UseWPF>true</UseWPF>
 	<PublishSingleFile>true</PublishSingleFile>
 	<GeneratePackageOnBuild>False</GeneratePackageOnBuild> <!-- 可选：生成单个文件 -->
-	<Version>1.0.0.16</Version>
-	<AssemblyVersion>1.0.0.16</AssemblyVersion>
-	<FileVersion>1.0.0.16</FileVersion>
-	<InformationalVersion>1.0.0.16</InformationalVersion>
+	<Version>1.0.0.17</Version>
+	<AssemblyVersion>1.0.0.17</AssemblyVersion>
+	<FileVersion>1.0.0.17</FileVersion>
+	<InformationalVersion>1.0.0.17</InformationalVersion>
 	<ApplicationIcon>Icons\CyntecAppIcon.ico</ApplicationIcon>
 	<Product>$(AssemblyName)</Product>
   </PropertyGroup>
