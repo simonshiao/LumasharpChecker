@@ -22,11 +22,10 @@ namespace LumasharpChecker.view
     /// </summary>
     public partial class StatisticResultWindow : Window
     {
-        public ProfileAddViewModel ViewModel { get; }
         public StatisticResultWindow(StatisticResultModel vm)
         {
             InitializeComponent();
-            DataContext = ViewModel;
+            DataContext = vm;
             //this.DataContext = ProfileManager.Instance;
         }
         //public static InverseBooleanConverter InverseBoolConverter { get; } = new InverseBooleanConverter();

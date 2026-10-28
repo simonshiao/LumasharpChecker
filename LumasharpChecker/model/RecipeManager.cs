@@ -34,6 +34,7 @@ public sealed class RecipeManager
         public int StationCount { get; set; } = 8;
         public string CreatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         public string UpdatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+        public string? DatabaseDayFolder { get; set; }
         public List<RecipeStation> Stations { get; set; } = CreateStations();
 
         private static List<RecipeStation> CreateStations() =>
@@ -45,11 +46,14 @@ public sealed class RecipeManager
         public int Number { get; set; }
         public bool IsConfigured { get; set; }
         public string? SourceProfileName { get; set; }
+        public string? OkDatabasePath { get; set; }
+        public string? NgDatabasePath { get; set; }
     }
 
     public sealed class AppPreferences
     {
         public int StationCount { get; set; } = 8;
+        public string? LastRecipeId { get; set; }
     }
 
     public AppPreferences LoadPreferences()

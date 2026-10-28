@@ -38,6 +38,12 @@ namespace LumasharpChecker
             window.ShowDialog();
         }
 
+        private void OpenDatabaseSetup_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new DatabaseSetupWindow(this);
+            window.ShowDialog();
+        }
+
         private void OpenTestImagePicker_Click(object sender, RoutedEventArgs e)
         {
             if (DataContext is not mainViewModel viewModel || viewModel.TestImageTree.Count == 0)
@@ -49,6 +55,19 @@ namespace LumasharpChecker
             };
             if (picker.ShowDialog() == true && !string.IsNullOrWhiteSpace(picker.SelectedFilePath))
                 viewModel.SelectTestImage(picker.SelectedFilePath);
+        }
+
+        private void MainImage_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (DataContext is not mainViewModel viewModel ||
+                viewModel.TestImageFiles.Count < 2 ||
+                viewModel.IsAnalyzingTestImages)
+            {
+                return;
+            }
+
+            e.Handled = true;
+            _ = viewModel.NavigateTestImageByWheelAsync(e.Delta);
         }
 
         private void MainRoiCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

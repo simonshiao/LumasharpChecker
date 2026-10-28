@@ -21,6 +21,8 @@ namespace LumasharpChecker.viewmodel
         private string targetImageFilePath;
 
         private List<string> _imagesFiles;
+        private ProfileData? _profileToReset;
+        private Action<ProfileData, string>? _resetCompleted;
         public ProfileAddViewModel()
         {
         }
@@ -31,6 +33,20 @@ namespace LumasharpChecker.viewmodel
             _imagesFiles = imagesFiles;
             DetectionMode = string.IsNullOrWhiteSpace(detectionMode) ? ProfileManager.InspectionMode.Brightness : detectionMode;
         }
+
+        public void InitializeForReset(List<string> imagesFiles, string detectionMode, ProfileData profile, Action<ProfileData, string> resetCompleted)
+        {
+            Initialize(imagesFiles, detectionMode);
+            _profileToReset = profile;
+            _resetCompleted = resetCompleted;
+            PatternMatchRoi = ToRect(profile.PatternMatchRoiX, profile.PatternMatchRoiY, profile.PatternMatchRoiW, profile.PatternMatchRoiH);
+            BrightnessRoi = ToRect(profile.EffectiveBrightnessRoiX, profile.EffectiveBrightnessRoiY, profile.EffectiveBrightnessRoiW, profile.EffectiveBrightnessRoiH);
+            MonitorRoi = BrightnessRoi;
+            SharpnessRoi = ToRect(profile.EffectiveSharpnessRoiX, profile.EffectiveSharpnessRoiY, profile.EffectiveSharpnessRoiW, profile.EffectiveSharpnessRoiH);
+        }
+
+        private static System.Windows.Rect ToRect(int? x, int? y, int? width, int? height) =>
+            new(x.GetValueOrDefault(), y.GetValueOrDefault(), width.GetValueOrDefault(), height.GetValueOrDefault());
 
         [ObservableProperty]
         private System.Windows.Rect _patternMatchRoi;
@@ -132,6 +148,13 @@ namespace LumasharpChecker.viewmodel
                 var vm = _windowService.ShowStatisticResultWindow(ar);
                 if (vm == null) return;
 
+                if (_profileToReset != null && _resetCompleted != null)
+                {
+                    ApplyAnalysisResult(_profileToReset, ar);
+                    _resetCompleted(_profileToReset, _imagesFiles[0]);
+                    return;
+                }
+
                 SavingProfileDialog savingProfileDialog = new SavingProfileDialog();
                 if (savingProfileDialog.ShowDialog() ?? false)
                 {
@@ -154,6 +177,60 @@ namespace LumasharpChecker.viewmodel
             finally
             {
                 //IsProcessing = false; // 恢复按钮状态
+            }
+        }
+
+        private void ApplyAnalysisResult(ProfileData profile, AnalysisResult result)
+        {
+            profile.BrightnessMax = result.Brightness.ThreeSigmaUpper;
+            profile.BrightnessMin = result.Brightness.ThreeSigmaLower;
+            profile.BrightnessMean = result.Brightness.Mean;
+            profile.BrightnessSigma = result.Brightness.Sigma;
+            profile.BrightnessValues = result.BrightnessValues;
+            profile.BrightnessPercentileLower = result.Brightness.Percentile?.Lower;
+            profile.BrightnessPercentileUpper = result.Brightness.Percentile?.Upper;
+            profile.BrightnessBaseValue = result.Brightness.Mean;
+            profile.DetectionMode = DetectionMode;
+            profile.SharpnessMin = result.Sharpness?.Percentile?.Lower;
+            profile.SharpnessMax = result.Sharpness?.Percentile?.Upper;
+            profile.SharpnessMean = result.Sharpness?.Mean;
+            profile.SharpnessSigma = result.Sharpness?.Sigma;
+            profile.SharpnessValues = result.SharpnessValues;
+            profile.SharpnessPercentileLower = result.Sharpness?.Percentile?.Lower;
+            profile.SharpnessPercentileUpper = result.Sharpness?.Percentile?.Upper;
+            profile.SharpnessBaseValue = result.Sharpness?.Mean;
+            profile.BrightnessLimitMode = ProfileManager.LimitMode.Percent;
+            profile.BrightnessPercentLower = 10;
+            profile.BrightnessPercentUpper = 10;
+            profile.BrightnessFixedMin = profile.BrightnessMin;
+            profile.BrightnessFixedMax = profile.BrightnessMax;
+            profile.SharpnessLimitMode = ProfileManager.LimitMode.Percent;
+            profile.SharpnessPercentLower = 10;
+            profile.SharpnessFixedMin = profile.SharpnessMin;
+            profile.PatternMatchRoiX = (int)PatternMatchRoi.X;
+            profile.PatternMatchRoiY = (int)PatternMatchRoi.Y;
+            profile.PatternMatchRoiW = (int)PatternMatchRoi.Width;
+            profile.PatternMatchRoiH = (int)PatternMatchRoi.Height;
+            profile.BrightnessRoiX = (int)BrightnessRoi.X;
+            profile.BrightnessRoiY = (int)BrightnessRoi.Y;
+            profile.BrightnessRoiW = (int)BrightnessRoi.Width;
+            profile.BrightnessRoiH = (int)BrightnessRoi.Height;
+            profile.MonitorRoiX = profile.BrightnessRoiX;
+            profile.MonitorRoiY = profile.BrightnessRoiY;
+            profile.MonitorRoiW = profile.BrightnessRoiW;
+            profile.MonitorRoiH = profile.BrightnessRoiH;
+            profile.SharpnessRoiX = (int)SharpnessRoi.X;
+            profile.SharpnessRoiY = (int)SharpnessRoi.Y;
+            profile.SharpnessRoiW = (int)SharpnessRoi.Width;
+            profile.SharpnessRoiH = (int)SharpnessRoi.Height;
+            profile.EnableDynamicThreshold = false;
+            profile.DynamicThresholdCount = 0;
+            profile.ModifyDateTime = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+
+            if (result.Brightness.Sigma < 1.0)
+            {
+                profile.BrightnessMin = result.Brightness.Mean - 3;
+                profile.BrightnessMax = result.Brightness.Mean + 3;
             }
         }
 

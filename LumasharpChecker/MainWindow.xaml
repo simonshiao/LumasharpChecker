@@ -208,13 +208,49 @@
             <Setter Property="Margin" Value="0,3,0,0"/>
             <Setter Property="FontSize" Value="13"/>
         </Style>
-        <Style x:Key="TestActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Height" Value="48"/>
+        <Style x:Key="HeaderActionButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="38"/>
             <Setter Property="MinHeight" Value="0"/>
-            <Setter Property="Padding" Value="4,3"/>
-            <Setter Property="Margin" Value="3"/>
-            <Setter Property="FontFamily" Value="Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="16"/>
+            <Setter Property="Padding" Value="9,3"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource Text}"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                    <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="YieldCardButtonStyle" TargetType="Button">
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="CardChrome"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="9">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="CardChrome" Property="Opacity" Value="0.82"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="CardChrome" Property="Opacity" Value="0.65"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="CardChrome" Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
     </Window.Resources>
 
@@ -225,14 +261,44 @@
         </Grid.RowDefinitions>
 
         <Border Background="{StaticResource Bg}" Padding="22,10,60,8">
-            <WrapPanel VerticalAlignment="Center">
-                <Button Content="Recipe 與設定" Click="OpenRecipeManager_Click" MinWidth="138" ToolTip="管理 Recipe 與逐站設定"/>
-                <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="18,0,0,0"
-                           VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Click="OpenRecipeManager_Click" Style="{StaticResource HeaderActionButton}"
+                        ToolTip="選擇配方並管理逐站設定" AutomationProperties.Name="選擇配方">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
+                              Width="17" Height="14" Stretch="Fill" Margin="0,0,7,0"
+                              Fill="{StaticResource BlueSoft}" Stroke="{StaticResource Blue}" StrokeThickness="1.5"/>
+                        <TextBlock Text="選擇配方" VerticalAlignment="Center" FontSize="12"/>
+                    </StackPanel>
+                </Button>
+                <Border Width="1" Height="23" Background="{StaticResource Line}" Margin="7,0,8,0"/>
+                <Button Command="{Binding ExportTestImagesCommand}" Style="{StaticResource HeaderActionButton}"
+                        ToolTip="匯出 Excel 檢測報表" AutomationProperties.Name="匯出報表">
+                    <StackPanel Orientation="Horizontal">
+                        <Path Data="M5,2 L14,2 L19,7 L19,22 L5,22 Z M14,2 L14,7 L19,7 M12,9 L12,16 M9,13 L12,16 L15,13"
+                              Width="15" Height="17" Stretch="Fill" Margin="0,0,6,0"
+                              Fill="{StaticResource Surface}" Stroke="{StaticResource Blue}" StrokeThickness="1.4"/>
+                        <TextBlock Text="匯出報表" VerticalAlignment="Center" FontSize="12"/>
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding ShowTestImageResultsCommand}" Style="{StaticResource HeaderActionButton}"
+                        ToolTip="檢視已完成的檢測結果" AutomationProperties.Name="檢視結果">
+                    <StackPanel Orientation="Horizontal">
+                        <StackPanel Width="16" Margin="0,0,6,0" VerticalAlignment="Center">
+                            <Border Height="2" Background="{StaticResource Blue}" Margin="0,2"/>
+                            <Border Height="2" Background="{StaticResource Muted}" Margin="0,2"/>
+                            <Border Height="2" Background="{StaticResource Muted}" Margin="0,2"/>
+                        </StackPanel>
+                        <TextBlock Text="檢視結果" VerticalAlignment="Center" FontSize="12"/>
+                    </StackPanel>
+                </Button>
+                <Border Width="1" Height="23" Background="{StaticResource Line}" Margin="7,0,8,0"/>
+                <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="3,0,0,0"
+                           VerticalAlignment="Center" MaxWidth="135" TextTrimming="CharacterEllipsis"
                            FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
-                <TextBlock Text="{Binding SaveSettingsMessage}" Margin="14,0,0,0" VerticalAlignment="Center"
-                           MaxWidth="280" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="12"/>
-            </WrapPanel>
+                <TextBlock Text="{Binding SaveSettingsMessage}" Margin="10,0,0,0" VerticalAlignment="Center"
+                           MaxWidth="170" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="11"/>
+            </StackPanel>
         </Border>
 
         <ToggleButton Grid.RowSpan="2"
@@ -298,15 +364,221 @@
         </Border>
 
         <Grid Grid.Row="1" Margin="22,0,22,20">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="292"/>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="326"/>
+                <ColumnDefinition Width="350"/>
             </Grid.ColumnDefinitions>
 
-            <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
+            <Grid Grid.Column="0" Margin="0,0,12,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+                <Border Background="{StaticResource Surface}"
+                        BorderBrush="{StaticResource Line}"
+                        BorderThickness="1"
+                        CornerRadius="16"
+                        Padding="8"
+                        Effect="{StaticResource CardShadow}"
+                        PreviewMouseWheel="MainImage_PreviewMouseWheel">
+                    <Viewbox Stretch="Uniform">
+                        <Grid>
+                            <Image Source="{Binding DisplayImage}" Stretch="None" IsHitTestVisible="False"/>
+                            <Canvas x:Name="MainRoiCanvas"
+                                    Width="{Binding DisplayImage.PixelWidth}"
+                                    Height="{Binding DisplayImage.PixelHeight}"
+                                    Background="Transparent"
+                                    MouseLeftButtonDown="MainRoiCanvas_MouseLeftButtonDown"
+                                    MouseMove="MainRoiCanvas_MouseMove"
+                                    MouseLeftButtonUp="MainRoiCanvas_MouseLeftButtonUp">
+                                    <Rectangle Stroke="#FF43A047"
+                                               StrokeThickness="{Binding StrokeThickness}"
+                                               Width="{Binding RectWidth}"
+                                               Height="{Binding RectHeight}"
+                                               Canvas.Left="{Binding RectX}"
+                                               Canvas.Top="{Binding RectY}"
+                                               IsHitTestVisible="False"/>
+                                    <Rectangle Stroke="#FF039BE5"
+                                               StrokeThickness="{Binding StrokeThickness2}"
+                                               Width="{Binding RectWidth2}"
+                                               Height="{Binding RectHeight2}"
+                                               Canvas.Left="{Binding RectX2}"
+                                               Canvas.Top="{Binding RectY2}"
+                                               IsHitTestVisible="False"/>
+                                    <Rectangle Stroke="#FFE53935"
+                                               Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               StrokeThickness="{Binding StrokeThickness3}"
+                                               Width="{Binding RectWidth3}"
+                                               Height="{Binding RectHeight3}"
+                                               Canvas.Left="{Binding RectX3}"
+                                               Canvas.Top="{Binding RectY3}"
+                                               IsHitTestVisible="False"/>
+                            </Canvas>
+                        </Grid>
+                    </Viewbox>
+                </Border>
+                <Border Grid.Row="1" Margin="0,10,0,0" Padding="10,8"
+                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                        BorderThickness="1" CornerRadius="14">
+                    <StackPanel>
+                        <DockPanel Margin="2,0,2,6">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <Button Command="{Binding ResetCurrentParametersCommand}"
+                                        IsEnabled="{Binding CanEditRoi}"
+                                        Content="重設參數"
+                                        ToolTip="選取多張樣本，重新設定 ROI 並計算基準參數；保存至目前設定且保留名稱。"
+                                        Padding="12,5">
+                                </Button>
+                            </StackPanel>
+                            <TextBlock Text="站別" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
+                                       FontSize="11" Margin="12,0,8,0" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding StationSlots}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Margin="2,0">
+                                        <Button Content="{Binding Number}" Padding="0" MinWidth="0" MinHeight="36"
+                                                Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding Number}"
+                                                IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTip="切換站別">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+                <Border Grid.Row="2" Margin="0,8,0,0" Padding="8,6"
+                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                        BorderThickness="1" CornerRadius="14">
+                    <Grid VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Click="OpenDatabaseSetup_Click" IsEnabled="{Binding IsRecipeActive}"
+                                    Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                    ToolTip="開啟各站圖庫設定" AutomationProperties.Name="圖庫設定">
+                                <Grid Width="23" Height="21">
+                                    <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
+                                          Width="18" Height="14" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          Stretch="Fill" Fill="#F0E6FA" Stroke="#8A3AB9" StrokeThickness="1.5"/>
+                                    <Border Width="13" Height="13" Background="{StaticResource Surface}" CornerRadius="7"
+                                            HorizontalAlignment="Right" VerticalAlignment="Bottom">
+                                        <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" FontSize="11"
+                                                   Foreground="#8A3AB9" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                </Grid>
+                            </Button>
+                            <Button Command="{Binding TestImageCommand}"
+                                    Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                    ToolTip="選擇資料夾；只建立圖片清單，不會立即測試"
+                                    AutomationProperties.Name="選擇資料夾">
+                                <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
+                                      Width="18" Height="14" Stretch="Fill"
+                                      Fill="{StaticResource BlueSoft}" Stroke="{StaticResource Blue}" StrokeThickness="1.5"/>
+                            </Button>
+                            <Button Command="{Binding SelectSingleImageCommand}"
+                                    Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                    ToolTip="選擇單張圖片；只顯示圖片，不會立即測試"
+                                    AutomationProperties.Name="選擇單張圖片">
+                                <Viewbox Width="18" Height="16">
+                                    <Grid Width="24" Height="20">
+                                        <Border BorderBrush="{StaticResource Blue}" BorderThickness="1.7" CornerRadius="2"/>
+                                        <Ellipse Width="3.5" Height="3.5" Fill="{StaticResource Blue}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,3,0,0"/>
+                                        <Path Data="M3,17 L9,10 L13,14 L17,8 L22,17 Z" Fill="#B9D8FF" Stroke="{StaticResource Blue}" StrokeThickness="1.2"/>
+                                    </Grid>
+                                </Viewbox>
+                            </Button>
+                            <Button Command="{Binding OpenStationDatabaseCommand}" CommandParameter="OK" Content="OK DB"
+                                    IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
+                                    Foreground="#248A3D" ToolTip="載入目前站別的 OK 圖庫"/>
+                            <Button Command="{Binding OpenStationDatabaseCommand}" CommandParameter="NG" Content="NG DB"
+                                    IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
+                                    Foreground="#D32F2F" ToolTip="載入目前站別的 NG 圖庫"/>
+                            <Button Command="{Binding OpenStationDatabaseCommand}" CommandParameter="Station" Content="本站圖片"
+                                    IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
+                                    ToolTip="載入站號資料夾內未分類的圖片"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Button Click="OpenTestImagePicker_Click"
+                                Content="&#xE8FD;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                ToolTip="開啟圖片清單，只切換預覽"
+                                AutomationProperties.Name="圖片清單"/>
+                        <Button Command="{Binding PreviousTestImageCommand}"
+                                Content="&#xE892;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                IsEnabled="{Binding CanNavigatePrevious}" ToolTip="上一張圖片"/>
+                        <TextBlock Text="{Binding TestImageInfo}" FontWeight="SemiBold"
+                                   VerticalAlignment="Center" MinWidth="78" TextAlignment="Center" Margin="5,0"/>
+                        <Button Command="{Binding NextTestImageCommand}"
+                                Content="&#xE893;" FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                IsEnabled="{Binding CanNavigateNext}" ToolTip="下一張圖片"/>
+                        <Button Command="{Binding StartContinuousTestCommand}"
+                                FontFamily="Segoe MDL2 Assets" FontSize="16"
+                                Width="38" Height="34" MinHeight="0" Padding="0" Margin="8,2,2,2">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                    <Setter Property="Content" Value="&#xE768;"/>
+                                    <Setter Property="ToolTip" Value="開始連續測試目前清單中的圖片"/>
+                                    <Setter Property="AutomationProperties.Name" Value="開始連續測試"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsContinuousTestRunning}" Value="True">
+                                            <Setter Property="Content" Value="&#xE769;"/>
+                                            <Setter Property="ToolTip" Value="暫停連續測試；再次按下可繼續"/>
+                                            <Setter Property="AutomationProperties.Name" Value="暫停連續測試"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
+                        </Button>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Button Command="{Binding ShowTestImageResultsByStatusCommand}" CommandParameter="ALL"
+                                    Content="ALL" Width="46" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                    ToolTip="檢視全部檢測結果" AutomationProperties.Name="檢視全部結果"/>
+                            <Button Command="{Binding ShowTestImageResultsByStatusCommand}" CommandParameter="OK"
+                                    Content="OK" Width="42" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                    Foreground="#248A3D" ToolTip="只檢視 OK 結果" AutomationProperties.Name="檢視 OK 結果"/>
+                            <Button Command="{Binding ShowTestImageResultsByStatusCommand}" CommandParameter="NG"
+                                    Content="NG" Width="42" Height="34" MinHeight="0" Padding="0" Margin="2"
+                                    Foreground="#D32F2F" ToolTip="只檢視 NG 結果" AutomationProperties.Name="檢視 NG 結果"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <ScrollViewer Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-<GroupBox Header="亮度規格">
+                    <GroupBox Header="亮度規格">
                         <StackPanel Margin="0">
                             <TextBlock Text="判定方式" Style="{StaticResource FieldLabel}"/>
                             <ComboBox ItemsSource="{Binding LimitModeItems}"
@@ -397,269 +669,78 @@
 
                     <Button Command="{Binding SaveInspectionSettingsCommand}"
                             Content="儲存檢測設定"
-                            Margin="0,0,0,8"/>
-
+                            Margin="0,0,0,14"/>
 
                 </StackPanel>
             </ScrollViewer>
 
-            <Grid Grid.Column="1" Margin="12,0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="Auto"/>
-                </Grid.RowDefinitions>
-                <Border Background="{StaticResource Surface}"
-                        BorderBrush="{StaticResource Line}"
-                        BorderThickness="1"
-                        CornerRadius="16"
-                        Padding="8"
-                        Effect="{StaticResource CardShadow}">
-                    <Viewbox Stretch="Uniform">
-                        <Grid>
-                            <Image Source="{Binding DisplayImage}" Stretch="None" IsHitTestVisible="False"/>
-                            <Canvas x:Name="MainRoiCanvas"
-                                    Width="{Binding DisplayImage.PixelWidth}"
-                                    Height="{Binding DisplayImage.PixelHeight}"
-                                    Background="Transparent"
-                                    MouseLeftButtonDown="MainRoiCanvas_MouseLeftButtonDown"
-                                    MouseMove="MainRoiCanvas_MouseMove"
-                                    MouseLeftButtonUp="MainRoiCanvas_MouseLeftButtonUp">
-                                    <Rectangle Stroke="#FF43A047"
-                                               StrokeThickness="{Binding StrokeThickness}"
-                                               Width="{Binding RectWidth}"
-                                               Height="{Binding RectHeight}"
-                                               Canvas.Left="{Binding RectX}"
-                                               Canvas.Top="{Binding RectY}"
-                                               IsHitTestVisible="False"/>
-                                    <Rectangle Stroke="#FF039BE5"
-                                               StrokeThickness="{Binding StrokeThickness2}"
-                                               Width="{Binding RectWidth2}"
-                                               Height="{Binding RectHeight2}"
-                                               Canvas.Left="{Binding RectX2}"
-                                               Canvas.Top="{Binding RectY2}"
-                                               IsHitTestVisible="False"/>
-                                    <Rectangle Stroke="#FFE53935"
-                                               Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                               StrokeThickness="{Binding StrokeThickness3}"
-                                               Width="{Binding RectWidth3}"
-                                               Height="{Binding RectHeight3}"
-                                               Canvas.Left="{Binding RectX3}"
-                                               Canvas.Top="{Binding RectY3}"
-                                               IsHitTestVisible="False"/>
-                            </Canvas>
-                        </Grid>
-                    </Viewbox>
-                </Border>
-                <Border Grid.Row="1" Margin="0,10,0,0" Padding="10,8"
-                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                        BorderThickness="1" CornerRadius="14">
-                    <StackPanel>
-                        <DockPanel Margin="2,0,2,6">
-                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                                <ComboBox Width="110" Margin="0,0,8,0"
-                                          ItemsSource="{Binding RoiTypeItems}"
-                                          SelectedItem="{Binding SelectedRoiType, Mode=TwoWay}"
-                                          Visibility="{Binding IsRoiEditing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                <Button Command="{Binding ToggleRoiEditingCommand}"
-                                        IsEnabled="{Binding CanEditRoi}"
-                                        Padding="12,5">
-                                    <Button.Style>
-                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                            <Setter Property="Content" Value="調整 ROI"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsRoiEditing}" Value="True">
-                                                    <Setter Property="Content" Value="完成 ROI"/>
-                                                    <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
-                                                    <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
-                                                    <Setter Property="Foreground" Value="{StaticResource Blue}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Button.Style>
-                                </Button>
-                            </StackPanel>
-                            <TextBlock Text="站別" FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
-                                       FontSize="11" Margin="12,0,8,0" TextTrimming="CharacterEllipsis"/>
+            <GroupBox Grid.Row="1" Grid.ColumnSpan="2" Header="檢測結果" Margin="0,10,0,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+                    <Border Grid.Row="0" Background="{StaticResource SurfaceSubtle}"
+                            BorderBrush="{StaticResource Line}" BorderThickness="1" CornerRadius="8"
+                            Padding="7,4" Margin="0,0,0,7"
+                            Visibility="{Binding IsAnalyzingTestImages, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <DockPanel>
+                            <TextBlock Text="{Binding AnalysisProgressText}" FontSize="11"
+                                       VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ProgressBar Minimum="0" Maximum="{Binding AnalysisProgressMaximum}"
+                                         Value="{Binding AnalysisProgressValue}" Height="8" MinWidth="120"
+                                         VerticalAlignment="Center"/>
                         </DockPanel>
-                        <ItemsControl ItemsSource="{Binding StationSlots}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <Grid Margin="2,0">
-                                        <Button Content="{Binding Number}" Padding="0" MinWidth="0" MinHeight="36"
-                                                Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding Number}"
-                                                IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                ToolTip="切換站別">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                    <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
-                                                    <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
-                                                            <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
-                                                            <Setter Property="Foreground" Value="{StaticResource Blue}"/>
-                                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                        </Button>
-                                    </Grid>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </StackPanel>
-                </Border>
-                <Border Grid.Row="2" Margin="0,8,0,0" Padding="8,6"
-                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                        BorderThickness="1" CornerRadius="14">
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Button Command="{Binding PreviousTestImageCommand}"
-                                Content="&#xE892;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                Width="42" Height="36" MinHeight="0" Padding="0" Margin="2"
-                                IsEnabled="{Binding CanNavigatePrevious}" ToolTip="上一張圖片"/>
-                        <Button x:Name="TestImageCountButton"
-                                Click="OpenTestImagePicker_Click"
-                                Padding="12,6" Margin="4,2"
-                                ToolTip="選擇圖片；目前只切換預覽，不會執行檢測">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding TestImageInfo}" FontWeight="SemiBold"/>
-                                <TextBlock Text=" &#xE70D;" FontFamily="Segoe MDL2 Assets" Margin="5,0,0,0"/>
-                            </StackPanel>
-                        </Button>
-                        <Button Command="{Binding NextTestImageCommand}"
-                                Content="&#xE893;" FontFamily="Segoe MDL2 Assets" FontSize="16"
-                                Width="42" Height="36" MinHeight="0" Padding="0" Margin="2"
-                                IsEnabled="{Binding CanNavigateNext}" ToolTip="下一張圖片"/>
-                    </StackPanel>
-                </Border>
-            </Grid>
-
-            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
-                <StackPanel>
-
-
-
-
-                    <GroupBox Header="測試圖片">
-                        <StackPanel Margin="0">
-                            <UniformGrid Columns="2" HorizontalAlignment="Stretch">
-                                <Button Style="{StaticResource TestActionButton}"
-                                        Command="{Binding TestImageCommand}"
-                                        ToolTip="只載入資料夾清單與預覽，不執行測試"
-                                        AutomationProperties.Name="選擇資料夾">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
-                                            <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
-                                                  Fill="#E8F2FF" Stroke="#007AFF" StrokeThickness="1.5"/>
-                                        </Viewbox>
-                                        <TextBlock Text="選擇資料夾" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                    </Border>
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="1*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="檢測良率" FontWeight="SemiBold" Margin="0,0,0,5"/>
+                            <Grid Grid.Row="1">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="6"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" Style="{StaticResource YieldCardButtonStyle}"
+                                        Background="#EAF7EE" BorderBrush="#B7E4C7"
+                                        Command="{Binding ShowTestImageResultsByStatusCommand}"
+                                        CommandParameter="OK" ToolTip="檢視 OK 檢測結果" AutomationProperties.Name="檢視 OK 結果">
+                                    <DockPanel Margin="7,4">
+                                        <TextBlock Text="OK" Foreground="#248A3D" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding OverallOkCount}" Foreground="#248A3D" FontWeight="SemiBold" FontSize="16" TextAlignment="Right"/>
+                                            <TextBlock Text="{Binding OverallOkRateText}" Foreground="#248A3D" FontSize="10" TextAlignment="Right"/>
+                                        </StackPanel>
+                                    </DockPanel>
                                 </Button>
-                                <Button Style="{StaticResource TestActionButton}"
-                                        Command="{Binding StartContinuousTestCommand}"
-                                        ToolTip="開始連續測試清單中的所有圖片"
-                                        AutomationProperties.Name="連續測試">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
-                                            <Grid Width="24" Height="24">
-                                                <Ellipse Stroke="#34C759" StrokeThickness="2.5"/>
-                                                <Path Data="M9,6 L18,12 L9,18 Z" Fill="#34C759"/>
-                                            </Grid>
-                                        </Viewbox>
-                                        <TextBlock Text="連續測試" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
-                                    </StackPanel>
+                                <Button Grid.Column="2" Style="{StaticResource YieldCardButtonStyle}"
+                                        Background="#FFF0EF" BorderBrush="#FFD1CE"
+                                        Command="{Binding ShowTestImageResultsByStatusCommand}"
+                                        CommandParameter="NG" ToolTip="檢視 NG 檢測結果" AutomationProperties.Name="檢視 NG 結果">
+                                    <DockPanel Margin="7,4">
+                                        <TextBlock Text="NG" Foreground="#D32F2F" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        <StackPanel DockPanel.Dock="Right" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding OverallNgCount}" Foreground="#D32F2F" FontWeight="SemiBold" FontSize="16" TextAlignment="Right"/>
+                                            <TextBlock Text="{Binding OverallNgRateText}" Foreground="#D32F2F" FontSize="10" TextAlignment="Right"/>
+                                        </StackPanel>
+                                    </DockPanel>
                                 </Button>
-                                <Button Style="{StaticResource TestActionButton}"
-                                        Command="{Binding TestSingleImageCommand}"
-                                        ToolTip="選擇並測試單張圖片"
-                                        AutomationProperties.Name="單張測試">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
-                                            <Grid Width="24" Height="20">
-                                                <Border BorderBrush="#007AFF" BorderThickness="1.7" CornerRadius="2"/>
-                                                <Ellipse Width="3.5" Height="3.5" Fill="#007AFF" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4,3,0,0"/>
-                                                <Path Data="M3,17 L9,10 L13,14 L17,8 L22,17 Z" Fill="#B9D8FF" Stroke="#007AFF" StrokeThickness="1.2"/>
-                                            </Grid>
-                                        </Viewbox>
-                                        <TextBlock Text="單張測試" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource TestActionButton}"
-                                        Command="{Binding ExportTestImagesCommand}"
-                                        ToolTip="匯出 Excel 檢測報表"
-                                        AutomationProperties.Name="匯出 Excel 報表">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
-                                            <Grid Width="20" Height="22">
-                                                <Path Data="M3,1 L13,1 L18,6 L18,21 L3,21 Z M13,1 L13,6 L18,6"
-                                                      Fill="#F8F8FA" Stroke="#6E6E73" StrokeThickness="1.4"/>
-                                                <Path Data="M10,7 L10,15 M7,12 L10,15 L13,12"
-                                                      Stroke="#007AFF" StrokeThickness="1.8" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
-                                            </Grid>
-                                        </Viewbox>
-                                        <TextBlock Text="匯出報表" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                                <Button Style="{StaticResource TestActionButton}"
-                                        Command="{Binding ShowTestImageResultsCommand}"
-                                        ToolTip="檢視全部檢測結果"
-                                        AutomationProperties.Name="檢視全部結果">
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                        <Viewbox Width="20" Height="20" Margin="0,0,6,0">
-                                            <StackPanel Width="22" VerticalAlignment="Center">
-                                                <Border Height="2" Background="#007AFF" Margin="0,2"/>
-                                                <Border Height="2" Background="#6E6E73" Margin="0,2"/>
-                                                <Border Height="2" Background="#6E6E73" Margin="0,2"/>
-                                            </StackPanel>
-                                        </Viewbox>
-                                        <TextBlock Text="檢視結果" FontFamily="Microsoft JhengHei UI" FontSize="11" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </Button>
-                            </UniformGrid>
-                            <Border Background="{StaticResource SurfaceSubtle}"
-                                    BorderBrush="{StaticResource Line}"
-                                    BorderThickness="1"
-                                    CornerRadius="10"
-                                    Padding="8"
-                                    Margin="0,8,0,0"
-                                    Visibility="{Binding IsAnalyzingTestImages, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <StackPanel>
-                                    <TextBlock Text="{Binding AnalysisProgressText}"
-                                               Style="{StaticResource ResultValue}"
-                                               TextWrapping="Wrap"/>
-                                    <ProgressBar Minimum="0"
-                                                 Maximum="{Binding AnalysisProgressMaximum}"
-                                                 Value="{Binding AnalysisProgressValue}"
-                                                 Height="8"
-                                                 Margin="0,6,0,0"/>
-                                </StackPanel>
-                            </Border>
-                            <Border Background="{StaticResource SurfaceSubtle}"
-                                    BorderBrush="{StaticResource Line}"
-                                    BorderThickness="1"
-                                    CornerRadius="10"
-                                    Padding="8"
-                                    Margin="0,0,0,8">
-                                <StackPanel>
-                                    <TextBlock Text="總結果" FontWeight="SemiBold" Foreground="{StaticResource Text}" Margin="0,0,0,4"/>
-                                    <TextBlock Style="{StaticResource ResultValue}">
-                                        <TextBlock.Text>
-                                            <MultiBinding StringFormat="總判定 OK / NG: {0} / {1}">
-                                                <Binding Path="OverallOkCount"/>
-                                                <Binding Path="OverallNgCount"/>
-                                            </MultiBinding>
-                                        </TextBlock.Text>
-                                    </TextBlock>
-                                </StackPanel>
-                            </Border>
-                            <Separator Margin="0,8"/>
+                            </Grid>
+                            <TextBlock Grid.Row="2" Text="{Binding TotalTestImageCount, StringFormat=已判定 {0} 張}"
+                                       Foreground="{StaticResource Muted}" FontSize="10" Margin="0,4,0,0"/>
+                        </Grid>
+                        <Border Grid.Column="1" Width="1" Background="{StaticResource Line}"/>
+                        <StackPanel Grid.Column="2" VerticalAlignment="Center">
                             <TextBlock Style="{StaticResource ResultValue}">
                                 <Run Text="亮度: "/>
                                 <Run Text="{Binding TestImageBrightness, StringFormat={}{0:F2}}" Foreground="{Binding BrightnessColor}"/>
@@ -667,46 +748,10 @@
                                 <Run Text="{Binding TestImageBrightnessDeltaPercentText, Mode=OneWay}" Foreground="{Binding BrightnessColor}"/>
                                 <Run Text=")"/>
                             </TextBlock>
-                            <TextBlock Style="{StaticResource ResultValue}"
-                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <Run Text="銳利度: "/>
-                                <Run Text="{Binding TestImageSharpness, StringFormat={}{0:F2}}" Foreground="{Binding SharpnessColor}"/>
-                            </TextBlock>
-                            <TextBlock Text="亮度檢測 ROI（藍色）" Style="{StaticResource FieldLabel}" Margin="0,8,0,3"/>
-                            <TextBlock Style="{StaticResource ResultValue}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
-                                        <Binding Path="TestImageBrightnessROI.X"/>
-                                        <Binding Path="TestImageBrightnessROI.Y"/>
-                                        <Binding Path="TestImageBrightnessROI.Width"/>
-                                        <Binding Path="TestImageBrightnessROI.Height"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <TextBlock Text="銳利度檢測 ROI（紅色）"
-                                       Style="{StaticResource FieldLabel}"
-                                       Margin="0,8,0,3"
-                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Style="{StaticResource ResultValue}"
-                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
-                                        <Binding Path="TestImageSharpnessROI.X"/>
-                                        <Binding Path="TestImageSharpnessROI.Y"/>
-                                        <Binding Path="TestImageSharpnessROI.Width"/>
-                                        <Binding Path="TestImageSharpnessROI.Height"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <TextBlock Text="{Binding TestImageMatchFailed}"
-                                       Foreground="Red"
-                                       FontWeight="Bold"
-                                       TextWrapping="Wrap"
-                                       Margin="0,8,0,0"/>
                         </StackPanel>
-                    </GroupBox>
-                </StackPanel>
-            </ScrollViewer>
+                    </Grid>
+                </Grid>
+            </GroupBox>
         </Grid>
     </Grid>
 </Window>

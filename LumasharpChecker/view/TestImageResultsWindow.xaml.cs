@@ -13,10 +13,18 @@ namespace LumasharpChecker.view
 {
     public partial class TestImageResultsWindow : Window
     {
-        public TestImageResultsWindow(IEnumerable<TestImageResultRow> results, string thumbnailMode)
+        public TestImageResultsWindow(IEnumerable<TestImageResultRow> results, string thumbnailMode, string statusFilter = "ALL")
         {
             InitializeComponent();
-            DataContext = results.Select(result => new TestImageResultDisplayRow(result, thumbnailMode)).ToList();
+            var filteredResults = statusFilter switch
+            {
+                "OK" => results.Where(result => result.IsOverallPass),
+                "NG" => results.Where(result => !result.IsOverallPass),
+                _ => results
+            };
+            Title = statusFilter == "ALL" ? "測試圖片結果" : $"{statusFilter} 檢測結果";
+            ResultsTitle.Text = Title;
+            DataContext = filteredResults.Select(result => new TestImageResultDisplayRow(result, thumbnailMode)).ToList();
         }
 
         private void ResultsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)

@@ -68,6 +68,17 @@ namespace LumasharpChecker.viewmodel
         public ObservableCollection<TestImageTreeNode> Children { get; set; } = new();
     }
 
+    public sealed class StationDatabasePathViewModel
+    {
+        public int Number { get; init; }
+        public string OkPath { get; init; } = string.Empty;
+        public string NgPath { get; init; } = string.Empty;
+        public bool OkDirectoryExists { get; init; }
+        public bool NgDirectoryExists { get; init; }
+        public string OkStatus => string.IsNullOrWhiteSpace(OkPath) ? "未設定" : OkDirectoryExists ? "可用" : "不存在";
+        public string NgStatus => string.IsNullOrWhiteSpace(NgPath) ? "未設定" : NgDirectoryExists ? "可用" : "不存在";
+    }
+
     public static class BatchPreviewModes
     {
         public const string All = "全部縮圖";
@@ -80,8 +91,17 @@ namespace LumasharpChecker.viewmodel
         private readonly ConcurrentDictionary<string, processInfo> _processMonitor = new();
         private ProfileManager profileManager = new("profile");
         private readonly RecipeManager recipeManager;
+        private readonly RecipeManager.AppPreferences _preferences;
         private bool _isInitializing;
         private bool _isLoadingRecipe;
+        private bool _continuousTestLoopActive;
+        private bool _continuousTestPaused;
+        private int _continuousTestNextIndex;
+        private string? _activeStationDatabase;
+        private readonly Dictionary<string, int> _testImageResultIndexes = new(StringComparer.OrdinalIgnoreCase);
+        private int _brightnessOkResultCount;
+        private int _sharpnessOkResultCount;
+        private int _overallOkResultCount;
 
         // 對外暴露可綁定集合（無需手動觸發通知，ObservableCollection 自帶集合變化事件）
         public ObservableCollection<processInfo> ProcessList { get; } = new();
@@ -185,6 +205,12 @@ namespace LumasharpChecker.viewmodel
 
         [ObservableProperty]
         private ObservableCollection<StationSlotViewModel> _stationSlots = new();
+
+        [ObservableProperty]
+        private ObservableCollection<StationDatabasePathViewModel> _stationDatabasePaths = new();
+
+        [ObservableProperty]
+        private string _databaseDayFolderDisplay = string.Empty;
 
         [ObservableProperty]
         private bool _isRoiEditing;
@@ -426,8 +452,9 @@ namespace LumasharpChecker.viewmodel
             ServerStatus = "LumasharpChecker";
 
             recipeManager = new RecipeManager(Environment.CurrentDirectory, profileManager.BasePath);
+            _preferences = recipeManager.LoadPreferences();
             _isInitializing = true;
-            StationCount = recipeManager.LoadPreferences().StationCount;
+            StationCount = _preferences.StationCount;
             _isInitializing = false;
 
             var t = profileManager.LoadAllProfile();
@@ -437,6 +464,9 @@ namespace LumasharpChecker.viewmodel
                 _selectedItem = _items[0];
             OnSelectionChanged();
             RefreshStationSlots();
+            SelectedRecipe = Recipes.FirstOrDefault(recipe =>
+                string.Equals(recipe.Id, _preferences.LastRecipeId, StringComparison.OrdinalIgnoreCase));
+            if (SelectedRecipe != null) LoadSelectedRecipe();
         }
 
         [RelayCommand]
@@ -474,16 +504,23 @@ namespace LumasharpChecker.viewmodel
             StationCount = CurrentRecipe.StationCount is 8 or 10 ? CurrentRecipe.StationCount : StationCount;
             _isLoadingRecipe = false;
             CurrentStationNumber = 1;
+            _activeStationDatabase = null;
             ResetTestImageState();
             LoadRecipeStation();
+            _preferences.LastRecipeId = CurrentRecipe.Id;
+            _preferences.StationCount = StationCount;
+            recipeManager.SavePreferences(_preferences);
         }
 
         [RelayCommand]
         private void CloseRecipe()
         {
             if (CurrentProfile != null && CurrentRecipe != null) SaveCurrentInspectionSettings(reanalyzeTestImages: false);
+            _activeStationDatabase = null;
             ResetTestImageState();
             CurrentRecipe = null;
+            _preferences.LastRecipeId = null;
+            recipeManager.SavePreferences(_preferences);
             CurrentStationNumber = 1;
             RefreshStationSlots();
             LoadCurrentProfile(SelectedItem, isLibraryProfile: true);
@@ -505,6 +542,11 @@ namespace LumasharpChecker.viewmodel
             {
                 if (CurrentRecipe?.Id == SelectedRecipe.Id) CloseRecipe();
                 recipeManager.DeleteRecipe(SelectedRecipe);
+                if (string.Equals(_preferences.LastRecipeId, SelectedRecipe.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    _preferences.LastRecipeId = null;
+                    recipeManager.SavePreferences(_preferences);
+                }
                 Recipes.Remove(SelectedRecipe);
                 SelectedRecipe = null;
                 SaveSettingsMessage = "Recipe 已刪除";
@@ -528,6 +570,8 @@ namespace LumasharpChecker.viewmodel
             CurrentStationNumber = stationNumber;
             ResetTestImageState();
             LoadRecipeStation();
+            if (_activeStationDatabase != null)
+                LoadStationDatabase(_activeStationDatabase);
         }
 
         [RelayCommand]
@@ -594,6 +638,141 @@ namespace LumasharpChecker.viewmodel
             StationSlots = slots;
         }
 
+        [RelayCommand]
+        private void SelectDatabaseDayFolder()
+        {
+            if (CurrentRecipe == null)
+            {
+                SaveSettingsMessage = "請先載入 Recipe，再設定各站 OK／NG 圖庫路徑。";
+                return;
+            }
+            if (IsAnalyzingTestImages)
+            {
+                SaveSettingsMessage = "圖片仍在檢測中，請完成後再設定圖庫路徑。";
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "選取日期、站號或 OK／NG 資料夾",
+                InitialDirectory = Directory.Exists(CurrentRecipe.DatabaseDayFolder)
+                    ? CurrentRecipe.DatabaseDayFolder
+                    : string.Empty
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            try
+            {
+                ApplyDatabaseDayFolder(dialog.FolderName, true);
+            }
+            catch (Exception ex)
+            {
+                SaveSettingsMessage = $"圖庫設定失敗：{ex.Message}";
+                MessageBox.Show(SaveSettingsMessage, "圖庫設定失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private bool ApplyDatabaseDayFolder(string folder, bool showMessages)
+        {
+            if (CurrentRecipe == null) return false;
+            string selectedFolder = Path.GetFullPath(folder);
+            string? dayFolder = ResolveDatabaseDayFolder(selectedFolder);
+            if (dayFolder == null)
+            {
+                if (showMessages)
+                    MessageBox.Show(
+                        "此資料夾及其上層找不到站號資料夾。請選擇日期資料夾（例如 welding\\09\\03）、站號資料夾，或該站的 OK／NG 資料夾。",
+                        "資料夾結構不符", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            CurrentRecipe.DatabaseDayFolder = dayFolder;
+            DatabaseDayFolderDisplay = dayFolder;
+            int availableStations = 0;
+            int classifiedStations = 0;
+            foreach (var station in CurrentRecipe.Stations.Where(item => item.Number <= CurrentRecipe.StationCount))
+            {
+                string stationFolder = Path.Combine(dayFolder, station.Number.ToString());
+                station.OkDatabasePath = Path.Combine(stationFolder, "OK");
+                station.NgDatabasePath = Path.Combine(stationFolder, "NG");
+                if (Directory.Exists(stationFolder)) availableStations++;
+                if (HasDirectDatabaseFolders(stationFolder)) classifiedStations++;
+            }
+
+            recipeManager.SaveManifest(CurrentRecipe);
+            RefreshStationDatabasePaths();
+            if (_activeStationDatabase != null)
+            {
+                ResetTestImageState();
+                LoadStationDatabase(_activeStationDatabase);
+            }
+            string resolutionNote = string.Equals(selectedFolder, dayFolder, StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : $"（已從所選子資料夾辨識日期層：{dayFolder}）";
+            SaveSettingsMessage = $"已為 {CurrentRecipe.Name} 的 {CurrentRecipe.StationCount} 站帶入路徑；{availableStations} 站的資料夾存在。{resolutionNote}可用主畫面 OK DB／NG DB／本站圖片載入。";
+            if (showMessages)
+                MessageBox.Show($"日期資料夾：{dayFolder}\n已一次設定 {CurrentRecipe.StationCount} 站路徑，其中 {availableStations} 站資料夾存在，{classifiedStations} 站有 OK 或 NG 子資料夾。\n站號資料夾內未分類的圖片，可用主畫面「本站圖片」載入。",
+                    "各站圖庫設定完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            return true;
+        }
+
+        private static string? ResolveDatabaseDayFolder(string selectedFolder)
+        {
+            if (HasStationFolders(selectedFolder)) return selectedFolder;
+
+            var parent = Directory.GetParent(selectedFolder);
+            string selectedName = Path.GetFileName(selectedFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+
+            // The user may select <day>\\<station> instead of the <day> folder.
+            if (int.TryParse(selectedName, out int stationNumber)
+                && stationNumber is >= 1 and <= 10
+                && parent != null
+                && HasStationFolders(parent.FullName))
+            {
+                return parent.FullName;
+            }
+
+            // Also accept selecting the station's OK or NG folder itself.
+            if ((string.Equals(selectedName, "OK", StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(selectedName, "NG", StringComparison.OrdinalIgnoreCase))
+                && parent != null
+                && int.TryParse(Path.GetFileName(parent.FullName), out stationNumber)
+                && stationNumber is >= 1 and <= 10
+                && HasDirectDatabaseFolders(parent.FullName))
+            {
+                var dayParent = parent.Parent;
+                if (dayParent != null && HasStationFolders(dayParent.FullName))
+                    return dayParent.FullName;
+            }
+
+            return null;
+        }
+
+        private static bool HasStationFolders(string dayFolder)
+            => Enumerable.Range(1, 10).Any(number => Directory.Exists(Path.Combine(dayFolder, number.ToString())));
+
+        private static bool HasDirectDatabaseFolders(string stationFolder)
+            => Directory.Exists(Path.Combine(stationFolder, "OK"))
+                || Directory.Exists(Path.Combine(stationFolder, "NG"));
+
+        private void RefreshStationDatabasePaths()
+        {
+            StationDatabasePaths = CurrentRecipe == null
+                ? new ObservableCollection<StationDatabasePathViewModel>()
+                : new ObservableCollection<StationDatabasePathViewModel>(CurrentRecipe.Stations
+                    .Where(station => station.Number <= CurrentRecipe.StationCount)
+                    .Select(station => new StationDatabasePathViewModel
+                    {
+                        Number = station.Number,
+                        OkPath = station.OkDatabasePath ?? string.Empty,
+                        NgPath = station.NgDatabasePath ?? string.Empty,
+                        OkDirectoryExists = !string.IsNullOrWhiteSpace(station.OkDatabasePath)
+                            && Directory.Exists(station.OkDatabasePath),
+                        NgDirectoryExists = !string.IsNullOrWhiteSpace(station.NgDatabasePath)
+                            && Directory.Exists(station.NgDatabasePath)
+                    }));
+        }
+
         private string GetProcessingProfileName() => CurrentRecipe == null
             ? CurrentProfile?.Name ?? string.Empty
             : RecipeManager.GetStationDirectoryName(CurrentStationNumber);
@@ -655,7 +834,13 @@ namespace LumasharpChecker.viewmodel
         [ObservableProperty]
         private int overallNgCount;
         [ObservableProperty]
+        private string overallOkRateText = "0.00%";
+        [ObservableProperty]
+        private string overallNgRateText = "0.00%";
+        [ObservableProperty]
         private bool isAnalyzingTestImages;
+        [ObservableProperty]
+        private bool isContinuousTestRunning;
         [ObservableProperty]
         private bool isTestImageAnalysisComplete;
         [ObservableProperty]
@@ -854,6 +1039,8 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             OnPropertyChanged(nameof(CanApplyLibraryProfileToStation));
             RefreshStationSlots();
+            RefreshStationDatabasePaths();
+            DatabaseDayFolderDisplay = value?.DatabaseDayFolder ?? string.Empty;
         }
 
         partial void OnStationCountChanged(int value)
@@ -863,7 +1050,8 @@ namespace LumasharpChecker.viewmodel
             {
                 if (CurrentRecipe != null && !_isLoadingRecipe && CurrentProfile != null)
                     SaveCurrentInspectionSettings(reanalyzeTestImages: false);
-                recipeManager.SavePreferences(new RecipeManager.AppPreferences { StationCount = value });
+                _preferences.StationCount = value;
+                recipeManager.SavePreferences(_preferences);
                 if (CurrentRecipe != null && !_isLoadingRecipe)
                 {
                     CurrentRecipe.StationCount = value;
@@ -876,6 +1064,7 @@ namespace LumasharpChecker.viewmodel
                 }
             }
             RefreshStationSlots();
+            RefreshStationDatabasePaths();
             OnPropertyChanged(nameof(CurrentInspectionName));
         }
 
@@ -972,18 +1161,63 @@ namespace LumasharpChecker.viewmodel
         }
 
         [RelayCommand]
-        private void ToggleRoiEditing()
+        private void ResetCurrentParameters()
         {
-            if (!CanEditRoi)
+            if (CurrentProfile == null)
             {
-                StationStatusMessage = "請先選擇設定檔或載入已設定的站別，再調整 ROI。";
+                StationStatusMessage = "請先選擇設定檔或載入已設定的站別，再重設參數。";
                 return;
             }
 
-            IsRoiEditing = !IsRoiEditing;
-            StationStatusMessage = IsRoiEditing
-                ? $"正在調整{SelectedRoiType} ROI：在目前影像上拖曳框選。"
-                : "ROI 調整已完成。";
+            if (IsAnalyzingTestImages)
+            {
+                StationStatusMessage = "圖片仍在檢測中，請完成後再重設參數。";
+                return;
+            }
+
+            var dialog = new Microsoft.Win32.OpenFileDialog
+            {
+                Title = "選取多張基準樣本圖片",
+                Filter = "圖片檔案|*.jpg;*.jpeg;*.png;*.bmp;*.gif|所有檔案|*.*",
+                Multiselect = true
+            };
+            if (dialog.ShowDialog() != true) return;
+
+            SelectedFiles.Clear();
+            foreach (var file in dialog.FileNames) SelectedFiles.Add(file);
+            IsRoiEditing = false;
+            _windowService.ShowProfileAddWindow(
+                SelectedFiles.ToList(), DetectionMode, CurrentProfile, SaveResetParameters);
+        }
+
+        private void SaveResetParameters(ProfileData profile, string patternImagePath)
+        {
+            if (CurrentProfile == null || !ReferenceEquals(CurrentProfile, profile))
+                throw new InvalidOperationException("目前站別已變更，無法保存重算參數。");
+            if (string.IsNullOrWhiteSpace(CurrentProfile.ImagePath))
+                throw new InvalidOperationException("目前設定沒有基準圖路徑，無法更新基準影像。");
+
+            var patternPath = Path.GetFullPath(CurrentProfile.ImagePath);
+            Directory.CreateDirectory(Path.GetDirectoryName(patternPath)!);
+            if (!string.Equals(Path.GetFullPath(patternImagePath), patternPath, StringComparison.OrdinalIgnoreCase))
+                File.Copy(patternImagePath, patternPath, true);
+            CurrentProfile.Bitmap = ProfileManager.LoadBitmapFromPath(patternPath);
+            CurrentProfile.ImageWidth = CurrentProfile.Bitmap.PixelWidth;
+            CurrentProfile.ImageHeight = CurrentProfile.Bitmap.PixelHeight;
+
+            LoadInspectionSettings(CurrentProfile);
+            SaveCurrentInspectionSettings(reanalyzeTestImages: false);
+            RefreshStationSlots();
+            OnPropertyChanged(nameof(CurrentProfile));
+            OnPropertyChanged(nameof(StationSettingsImage));
+            OnPropertyChanged(nameof(ImageSizeSummary));
+            OnPropertyChanged(nameof(BrightnessCvSummary));
+            OnPropertyChanged(nameof(SharpnessCvSummary));
+            OnPropertyChanged(nameof(BrightnessPercentileSummary));
+            OnPropertyChanged(nameof(SharpnessPercentileSummary));
+            SaveSettingsMessage = $"已用 {SelectedFiles.Count} 張樣本重算並保存目前設定，名稱維持「{CurrentProfile.Name}」。";
+            if (IsTestImageAnalysisComplete && TestImageFiles.Count > 0)
+                _ = ReanalyzeLoadedTestImagesAsync();
         }
 
         public void UpdateStationRoi(string roiType, int x, int y, int width, int height)
@@ -1149,6 +1383,9 @@ namespace LumasharpChecker.viewmodel
             TestImageMatchFailed = string.Empty;
             TestImageResults.Clear();
             IsTestImageAnalysisComplete = false;
+            IsContinuousTestRunning = false;
+            _continuousTestPaused = false;
+            _continuousTestNextIndex = 0;
             ResetTestImageSummary();
             CanNavigatePrevious = false;
             CanNavigateNext = false;
@@ -1271,20 +1508,58 @@ namespace LumasharpChecker.viewmodel
             };
             if (dialog.ShowDialog() != true) return;
 
+            _activeStationDatabase = null;
             ResetTestImageState();
             LoadTestImageFolder(dialog.FolderName);
         }
 
         [RelayCommand]
-        private async Task TestSingleImage()
+        private void OpenStationDatabase(string kind)
         {
-            if (CurrentProfile == null) return;
+            if (IsAnalyzingTestImages)
+            {
+                SaveSettingsMessage = "圖片仍在檢測中，請完成後再切換圖庫。";
+                return;
+            }
+            if (LoadStationDatabase(kind, true)) _activeStationDatabase = kind;
+        }
 
+        private bool LoadStationDatabase(string kind, bool showError = false)
+        {
+            var station = CurrentRecipe?.Stations.FirstOrDefault(item => item.Number == CurrentStationNumber);
+            string? folder = kind switch
+            {
+                "OK" => station?.OkDatabasePath,
+                "NG" => station?.NgDatabasePath,
+                "Station" when !string.IsNullOrWhiteSpace(CurrentRecipe?.DatabaseDayFolder)
+                    => Path.Combine(CurrentRecipe.DatabaseDayFolder, CurrentStationNumber.ToString()),
+                _ => null
+            };
+            string label = kind == "Station" ? "本站圖片" : kind + " DB";
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
+            {
+                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站的 {label} 資料夾尚未設定或不存在。";
+                if (showError)
+                    MessageBox.Show(SaveSettingsMessage + (string.IsNullOrWhiteSpace(folder) ? "\n請先使用圖庫設定選擇日期資料夾。" : $"\n{folder}"),
+                        "無法載入圖庫", MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            ResetTestImageState();
+            if (!LoadTestImageFolder(folder)) return false;
+            if (TestImageFiles.Count > 0)
+                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站 {label}：已載入 {TestImageFiles.Count} 張；按連續測試開始檢測。";
+            return true;
+        }
+
+        [RelayCommand]
+        private void SelectSingleImage()
+        {
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Filter = "圖片檔案|*.jpg;*.jpeg;*.png;*.bmp;*.gif|所有檔案|*.*",
                 Multiselect = false,
-                Title = "選擇要單獨測試的圖片"
+                Title = "選擇圖片"
             };
 
             if (dialog.ShowDialog() != true)
@@ -1298,17 +1573,20 @@ namespace LumasharpChecker.viewmodel
                 return;
             }
 
+            _activeStationDatabase = null;
             ResetTestImageState();
             TestImageFiles.Add(dialog.FileName);
             TestImageTree = BuildTestImageTree(TestImageFiles);
             CurrentTestImageIndex = 0;
-
-            await AnalyzeTestImageFolderAsync();
             ProcessCurrentTestImage();
+            SaveSettingsMessage = "已選擇單張圖片；按「連續測試」才會開始檢測";
         }
 
         private void ResetTestImageState()
         {
+            IsContinuousTestRunning = false;
+            _continuousTestPaused = false;
+            _continuousTestNextIndex = 0;
             TestImageFiles.Clear();
             TestImageTree.Clear();
             CurrentTestImageIndex = -1;
@@ -1329,7 +1607,7 @@ namespace LumasharpChecker.viewmodel
             UpdateDisplayImage();
         }
 
-        private void LoadTestImageFolder(string folderPath)
+        private bool LoadTestImageFolder(string folderPath)
         {
             try
             {
@@ -1350,18 +1628,20 @@ namespace LumasharpChecker.viewmodel
                 if (files.Length == 0)
                 {
                     SaveSettingsMessage = "資料夾內沒有支援的圖片";
-                    return;
+                    return true;
                 }
 
                 // 載入資料夾只建立清單並顯示第一張預覽，不執行影像檢測。
                 CurrentTestImageIndex = 0;
                 ProcessCurrentTestImage();
                 SaveSettingsMessage = $"已載入 {files.Length} 張圖片；按「連續測試」開始檢測";
+                return true;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"載入測試圖片資料夾失敗: {ex.Message}");
                 SaveSettingsMessage = $"載入圖片失敗：{ex.Message}";
+                return false;
             }
         }
 
@@ -1391,9 +1671,26 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void StartContinuousTest()
         {
+            if (IsContinuousTestRunning)
+            {
+                IsContinuousTestRunning = false;
+                _continuousTestPaused = true;
+                SaveSettingsMessage = $"連續測試已暫停（{_continuousTestNextIndex} / {TestImageFiles.Count}）";
+                return;
+            }
+
             if (IsAnalyzingTestImages)
             {
-                SaveSettingsMessage = "圖片仍在檢測中，請稍候";
+                if (_continuousTestLoopActive && _continuousTestPaused)
+                {
+                    _continuousTestPaused = false;
+                    IsContinuousTestRunning = true;
+                    SaveSettingsMessage = "連續測試繼續執行";
+                }
+                else
+                {
+                    SaveSettingsMessage = "圖片仍在檢測中，請稍候";
+                }
                 return;
             }
 
@@ -1403,13 +1700,116 @@ namespace LumasharpChecker.viewmodel
                 return;
             }
 
+            if (CurrentProfile == null)
+            {
+                SaveSettingsMessage = "請先載入 Recipe 或選擇設定檔";
+                return;
+            }
+
+            if (!_continuousTestPaused)
+            {
+                TestImageResults.Clear();
+                IsTestImageAnalysisComplete = false;
+                ResetTestImageSummary();
+                _continuousTestNextIndex = 0;
+            }
+
+            _continuousTestPaused = false;
+            IsContinuousTestRunning = true;
             _ = RunContinuousTestAsync();
         }
 
         private async Task RunContinuousTestAsync()
         {
-            await AnalyzeTestImageFolderAsync();
-            ProcessCurrentTestImage();
+            var imageFiles = TestImageFiles.ToList();
+            if (imageFiles.Count == 0)
+            {
+                IsContinuousTestRunning = false;
+                return;
+            }
+
+            _continuousTestLoopActive = true;
+            IsAnalyzingTestImages = true;
+            AnalysisProgressMaximum = imageFiles.Count;
+            AnalysisProgressValue = _continuousTestNextIndex;
+            string profileName = GetProcessingProfileName();
+            string profileBasePath = GetProcessingProfileBasePath();
+            bool includeSharpness = IsSharpnessEnabled;
+            double brightnessBaseValue = BrightnessBaseValue;
+
+            try
+            {
+                var processor = new ImageProcessor(profileBasePath);
+                while (IsContinuousTestRunning && _continuousTestNextIndex < imageFiles.Count)
+                {
+                    int index = _continuousTestNextIndex;
+                    string imagePath = imageFiles[index];
+                    CurrentTestImageIndex = index;
+                    CurrentTestImagePath = imagePath;
+                    TestImageInfo = $"圖片 {index + 1} / {imageFiles.Count}";
+                    CanNavigatePrevious = index > 0;
+                    CanNavigateNext = index < imageFiles.Count - 1;
+
+                    AnalysisProgressText = $"檢測中 {index + 1} / {imageFiles.Count}: {Path.GetFileName(imagePath)}";
+
+                    var result = await Task.Run(() => AnalyzeSingleTestImage(processor, imagePath, profileName, includeSharpness, brightnessBaseValue));
+
+                    UpsertTestImageResult(result);
+
+                    _continuousTestNextIndex = index + 1;
+                    AnalysisProgressValue = _continuousTestNextIndex;
+
+                    if (!IsContinuousTestRunning || _continuousTestNextIndex >= imageFiles.Count)
+                    {
+                        ApplyTestImageResult(result);
+                        RefreshContinuousPreview(imagePath);
+                    }
+                }
+
+                if (_continuousTestNextIndex >= imageFiles.Count)
+                {
+                    IsTestImageAnalysisComplete = true;
+                    AnalysisProgressText = $"檢測完成 {TestImageResults.Count} 張";
+                    _continuousTestPaused = false;
+                    _continuousTestNextIndex = 0;
+                }
+                else
+                {
+                    _continuousTestPaused = true;
+                    AnalysisProgressText = $"已暫停 {_continuousTestNextIndex} / {imageFiles.Count}";
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"連續測試失敗: {ex.Message}");
+                SaveSettingsMessage = $"連續測試失敗：{ex.Message}";
+                _continuousTestPaused = _continuousTestNextIndex < imageFiles.Count;
+            }
+            finally
+            {
+                _continuousTestLoopActive = false;
+                IsContinuousTestRunning = false;
+                IsAnalyzingTestImages = false;
+            }
+        }
+
+        public Task NavigateTestImageByWheelAsync(int delta) =>
+            delta > 0 ? PreviousTestImage() : NextTestImage();
+
+        private void RefreshContinuousPreview(string imagePath)
+        {
+            try
+            {
+                CurrentTestImageBitmap = LoadBitmapFromPath(imagePath);
+                UpdateDisplayImage();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"連續測試預覽載入失敗: {ex.Message}");
+                CurrentTestImageBitmap = null;
+                UpdateDisplayImage();
+                TestImageMatchFailed = "圖片預覽載入失敗";
+            }
         }
 
         public void SelectTestImage(string filePath)
@@ -1550,6 +1950,10 @@ namespace LumasharpChecker.viewmodel
 
         private void ResetTestImageSummary()
         {
+            _testImageResultIndexes.Clear();
+            _brightnessOkResultCount = 0;
+            _sharpnessOkResultCount = 0;
+            _overallOkResultCount = 0;
             TotalTestImageCount = 0;
             BrightnessOkCount = 0;
             BrightnessNgCount = 0;
@@ -1557,17 +1961,81 @@ namespace LumasharpChecker.viewmodel
             SharpnessNgCount = 0;
             OverallOkCount = 0;
             OverallNgCount = 0;
+            OverallOkRateText = "0.00%";
+            OverallNgRateText = "0.00%";
         }
 
         private void UpdateTestImageSummary()
         {
+            _testImageResultIndexes.Clear();
+            _brightnessOkResultCount = 0;
+            _sharpnessOkResultCount = 0;
+            _overallOkResultCount = 0;
+
+            for (int i = 0; i < TestImageResults.Count; i++)
+            {
+                TestImageResultRow result = TestImageResults[i];
+                _testImageResultIndexes[result.FilePath] = i;
+                AdjustTestImageResultCounts(result, 1);
+            }
+
+            UpdateTestImageSummaryProperties();
+        }
+
+        private void UpsertTestImageResult(TestImageResultRow result)
+        {
+            if (_testImageResultIndexes.TryGetValue(result.FilePath, out int existingIndex) &&
+                existingIndex >= 0 && existingIndex < TestImageResults.Count)
+            {
+                AdjustTestImageResultCounts(TestImageResults[existingIndex], -1);
+                TestImageResults[existingIndex] = result;
+                AdjustTestImageResultCounts(result, 1);
+            }
+            else
+            {
+                _testImageResultIndexes[result.FilePath] = TestImageResults.Count;
+                TestImageResults.Add(result);
+                AdjustTestImageResultCounts(result, 1);
+            }
+
+            UpdateTestImageSummaryProperties();
+        }
+
+        private void AdjustTestImageResultCounts(TestImageResultRow result, int direction)
+        {
+            if (result.BrightnessSafe) _brightnessOkResultCount += direction;
+            if (result.SharpnessSafe) _sharpnessOkResultCount += direction;
+            if (result.IsOverallPass) _overallOkResultCount += direction;
+        }
+
+        private void UpdateTestImageSummaryProperties()
+        {
             TotalTestImageCount = TestImageResults.Count;
-            BrightnessOkCount = TestImageResults.Count(result => result.BrightnessSafe);
+            BrightnessOkCount = _brightnessOkResultCount;
             BrightnessNgCount = TotalTestImageCount - BrightnessOkCount;
-            SharpnessOkCount = IsSharpnessEnabled ? TestImageResults.Count(result => result.SharpnessSafe) : 0;
+            SharpnessOkCount = IsSharpnessEnabled ? _sharpnessOkResultCount : 0;
             SharpnessNgCount = IsSharpnessEnabled ? TotalTestImageCount - SharpnessOkCount : 0;
-            OverallOkCount = TestImageResults.Count(result => result.IsOverallPass);
+            OverallOkCount = _overallOkResultCount;
             OverallNgCount = TotalTestImageCount - OverallOkCount;
+            OverallOkRateText = TotalTestImageCount == 0
+                ? "0.00%"
+                : $"{OverallOkCount * 100.0 / TotalTestImageCount:F2}%";
+            OverallNgRateText = TotalTestImageCount == 0
+                ? "0.00%"
+                : $"{OverallNgCount * 100.0 / TotalTestImageCount:F2}%";
+        }
+
+        private TestImageResultRow? FindTestImageResult(string imagePath)
+        {
+            return _testImageResultIndexes.TryGetValue(imagePath, out int index) &&
+                   index >= 0 && index < TestImageResults.Count
+                ? TestImageResults[index]
+                : null;
+        }
+
+        private bool AreAllTestImagesAnalyzed()
+        {
+            return TestImageFiles.Count > 0 && _testImageResultIndexes.Count >= TestImageFiles.Count;
         }
 
         private void ProcessCurrentTestImage()
@@ -1582,7 +2050,7 @@ namespace LumasharpChecker.viewmodel
             CanNavigatePrevious = CurrentTestImageIndex > 0;
             CanNavigateNext = CurrentTestImageIndex < TestImageFiles.Count - 1;
 
-            var cachedResult = TestImageResults.FirstOrDefault(result => string.Equals(result.FilePath, CurrentTestImagePath, StringComparison.OrdinalIgnoreCase));
+            var cachedResult = FindTestImageResult(CurrentTestImagePath);
             if (cachedResult != null)
             {
                 ApplyTestImageResult(cachedResult);
@@ -1592,7 +2060,7 @@ namespace LumasharpChecker.viewmodel
 
             try
             {
-                // 導覽清單只切換預覽；分析只能由單張或連續測試命令啟動。
+                // 清單和選圖只切換預覽；方向鍵切換圖片時會補做單張分析。
                 TestImageBrightness = 0;
                 TestImageBrightnessDeltaPercent = double.NaN;
                 TestImageSharpness = 0;
@@ -1651,25 +2119,24 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void ShowTestImageResults()
         {
-            if (TestImageFiles.Count == 0)
+            ShowTestImageResults("ALL");
+        }
+
+        [RelayCommand]
+        private void ShowTestImageResultsByStatus(string statusFilter)
+        {
+            ShowTestImageResults(statusFilter);
+        }
+
+        private void ShowTestImageResults(string statusFilter)
+        {
+            if (TestImageResults.Count == 0)
             {
-                SaveSettingsMessage = "請先載入測試圖片";
+                SaveSettingsMessage = "目前還沒有可檢視的檢測結果";
                 return;
             }
 
-            if (!IsTestImageAnalysisComplete)
-            {
-                if (IsAnalyzingTestImages)
-                {
-                    SaveSettingsMessage = "圖片仍在檢測中，請稍候再檢視結果";
-                    return;
-                }
-
-                SaveSettingsMessage = "請先完成測試圖片檢測";
-                return;
-            }
-
-            var window = new TestImageResultsWindow(TestImageResults, ResultsThumbnailMode);
+            var window = new TestImageResultsWindow(TestImageResults, ResultsThumbnailMode, statusFilter);
             window.Owner = Application.Current.MainWindow;
             window.Show();
         }
@@ -1686,22 +2153,85 @@ namespace LumasharpChecker.viewmodel
         }
 
         [RelayCommand]
-        private void PreviousTestImage()
+        private async Task PreviousTestImage()
         {
+            if (IsAnalyzingTestImages)
+            {
+                SaveSettingsMessage = "圖片仍在檢測中，請稍候";
+                return;
+            }
+
             if (CanNavigatePrevious && CurrentTestImageIndex > 0)
             {
                 CurrentTestImageIndex--;
                 ProcessCurrentTestImage();
+                await AnalyzeCurrentTestImageAsync();
             }
         }
 
         [RelayCommand]
-        private void NextTestImage()
+        private async Task NextTestImage()
         {
+            if (IsAnalyzingTestImages)
+            {
+                SaveSettingsMessage = "圖片仍在檢測中，請稍候";
+                return;
+            }
+
             if (CanNavigateNext && CurrentTestImageIndex < TestImageFiles.Count - 1)
             {
                 CurrentTestImageIndex++;
                 ProcessCurrentTestImage();
+                await AnalyzeCurrentTestImageAsync();
+            }
+        }
+
+        private async Task AnalyzeCurrentTestImageAsync()
+        {
+            if (CurrentProfile == null || CurrentTestImageIndex < 0 || CurrentTestImageIndex >= TestImageFiles.Count)
+            {
+                return;
+            }
+
+            string imagePath = CurrentTestImagePath;
+            if (FindTestImageResult(imagePath) != null)
+            {
+                IsTestImageAnalysisComplete = AreAllTestImagesAnalyzed();
+                return;
+            }
+
+            string profileName = GetProcessingProfileName();
+            string profileBasePath = GetProcessingProfileBasePath();
+            bool includeSharpness = IsSharpnessEnabled;
+            double brightnessBaseValue = BrightnessBaseValue;
+
+            IsAnalyzingTestImages = true;
+            AnalysisProgressValue = 0;
+            AnalysisProgressMaximum = 1;
+            AnalysisProgressText = $"檢測中 1 / 1: {Path.GetFileName(imagePath)}";
+
+            try
+            {
+                var result = await Task.Run(() =>
+                {
+                    var processor = new ImageProcessor(profileBasePath);
+                    return AnalyzeSingleTestImage(processor, imagePath, profileName, includeSharpness, brightnessBaseValue);
+                });
+
+                UpsertTestImageResult(result);
+                IsTestImageAnalysisComplete = AreAllTestImagesAnalyzed();
+                AnalysisProgressValue = 1;
+                AnalysisProgressText = $"已完成 {Path.GetFileName(imagePath)}";
+                ProcessCurrentTestImage();
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"檢測目前圖片失敗: {ex.Message}");
+                SaveSettingsMessage = $"檢測圖片失敗：{ex.Message}";
+            }
+            finally
+            {
+                IsAnalyzingTestImages = false;
             }
         }
 
@@ -1733,7 +2263,7 @@ namespace LumasharpChecker.viewmodel
         public interface IWindowService
         {
             bool? ShowProfileDetailWindow(ProfileData profile, List<string> imagesFiles);  // 抽象視窗顯示行為
-            bool? ShowProfileAddWindow(List<string> imagesFiles, string detectionMode);  // 抽象視窗顯示行為
+            bool? ShowProfileAddWindow(List<string> imagesFiles, string detectionMode, ProfileData? profileToReset = null, Action<ProfileData, string>? resetCompleted = null);  // 抽象視窗顯示行為
         }
         public class WindowService : IWindowService
         {
@@ -1745,7 +2275,7 @@ namespace LumasharpChecker.viewmodel
                 window.DataContext = new ProfileDetailViewModel(profile, imagesFiles);  // 傳遞資料
                 return window.ShowDialog();  // 回傳 DialogResult
             }
-            public bool? ShowProfileAddWindow(List<string> imagesFiles, string detectionMode)
+            public bool? ShowProfileAddWindow(List<string> imagesFiles, string detectionMode, ProfileData? profileToReset = null, Action<ProfileData, string>? resetCompleted = null)
             {
                 var window = new ProfileAddWindows();
                 var services = new ServiceCollection();
@@ -1755,7 +2285,10 @@ namespace LumasharpChecker.viewmodel
                 var provider = services.BuildServiceProvider();
                 // 設定主視窗 DataContext
                 var vm = provider.GetRequiredService<ProfileAddViewModel>();
-                vm.Initialize(imagesFiles, detectionMode);
+                if (profileToReset != null && resetCompleted != null)
+                    vm.InitializeForReset(imagesFiles, detectionMode, profileToReset, resetCompleted);
+                else
+                    vm.Initialize(imagesFiles, detectionMode);
                 window.DataContext = vm;
                 return window.ShowDialog();
 

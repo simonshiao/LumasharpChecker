@@ -15,7 +15,7 @@
 
         <StackPanel Margin="0,0,0,18">
             <TextBlock Text="Recipe 與站別設定" FontSize="24" FontWeight="SemiBold"/>
-            <TextBlock Text="先建立或載入 Recipe，再逐站套用設定檔。ROI 可回主畫面直接在影像上調整。"
+            <TextBlock Text="雙擊 Recipe 可直接載入，再逐站套用設定檔。重設參數可回主畫面選取多張樣本重新計算。"
                        Foreground="{StaticResource Muted}" Margin="0,5,0,0"/>
         </StackPanel>
 
@@ -31,6 +31,11 @@
                             <ListBox ItemsSource="{Binding Recipes}" SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}"
                                      MinHeight="118" MaxHeight="190" BorderBrush="{StaticResource Line}"
                                      Background="{StaticResource SurfaceSubtle}" Padding="4">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <EventSetter Event="MouseDoubleClick" Handler="RecipeItem_MouseDoubleClick"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
                                         <Border Padding="10,8" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
