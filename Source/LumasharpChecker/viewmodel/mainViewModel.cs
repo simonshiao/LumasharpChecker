@@ -703,6 +703,8 @@ namespace LumasharpChecker.viewmodel
                 slots.Add(slot);
             }
             StationSlots = slots;
+            OnPropertyChanged(nameof(RecipeConfigurationSummary));
+            OnPropertyChanged(nameof(CurrentStationStatusText));
         }
 
         [RelayCommand]
@@ -1055,6 +1057,30 @@ namespace LumasharpChecker.viewmodel
         public bool IsSharpnessFixedMode => SharpnessLimitMode == ProfileManager.LimitMode.Fixed;
         public bool IsSharpnessEnabled => DetectionMode == ProfileManager.InspectionMode.BrightnessSharpness;
         public bool IsRecipeActive => CurrentRecipe != null;
+        // 全域上方工具列直接讀取目前載入的 Recipe／站別，避免只顯示尚未套用的選單項目。
+        public string RecipeConfigurationSummary => CurrentRecipe == null
+            ? "未選擇" : $"已設定 {StationSlots.Count(slot => slot.IsConfigured)}/{StationCount} 站";
+        public string CurrentStationStatusText => CurrentRecipe == null
+            ? "—" : $"CCD {CurrentStationNumber:00} · {(StationSlots.FirstOrDefault(slot => slot.Number == CurrentStationNumber)?.IsConfigured == true ? "已設定" : "待校準")}";
+        public string GlobalRunStatusText => CurrentRecipe == null
+            ? "請先選擇 Recipe"
+            : IsMultiStationTesting ? MultiStationProgress
+            : IsAnalyzingTestImages || IsContinuousTestRunning
+                ? (string.IsNullOrWhiteSpace(AnalysisProgressText) ? "單站檢測中" : AnalysisProgressText)
+                : IsTestImageAnalysisComplete && TotalTestImageCount > 0
+                    ? $"單站已判定 {TotalTestImageCount:N0} 張"
+                    : MultiStationProgress;
+        public System.Windows.Media.Brush GlobalStatusBrush => CurrentRecipe == null
+            ? System.Windows.Media.Brushes.DarkOrange
+            : IsMultiStationTesting || IsAnalyzingTestImages || IsContinuousTestRunning
+                ? System.Windows.Media.Brushes.DeepSkyBlue
+            : IsTestImageAnalysisComplete && TotalTestImageCount > 0
+                ? System.Windows.Media.Brushes.MediumSeaGreen
+            : MultiStationProgress.StartsWith("檢測完成", StringComparison.Ordinal)
+                ? System.Windows.Media.Brushes.MediumSeaGreen
+                : MultiStationProgress.StartsWith("多站測試中斷", StringComparison.Ordinal)
+                    ? System.Windows.Media.Brushes.IndianRed
+                    : System.Windows.Media.Brushes.SlateGray;
         public bool HasCurrentProfile => CurrentProfile != null;
         public bool HasSelectedRecipe => SelectedRecipe != null;
         public bool HasSelectedProfile => SelectedItem != null;
@@ -1107,6 +1133,8 @@ namespace LumasharpChecker.viewmodel
             MultiStationProgress = "尚未執行檢測";
             MultiStationTotal = "OK —   NG —   良率 —";
             OnPropertyChanged(nameof(IsRecipeActive));
+            OnPropertyChanged(nameof(GlobalStatusBrush));
+            OnPropertyChanged(nameof(GlobalRunStatusText));
             OnPropertyChanged(nameof(CurrentInspectionName));
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             OnPropertyChanged(nameof(CanApplyLibraryProfileToStation));
@@ -1144,7 +1172,28 @@ namespace LumasharpChecker.viewmodel
         {
             OnPropertyChanged(nameof(CurrentInspectionName));
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
+            OnPropertyChanged(nameof(CurrentStationStatusText));
         }
+
+        partial void OnIsAnalyzingTestImagesChanged(bool value)
+        {
+            OnPropertyChanged(nameof(GlobalRunStatusText));
+            OnPropertyChanged(nameof(GlobalStatusBrush));
+        }
+        partial void OnIsContinuousTestRunningChanged(bool value)
+        {
+            OnPropertyChanged(nameof(GlobalRunStatusText));
+            OnPropertyChanged(nameof(GlobalStatusBrush));
+        }
+        partial void OnIsTestImageAnalysisCompleteChanged(bool value)
+        {
+            OnPropertyChanged(nameof(GlobalRunStatusText));
+            OnPropertyChanged(nameof(GlobalStatusBrush));
+        }
+        partial void OnAnalysisProgressTextChanged(string value)
+            => OnPropertyChanged(nameof(GlobalRunStatusText));
+        partial void OnTotalTestImageCountChanged(int value)
+            => OnPropertyChanged(nameof(GlobalRunStatusText));
 
         private void NotifyBaselineSummaryChanged()
         {

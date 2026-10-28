@@ -318,7 +318,7 @@
 
     <Grid Background="{StaticResource Bg}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="68"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -327,7 +327,7 @@
         </Grid.ColumnDefinitions>
 
         <!-- 與 ChaoMcpHub 一致的輕量收合式導覽，保留原有單站檢測頁。 -->
-        <Border x:Name="SidebarPanel" Grid.Column="0" Grid.RowSpan="2"
+        <Border x:Name="SidebarPanel" Grid.Column="0" Grid.Row="1"
                 Background="{StaticResource HudHeaderGradient}" BorderBrush="{StaticResource HudBorder}"
                 BorderThickness="0,0,1,0" Padding="10,14">
             <DockPanel LastChildFill="False">
@@ -335,8 +335,8 @@
                     <Grid Margin="3,0,3,21">
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="34"/></Grid.ColumnDefinitions>
                         <StackPanel x:Name="SidebarBrand">
-                            <TextBlock Text="LUMA" FontSize="19" FontWeight="Bold" Foreground="{StaticResource Text}"/>
-                            <TextBlock Text="光源點檢" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
+                            <TextBlock Text="功能導覽" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
+                            <TextBlock Text="工作區" FontSize="11" Foreground="{StaticResource Muted}" Margin="0,3,0,0"/>
                         </StackPanel>
                         <Button x:Name="SidebarToggle" Grid.Column="1" Click="ToggleSidebar_Click"
                                 Content="&#xE700;" FontFamily="Segoe MDL2 Assets"
@@ -363,14 +363,6 @@
                         </StackPanel>
                     </Button>
                     <Border Height="1" Background="{StaticResource Line}" Margin="8,11,8,12"/>
-                    <Button Click="OpenRecipeManager_Click" ToolTip="選擇配方"
-                            AutomationProperties.Name="側欄選擇配方" Padding="10,10"
-                            Margin="0,0,0,6" HorizontalContentAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="24"/>
-                            <TextBlock x:Name="RecipeNavLabel" Text="選擇配方" VerticalAlignment="Center" Margin="7,0,0,0"/>
-                        </StackPanel>
-                    </Button>
                     <Button Click="OpenDatabaseSetup_Click" IsEnabled="{Binding IsRecipeActive}"
                             ToolTip="一次設定各站圖庫" AutomationProperties.Name="側欄各站圖庫設定"
                             Padding="10,10" HorizontalContentAlignment="Left">
@@ -388,66 +380,121 @@
             </DockPanel>
         </Border>
 
-        <Border x:Name="MainHeaderBar" Grid.Column="1" Background="{StaticResource Bg}"
-                Padding="22,10,60,8" Visibility="Collapsed">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Button Click="OpenRecipeManager_Click" Style="{StaticResource HeaderActionButton}"
-                        ToolTip="選擇配方並管理逐站設定" AutomationProperties.Name="選擇配方">
+        <!-- 全域上方工具列：配方與狀態跨八站／單站持續可見，不與側欄重複。 -->
+        <Border x:Name="MainHeaderBar" Grid.Row="0" Grid.ColumnSpan="2"
+                Panel.ZIndex="18" Background="{StaticResource HudHeaderGradient}"
+                BorderBrush="{StaticResource HudBorder}" BorderThickness="0,0,0,1"
+                Padding="16,7,57,7">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*" MinWidth="185"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" VerticalAlignment="Center" Margin="0,0,17,0">
+                    <TextBlock Text="LUMA" FontSize="20" FontWeight="Bold"
+                               Foreground="{StaticResource HudText}"/>
+                    <TextBlock Text="光源點檢" FontSize="10"
+                               Foreground="{StaticResource HudTextSoft}" Margin="0,1,0,0"/>
+                </StackPanel>
+                <Button Grid.Column="1" Click="OpenRecipeManager_Click"
+                        Style="{StaticResource HeaderActionButton}" Margin="0,0,13,0"
+                        Background="{StaticResource BlueSoft}" BorderBrush="{StaticResource HudBorder}"
+                        Padding="10,7" ToolTip="選擇／建立 Recipe，並管理各站檢測設定"
+                        AutomationProperties.Name="選擇配方">
                     <StackPanel Orientation="Horizontal">
-                        <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
-                              Width="17" Height="14" Stretch="Fill" Margin="0,0,7,0"
-                              Fill="{StaticResource BlueSoft}" Stroke="{StaticResource Blue}" StrokeThickness="1.5"/>
-                        <TextBlock Text="選擇配方" VerticalAlignment="Center" FontSize="12"/>
+                        <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="20" Foreground="{StaticResource Blue}"
+                                   VerticalAlignment="Center" Margin="0,0,7,0"/>
+                        <TextBlock Text="選擇配方" FontSize="13" FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <TextBlock Text="  &#xE70D;" FontFamily="Segoe MDL2 Assets"
+                                   FontSize="10" VerticalAlignment="Center" Foreground="{StaticResource Blue}"/>
                     </StackPanel>
                 </Button>
-                <Border Width="1" Height="23" Background="{StaticResource Line}" Margin="7,0,8,0"/>
-                <Button Command="{Binding ExportTestImagesCommand}" Style="{StaticResource HeaderActionButton}"
-                        ToolTip="匯出 Excel 檢測報表" AutomationProperties.Name="匯出報表">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="M5,2 L14,2 L19,7 L19,22 L5,22 Z M14,2 L14,7 L19,7 M12,9 L12,16 M9,13 L12,16 L15,13"
-                              Width="15" Height="17" Stretch="Fill" Margin="0,0,6,0"
-                              Fill="{StaticResource Surface}" Stroke="{StaticResource Blue}" StrokeThickness="1.4"/>
-                        <TextBlock Text="匯出報表" VerticalAlignment="Center" FontSize="12"/>
+                <Border Grid.Column="2" Background="#E8F8FE" CornerRadius="8"
+                        BorderBrush="{StaticResource Line}" BorderThickness="1"
+                        Padding="12,5" Margin="0,0,13,0">
+                    <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="目前 Recipe" FontSize="10"
+                                   Foreground="{StaticResource HudTextSoft}"/>
+                        <DockPanel LastChildFill="True" Margin="0,2,0,0">
+                            <TextBlock DockPanel.Dock="Right" Text="{Binding RecipeConfigurationSummary}"
+                                       FontSize="10" Foreground="{StaticResource HudAccentStrong}"
+                                       Margin="10,0,0,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未載入 Recipe}"
+                                       FontWeight="SemiBold" FontSize="14"
+                                       Foreground="{StaticResource HudText}" TextTrimming="CharacterEllipsis"
+                                       ToolTip="{Binding CurrentRecipe.Name}"/>
+                        </DockPanel>
                     </StackPanel>
-                </Button>
-                <Button Command="{Binding ShowTestImageResultsCommand}" Style="{StaticResource HeaderActionButton}"
-                        ToolTip="檢視已完成的檢測結果" AutomationProperties.Name="檢視結果">
-                    <StackPanel Orientation="Horizontal">
-                        <StackPanel Width="16" Margin="0,0,6,0" VerticalAlignment="Center">
-                            <Border Height="2" Background="{StaticResource Blue}" Margin="0,2"/>
-                            <Border Height="2" Background="{StaticResource Muted}" Margin="0,2"/>
-                            <Border Height="2" Background="{StaticResource Muted}" Margin="0,2"/>
+                </Border>
+                <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,15,0"
+                            MinWidth="100">
+                    <TextBlock Text="目前站別" FontSize="10" Foreground="{StaticResource HudTextSoft}"/>
+                    <TextBlock Text="{Binding CurrentStationStatusText}"
+                               FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource HudText}"
+                               Margin="0,3,0,0"/>
+                </StackPanel>
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center"
+                            Margin="0,0,12,0">
+                    <Button Command="{Binding ExportTestImagesCommand}"
+                            Style="{StaticResource HeaderActionButton}"
+                            ToolTip="匯出目前單站的 Excel 檢測報表"
+                            AutomationProperties.Name="匯出報表" Padding="9,8">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16" Foreground="{StaticResource Blue}" Margin="0,0,5,0"/>
+                            <TextBlock Text="報表" FontSize="12" VerticalAlignment="Center"/>
                         </StackPanel>
-                        <TextBlock Text="檢視結果" VerticalAlignment="Center" FontSize="12"/>
+                    </Button>
+                    <Button Command="{Binding ShowTestImageResultsCommand}"
+                            Style="{StaticResource HeaderActionButton}"
+                            ToolTip="查看目前單站的檢測結果"
+                            AutomationProperties.Name="檢視結果" Padding="9,8" Margin="4,0,0,0">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE8A1;" FontFamily="Segoe MDL2 Assets"
+                                       FontSize="16" Foreground="{StaticResource Blue}" Margin="0,0,5,0"/>
+                            <TextBlock Text="結果" FontSize="12" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+                <StackPanel Grid.Column="5" VerticalAlignment="Center" Width="142">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                        <Ellipse Width="7" Height="7" Fill="{Binding GlobalStatusBrush}" Margin="0,0,6,0"/>
+                        <TextBlock Text="檢測狀態" Foreground="{StaticResource HudTextSoft}"
+                                   FontSize="10"/>
                     </StackPanel>
-                </Button>
-                <Border Width="1" Height="23" Background="{StaticResource Line}" Margin="7,0,8,0"/>
-                <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="3,0,0,0"
-                           VerticalAlignment="Center" MaxWidth="135" TextTrimming="CharacterEllipsis"
-                           FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
-                <TextBlock Text="{Binding SaveSettingsMessage}" Margin="10,0,0,0" VerticalAlignment="Center"
-                           MaxWidth="170" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="11"/>
-            </StackPanel>
+                    <TextBlock Text="{Binding GlobalRunStatusText}"
+                               Foreground="{StaticResource HudText}" FontSize="11"
+                               FontWeight="SemiBold" Margin="0,4,0,0"
+                               TextTrimming="CharacterEllipsis"
+                               ToolTip="{Binding GlobalRunStatusText}"/>
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <ToggleButton Grid.Column="1" Grid.RowSpan="2"
+        <ToggleButton Grid.Column="1" Grid.Row="0"
                       Panel.ZIndex="30"
                       Content="&#xE713;"
                       IsChecked="{Binding IsSettingsPanelOpen, Mode=TwoWay}"
                       Width="34"
                       HorizontalAlignment="Right"
                       VerticalAlignment="Top"
-                      Margin="0,8,12,0"
+                      Margin="0,17,12,0"
                       FontFamily="Segoe MDL2 Assets"
                       ToolTip="設定"
                       Foreground="{StaticResource Blue}"/>
 
-        <Border Grid.Column="1" Grid.RowSpan="2"
+        <Border Grid.Column="1" Grid.Row="1"
                 Panel.ZIndex="20"
                 Width="360"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Top"
-                Margin="0,48,12,0"
+                Margin="0,8,12,0"
                 Background="White"
                 BorderBrush="{StaticResource Line}"
                 BorderThickness="1"
@@ -998,7 +1045,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Background="{StaticResource HudAccent}" Width="4"
                                 CornerRadius="2" Margin="0,2,13,2"/>
-                        <TextBlock Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未選擇配方}"
+                        <TextBlock Text="多站離線檢測"
                                    FontWeight="Bold" FontSize="17" VerticalAlignment="Center"
                                    Foreground="{StaticResource HudText}" Margin="0,0,19,0"/>
                         <TextBlock Text="{Binding MultiStationTotal}" VerticalAlignment="Center"

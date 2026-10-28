@@ -59,7 +59,6 @@ namespace LumasharpChecker
                 AdvancedSettingsExpander.IsExpanded = false;
             StationOverviewPage.Visibility = overview ? Visibility.Visible : Visibility.Collapsed;
             InspectionPage.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
-            MainHeaderBar.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
             var activeBackground = (System.Windows.Media.Brush)FindResource("BlueSoft");
             var activeBorder = (System.Windows.Media.Brush)FindResource("Blue");
             OverviewNavButton.Background = overview ? activeBackground : System.Windows.Media.Brushes.Transparent;
@@ -78,7 +77,6 @@ namespace LumasharpChecker
             SidebarFooter.Visibility = visibility;
             OverviewNavLabel.Visibility = visibility;
             InspectionNavLabel.Visibility = visibility;
-            RecipeNavLabel.Visibility = visibility;
             DatabaseNavLabel.Visibility = visibility;
         }
 

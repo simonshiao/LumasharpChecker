@@ -33,14 +33,28 @@ namespace LumasharpChecker.viewmodel
         public bool IsMultiStationTesting
         {
             get => _isMultiStationTesting;
-            private set => SetProperty(ref _isMultiStationTesting, value);
+            private set
+            {
+                if (SetProperty(ref _isMultiStationTesting, value))
+                {
+                    OnPropertyChanged(nameof(GlobalStatusBrush));
+                    OnPropertyChanged(nameof(GlobalRunStatusText));
+                }
+            }
         }
 
         private string _multiStationProgress = "尚未執行檢測";
         public string MultiStationProgress
         {
             get => _multiStationProgress;
-            private set => SetProperty(ref _multiStationProgress, value);
+            private set
+            {
+                if (SetProperty(ref _multiStationProgress, value))
+                {
+                    OnPropertyChanged(nameof(GlobalStatusBrush));
+                    OnPropertyChanged(nameof(GlobalRunStatusText));
+                }
+            }
         }
         private string _multiStationTotal = "OK —   NG —   良率 —";
         public string MultiStationTotal
