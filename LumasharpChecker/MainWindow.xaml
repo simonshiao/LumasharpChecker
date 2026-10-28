@@ -216,27 +216,15 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Background="{StaticResource Bg}" Padding="22,16,60,12">
-            <StackPanel>
-                <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="光衰與影像品質檢測"
-                               Foreground="{StaticResource Text}"
-                               FontSize="28"
-                               FontWeight="SemiBold"/>
-                    <TextBlock Text="設定檢測基準、檢視影像區域，並執行單張或批次檢測。"
-                               Foreground="{StaticResource Muted}"
-                               FontSize="12"
-                               Margin="1,6,0,0"/>
-                </StackPanel>
-                <WrapPanel Margin="0,12,0,0" VerticalAlignment="Center">
-                    <Button Content="Recipe 與設定" Click="OpenRecipeManager_Click" MinWidth="138" ToolTip="管理 Recipe、設定檔並查看基準摘要"/>
-                    <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="18,0,0,0"
-                               VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
-                               FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
-                    <TextBlock Text="{Binding SaveSettingsMessage}" Margin="14,0,0,0" VerticalAlignment="Center"
-                               MaxWidth="280" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="12"/>
-                </WrapPanel>
-            </StackPanel>
+        <Border Background="{StaticResource Bg}" Padding="22,10,60,8">
+            <WrapPanel VerticalAlignment="Center">
+                <Button Content="Recipe 與設定" Click="OpenRecipeManager_Click" MinWidth="138" ToolTip="管理 Recipe 與逐站設定"/>
+                <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="18,0,0,0"
+                           VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                           FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
+                <TextBlock Text="{Binding SaveSettingsMessage}" Margin="14,0,0,0" VerticalAlignment="Center"
+                           MaxWidth="280" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="12"/>
+            </WrapPanel>
         </Border>
 
         <ToggleButton Grid.RowSpan="2"
@@ -420,27 +408,36 @@
                         Effect="{StaticResource CardShadow}">
                     <Viewbox Stretch="Uniform">
                         <Grid>
-                            <Image Source="{Binding DisplayImage}" Stretch="None"/>
-                            <Canvas>
-                                <Rectangle Stroke="#FF43A047"
-                                           StrokeThickness="{Binding StrokeThickness}"
-                                           Width="{Binding RectWidth}"
-                                           Height="{Binding RectHeight}"
-                                           Canvas.Left="{Binding RectX}"
-                                           Canvas.Top="{Binding RectY}"/>
-                                <Rectangle Stroke="#FF039BE5"
-                                           StrokeThickness="{Binding StrokeThickness2}"
-                                           Width="{Binding RectWidth2}"
-                                           Height="{Binding RectHeight2}"
-                                           Canvas.Left="{Binding RectX2}"
-                                           Canvas.Top="{Binding RectY2}"/>
-                                <Rectangle Stroke="#FFE53935"
-                                           Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                           StrokeThickness="{Binding StrokeThickness3}"
-                                           Width="{Binding RectWidth3}"
-                                           Height="{Binding RectHeight3}"
-                                           Canvas.Left="{Binding RectX3}"
-                                           Canvas.Top="{Binding RectY3}"/>
+                            <Image Source="{Binding DisplayImage}" Stretch="None" IsHitTestVisible="False"/>
+                            <Canvas x:Name="MainRoiCanvas"
+                                    Width="{Binding DisplayImage.PixelWidth}"
+                                    Height="{Binding DisplayImage.PixelHeight}"
+                                    Background="Transparent"
+                                    MouseLeftButtonDown="MainRoiCanvas_MouseLeftButtonDown"
+                                    MouseMove="MainRoiCanvas_MouseMove"
+                                    MouseLeftButtonUp="MainRoiCanvas_MouseLeftButtonUp">
+                                    <Rectangle Stroke="#FF43A047"
+                                               StrokeThickness="{Binding StrokeThickness}"
+                                               Width="{Binding RectWidth}"
+                                               Height="{Binding RectHeight}"
+                                               Canvas.Left="{Binding RectX}"
+                                               Canvas.Top="{Binding RectY}"
+                                               IsHitTestVisible="False"/>
+                                    <Rectangle Stroke="#FF039BE5"
+                                               StrokeThickness="{Binding StrokeThickness2}"
+                                               Width="{Binding RectWidth2}"
+                                               Height="{Binding RectHeight2}"
+                                               Canvas.Left="{Binding RectX2}"
+                                               Canvas.Top="{Binding RectY2}"
+                                               IsHitTestVisible="False"/>
+                                    <Rectangle Stroke="#FFE53935"
+                                               Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                               StrokeThickness="{Binding StrokeThickness3}"
+                                               Width="{Binding RectWidth3}"
+                                               Height="{Binding RectHeight3}"
+                                               Canvas.Left="{Binding RectX3}"
+                                               Canvas.Top="{Binding RectY3}"
+                                               IsHitTestVisible="False"/>
                             </Canvas>
                         </Grid>
                     </Viewbox>
@@ -450,9 +447,32 @@
                         BorderThickness="1" CornerRadius="14">
                     <StackPanel>
                         <DockPanel Margin="2,0,2,6">
+                            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                <ComboBox Width="110" Margin="0,0,8,0"
+                                          ItemsSource="{Binding RoiTypeItems}"
+                                          SelectedItem="{Binding SelectedRoiType, Mode=TwoWay}"
+                                          Visibility="{Binding IsRoiEditing, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Command="{Binding ToggleRoiEditingCommand}"
+                                        IsEnabled="{Binding CanEditRoi}"
+                                        Padding="12,5">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                            <Setter Property="Content" Value="調整 ROI"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsRoiEditing}" Value="True">
+                                                    <Setter Property="Content" Value="完成 ROI"/>
+                                                    <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                                    <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Button.Style>
+                                </Button>
+                            </StackPanel>
                             <TextBlock Text="站別" FontWeight="SemiBold"/>
                             <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
-                                       FontSize="11" Margin="12,0,0,0" TextTrimming="CharacterEllipsis"/>
+                                       FontSize="11" Margin="12,0,8,0" TextTrimming="CharacterEllipsis"/>
                         </DockPanel>
                         <ItemsControl ItemsSource="{Binding StationSlots}">
                             <ItemsControl.ItemsPanel>
@@ -460,26 +480,28 @@
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Button Content="{Binding Number}" Margin="2,0" Padding="0" MinWidth="0" MinHeight="36"
-                                            Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            CommandParameter="{Binding Number}"
-                                            IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            ToolTip="載入 Recipe 後按數字切換站別">
-                                        <Button.Style>
-                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
-                                                <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                        <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
-                                                        <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource Blue}"/>
-                                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                                    </DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Button.Style>
-                                    </Button>
+                                    <Grid Margin="2,0">
+                                        <Button Content="{Binding Number}" Padding="0" MinWidth="0" MinHeight="36"
+                                                Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding Number}"
+                                                IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                ToolTip="切換站別">
+                                            <Button.Style>
+                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                    <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
+                                                    <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                                                            <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                                            <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+                                                            <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+                                    </Grid>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

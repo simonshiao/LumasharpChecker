@@ -179,6 +179,15 @@ namespace LumasharpChecker.viewmodel
         private ObservableCollection<StationSlotViewModel> _stationSlots = new();
 
         [ObservableProperty]
+        private bool _isRoiEditing;
+
+        [ObservableProperty]
+        private string _selectedRoiType = "定位";
+
+        [ObservableProperty]
+        private ObservableCollection<string> _roiTypeItems = new(new[] { "定位", "亮度", "銳利度" });
+
+        [ObservableProperty]
         private int _currentStationNumber = 1;
 
         [ObservableProperty]
@@ -272,7 +281,11 @@ namespace LumasharpChecker.viewmodel
             {
                 DisplayImage = null;
             }
+
+            OnPropertyChanged(nameof(StationSettingsImage));
         }
+
+        public BitmapImage? StationSettingsImage => CurrentProfile?.Bitmap ?? DisplayImage;
 
 
         [ObservableProperty]
@@ -781,10 +794,15 @@ namespace LumasharpChecker.viewmodel
         public bool IsSharpnessEnabled => DetectionMode == ProfileManager.InspectionMode.BrightnessSharpness;
         public bool IsRecipeActive => CurrentRecipe != null;
         public bool HasSelectedRecipe => SelectedRecipe != null;
+        public bool HasSelectedProfile => SelectedItem != null;
         public bool CanApplyLibraryProfileToStation => CurrentRecipe != null && SelectedItem != null;
+        public bool CanEditRoi => CurrentProfile != null && DisplayImage != null;
         public string CurrentInspectionName => CurrentRecipe == null
             ? CurrentProfile?.Name ?? "未選擇設定檔"
             : $"{CurrentRecipe.Name} / 第 {CurrentStationNumber:00} 站";
+        public string CurrentStationSettingsLabel => CurrentRecipe?.Stations.FirstOrDefault(station => station.Number == CurrentStationNumber)?.SourceProfileName
+            ?? CurrentProfile?.Name
+            ?? "尚未套用設定檔";
         public bool IsBrightnessOnlyMode => !IsSharpnessEnabled;
         public bool IsRoiPanelVisible => ShowRoiPanel;
         public string ResultsThumbnailMode => BatchPreviewMode == BatchPreviewModes.None
@@ -801,6 +819,21 @@ namespace LumasharpChecker.viewmodel
         partial void OnCurrentProfileChanged(ProfileData? value)
         {
             NotifyBaselineSummaryChanged();
+            OnPropertyChanged(nameof(CurrentStationSettingsLabel));
+            OnPropertyChanged(nameof(CanEditRoi));
+            if (value == null) IsRoiEditing = false;
+        }
+
+        partial void OnSelectedItemChanged(ProfileData? value)
+        {
+            OnPropertyChanged(nameof(HasSelectedProfile));
+            OnPropertyChanged(nameof(CanApplyLibraryProfileToStation));
+        }
+
+        partial void OnDisplayImageChanged(BitmapImage value)
+        {
+            OnPropertyChanged(nameof(CanEditRoi));
+            if (value == null) IsRoiEditing = false;
         }
 
         partial void OnSelectedRecipeChanged(RecipeManager.RecipeManifest? value) => OnPropertyChanged(nameof(HasSelectedRecipe));
@@ -809,6 +842,7 @@ namespace LumasharpChecker.viewmodel
         {
             OnPropertyChanged(nameof(IsRecipeActive));
             OnPropertyChanged(nameof(CurrentInspectionName));
+            OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             OnPropertyChanged(nameof(CanApplyLibraryProfileToStation));
             RefreshStationSlots();
         }
@@ -836,7 +870,11 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(CurrentInspectionName));
         }
 
-        partial void OnCurrentStationNumberChanged(int value) => OnPropertyChanged(nameof(CurrentInspectionName));
+        partial void OnCurrentStationNumberChanged(int value)
+        {
+            OnPropertyChanged(nameof(CurrentInspectionName));
+            OnPropertyChanged(nameof(CurrentStationSettingsLabel));
+        }
 
         private void NotifyBaselineSummaryChanged()
         {
@@ -922,6 +960,87 @@ namespace LumasharpChecker.viewmodel
         private void SaveInspectionSettings()
         {
             SaveCurrentInspectionSettings(reanalyzeTestImages: true);
+        }
+
+        [RelayCommand]
+        private void ToggleRoiEditing()
+        {
+            if (!CanEditRoi)
+            {
+                StationStatusMessage = "請先選擇設定檔或載入已設定的站別，再調整 ROI。";
+                return;
+            }
+
+            IsRoiEditing = !IsRoiEditing;
+            StationStatusMessage = IsRoiEditing
+                ? $"正在調整{SelectedRoiType} ROI：在目前影像上拖曳框選。"
+                : "ROI 調整已完成。";
+        }
+
+        public void UpdateStationRoi(string roiType, int x, int y, int width, int height)
+        {
+            if (CurrentProfile == null)
+                return;
+
+            switch (roiType)
+            {
+                case "定位":
+                    OriginalX = x;
+                    OriginalY = y;
+                    OriginalWidth = width;
+                    OriginalHeight = height;
+                    CurrentProfile.PatternMatchRoiX = x;
+                    CurrentProfile.PatternMatchRoiY = y;
+                    CurrentProfile.PatternMatchRoiW = width;
+                    CurrentProfile.PatternMatchRoiH = height;
+                    OnPropertyChanged(nameof(RectX));
+                    OnPropertyChanged(nameof(RectY));
+                    OnPropertyChanged(nameof(RectWidth));
+                    OnPropertyChanged(nameof(RectHeight));
+                    break;
+
+                case "亮度":
+                    OriginalX2 = x;
+                    OriginalY2 = y;
+                    OriginalWidth2 = width;
+                    OriginalHeight2 = height;
+                    CurrentProfile.BrightnessRoiX = x;
+                    CurrentProfile.BrightnessRoiY = y;
+                    CurrentProfile.BrightnessRoiW = width;
+                    CurrentProfile.BrightnessRoiH = height;
+                    CurrentProfile.MonitorRoiX = x;
+                    CurrentProfile.MonitorRoiY = y;
+                    CurrentProfile.MonitorRoiW = width;
+                    CurrentProfile.MonitorRoiH = height;
+                    OnPropertyChanged(nameof(RectX2));
+                    OnPropertyChanged(nameof(RectY2));
+                    OnPropertyChanged(nameof(RectWidth2));
+                    OnPropertyChanged(nameof(RectHeight2));
+                    break;
+
+                case "銳利度" when IsSharpnessEnabled:
+                    OriginalX3 = x;
+                    OriginalY3 = y;
+                    OriginalWidth3 = width;
+                    OriginalHeight3 = height;
+                    CurrentProfile.SharpnessRoiX = x;
+                    CurrentProfile.SharpnessRoiY = y;
+                    CurrentProfile.SharpnessRoiW = width;
+                    CurrentProfile.SharpnessRoiH = height;
+                    OnPropertyChanged(nameof(RectX3));
+                    OnPropertyChanged(nameof(RectY3));
+                    OnPropertyChanged(nameof(RectWidth3));
+                    OnPropertyChanged(nameof(RectHeight3));
+                    break;
+
+                default:
+                    return;
+            }
+
+            SaveCurrentInspectionSettings(reanalyzeTestImages: false);
+            OnPropertyChanged(nameof(CurrentProfile));
+            OnPropertyChanged(nameof(BrightnessRoiAreaSummary));
+            OnPropertyChanged(nameof(SharpnessRoiAreaSummary));
         }
 
         private void SaveCurrentInspectionSettings(bool reanalyzeTestImages)
