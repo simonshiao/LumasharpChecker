@@ -1055,6 +1055,7 @@ namespace LumasharpChecker.viewmodel
         public bool IsSharpnessFixedMode => SharpnessLimitMode == ProfileManager.LimitMode.Fixed;
         public bool IsSharpnessEnabled => DetectionMode == ProfileManager.InspectionMode.BrightnessSharpness;
         public bool IsRecipeActive => CurrentRecipe != null;
+        public bool HasCurrentProfile => CurrentProfile != null;
         public bool HasSelectedRecipe => SelectedRecipe != null;
         public bool HasSelectedProfile => SelectedItem != null;
         public bool CanApplyLibraryProfileToStation => CurrentRecipe != null && SelectedItem != null;
@@ -1081,6 +1082,7 @@ namespace LumasharpChecker.viewmodel
         partial void OnCurrentProfileChanged(ProfileData? value)
         {
             NotifyBaselineSummaryChanged();
+            OnPropertyChanged(nameof(HasCurrentProfile));
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             OnPropertyChanged(nameof(CanEditRoi));
             if (value == null) IsRoiEditing = false;

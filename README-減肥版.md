@@ -1,6 +1,6 @@
 # LumasharpChecker｜.NET Framework 4.7.2 減肥版
 
-這是從原專案 1.0.0.34 分出的**獨立移植版本**，目前是 **1.0.0.42 [NET472 Slim]**。目的是讓已具備 .NET Framework 4.7.2（或更新版本）的公司 Windows 電腦，不必額外安裝 .NET 8 Desktop Runtime，即可直接執行。
+這是從原專案 1.0.0.34 分出的**獨立移植版本**，目前是 **1.0.0.43 [NET472 Slim]**。目的是讓已具備 .NET Framework 4.7.2（或更新版本）的公司 Windows 電腦，不必額外安裝 .NET 8 Desktop Runtime，即可直接執行。
 
 ## 使用方式
 
@@ -9,7 +9,7 @@
 3. 在複製後的資料夾執行 `LumasharpChecker.exe`；在開發機，也可雙擊此目錄的 `啟動減肥版.vbs`。
 4. Recipe、偏好和資料庫會寫入**該份程式所在目錄**，不與原版共用。
 
-## 主畫面（1.0.0.35～1.0.0.42）
+## 主畫面（1.0.0.35～1.0.0.43）
 
 - 參考 `ChaoMcpHub` 的輕量收合式側欄，首頁預設為 **站別總覽**，側欄可切回 **單站檢測**。原先的單站 ROI、亮度／銳利度規格、OK DB、NG DB、本站圖片、連續測試及報表都保留在單站頁。
 - 八站／十站與目前 Recipe 同步；總覽使用 4 欄卡片，逐站顯示**基準圖／圖庫樣本縮圖**及**本次檢測 OK／NG／良率**。來源只是 OK 樣本而非已校準 `pattern.jpg` 時會明確標註「未校準」，不會自動執行檢測。
@@ -21,6 +21,7 @@
 - **1.0.0.40** 首頁改為 Chao8Side 風格的極簡多站看板，側欄預設收合，移除大型標頭與重複的設定類按鈕。每站卡片顯示實際**判定 OK／NG 數量及良率**，右上角可勾選參與測試的站別。首頁只留 Recipe 名稱、測試彙總、進度與「測試勾選站別／停止」。
 - **1.0.0.41** 直接參照 Chao8Side 實際主介面配色原始碼 `src/Chao8Side.Main/SystemSource/UI/MainWindow.RecoveredBrightTheme.cs`，以**亮冰藍／青色 HUD 主題**重新設計首頁：背景漸層 `#F7FCFF → #E6F6FF`、亮色標頭、細青框 `#79DDF7`、深色相機預覽視窗 `#071828 → #0A354A`、綠色 OK／紅色 NG。卡片使用 **CCD 01～08** 站名、即時測試狀態燈、三格 OK／NG／良率數值及細型良率條。僅取樣式，未導入 Chao8Side 的 RTX、PLC、相機 DLL，也沒有更動原廠母本。
 - **1.0.0.42** 將 UI／UX 系統化：新增 `DesignSystem/HudTheme.xaml` 作 App 級共用主題，統一整支軟體的字體、表單、GroupBox、頁籤、DataGrid、色票、焦點與禁用狀態；Recipe、圖庫、ROI、儲存設定、統計與結果窗已逐頁套用，並修正新增參數視窗的浪費空間版型。細節與驗收清單參見 `UIUX_DESIGN_20261028.md`。
+- **1.0.0.43** 單站檢測右側改為「本站檢測摘要」優先：顯示當前 Recipe、狀態、亮度有效上下限與已判定圖片數，未設定 Profile 時顯示「尚未校準」而非零值。亮度／銳利度判定欄位與儲存指令完整保留，但收納進預設收合的「進階判定設定」。從總覽進入另一站時重新收合，減少操作員誤動作。完整 GUI 回歸見 `UIUX_DESIGN_20261028.md`。
 - 多站測試沿用現有 `ImageProcessor.ProcessImage2`，逐站使用獨立的 `profile.json`、`pattern.jpg` 及各站 OK／NG 圖庫影像，以 `IsOverallPass` 判定；圖庫原有的 OK／NG 分類不當成判定結果。沒有設定檔、沒有圖片的站會標為跳過，**不計入良率**。未測試時數量與良率顯示「—」，關閉應用程式後這輪記憶體結果不保留。
 - 這份結果代表**離線測試影像的判定通過率**，不是經過外部真值比對的產線良率。
 - **只有在本站未設定 OK 路徑、目錄失效或圖片少於 2 張時**，才跳出 Windows 原生 **檔案總管式資料夾選擇器**（IFileOpenDialog），支援網址列、貼上路徑、檔案總管瀏覽，取代傳統樹狀 FolderBrowserDialog；選到站號資料夾會自動尋找其 OK 子資料夾，明確禁止選取 NG 目錄。
@@ -44,7 +45,7 @@
 | 原 .NET 8 Self-contained publish | 22 | 247.28 MiB |
 | .NET Framework 4.7.2 初步輸出（含不必要平台檔） | 54 | 135.23 MiB |
 | .NET Framework 4.7.2 精簡程式（不含資料快取） | 約 48 | 約 100.08 MiB |
-| **目前 1.0.0.42 + R002 78 張離線樣本** | **程式 + 樣本** | **約 152.87 MiB** |
+| **目前 1.0.0.43 + R002 78 張離線樣本** | **程式 + 樣本** | **152.89 MiB** |
 
 本版移除了 macOS 的 `*.dylib`、Windows ARM64 與 Windows x86 的原生套件。為避免破壞圖表及影像載入，保留 OpenCV / FFmpeg 與 Windows x64 SkiaSharp 相依檔案。
 
@@ -63,6 +64,10 @@ dotnet publish .\LumasharpChecker\LumasharpChecker.csproj -c Release -p:Platform
 
 ## 驗收紀錄（2026-10-28）
 
+- **PASS（v43）**：單站右側摘要／進階設定分區實際操作：CCD1 預設收合，展開能顯示閾值欄位；由總覽切換 CCD2 後重新收合、未校準提示正確；1130×740 視窗下操作仍可見；取消測試未變更 Profile。
+- **PASS（v43）**：隔離載入正式發行組件的三個視窗：儲存檢測設定、統計分析結果、測試圖片結果，均成功顯示與關閉；用空白結果集合測試結果窗，未執行任何儲存。
+- **PASS（v43）**：R002 多站測試仍判定 CCD1 為 11 OK／1 NG／91.7%，其他 7 站因未校準跳過；.NET Framework CLR、原版 Git 不變。
+- **待驗收**：125%／150% Windows DPI 的實際目視檢查；真實 ROI 統計→人工確認→儲存 Profile→重新載入完整閉環。隔離 UI 開窗測試不等於這些功能已驗收。
 - **PASS**：.NET Framework 4.7.2 Release 編譯（0 個錯誤，136 個編譯警告；多為原有分析與 COM interop 警告）。
 - **PASS**：正式 `App-net472-Slim/` 已發布，包含 R002 78 張離線樣本實測 152.87 MiB。
 - **PASS**：主視窗標題 `LumasharpChecker 1.0.0.42 [NET472 Slim]`，ResourceDictionary 成功載入，8 張 CCD 卡片、勾選框、深色相機圖像區、OK／NG／良率與測試入口均在。

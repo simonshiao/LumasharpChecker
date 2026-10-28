@@ -716,6 +716,81 @@
 
             <ScrollViewer Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
+                    <!-- 避免將可編輯閾值作為單站頁預設內容；檢測員先看本站狀態與結果。 -->
+                    <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                            BorderThickness="1" CornerRadius="12" Padding="15,13"
+                            Margin="0,0,0,12" Effect="{StaticResource CardShadow}">
+                        <StackPanel>
+                            <DockPanel Margin="0,0,0,9">
+                                <TextBlock Text="本站檢測" FontSize="16" FontWeight="SemiBold"
+                                           Foreground="{StaticResource Text}"/>
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding DetectionMode}"
+                                           FontSize="11" Foreground="{StaticResource Blue}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                            </DockPanel>
+                            <TextBlock Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未選擇配方}"
+                                       Foreground="{StaticResource Muted}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis" Margin="0,0,0,7"
+                                       ToolTip="{Binding CurrentRecipe.Name}"/>
+                            <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
+                                       TextWrapping="Wrap" FontSize="12" Margin="0,0,0,11"/>
+                            <Border Background="{StaticResource SurfaceSubtle}" CornerRadius="8" Padding="10,9"
+                                    BorderBrush="{StaticResource Line}" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <TextBlock Text="亮度有效範圍" Style="{StaticResource FieldLabel}"/>
+                                        <StackPanel Visibility="{Binding HasCurrentProfile, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <TextBlock Text="{Binding EffectiveBrightnessMin, StringFormat={}{0:F2}}"
+                                                       FontSize="16" Foreground="{StaticResource Text}"
+                                                       FontWeight="SemiBold"/>
+                                            <TextBlock Text="{Binding EffectiveBrightnessMax, StringFormat=至 {0:F2}}"
+                                                       FontSize="12" Foreground="{StaticResource Muted}"/>
+                                        </StackPanel>
+                                        <TextBlock Text="尚未校準" Foreground="{StaticResource Orange}"
+                                                   FontSize="15" FontWeight="SemiBold">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasCurrentProfile}" Value="True">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                        <TextBlock Text="已判定圖片" Style="{StaticResource FieldLabel}"/>
+                                        <TextBlock Text="{Binding TotalTestImageCount, StringFormat={}{0:N0} 張}"
+                                                   FontSize="21" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Blue}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+                            <TextBlock Text="修改亮度與銳利度的判定條件，請展開下方「進階判定設定」。"
+                                       Foreground="{StaticResource Muted}" FontSize="11"
+                                       Margin="0,10,0,0" TextWrapping="Wrap"/>
+                        </StackPanel>
+                    </Border>
+                    <Expander x:Name="AdvancedSettingsExpander" IsExpanded="False"
+                              AutomationProperties.Name="進階判定設定"
+                              Margin="0,0,0,5">
+                        <Expander.Header>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="進階判定設定" FontWeight="SemiBold" FontSize="14"
+                                           Foreground="{StaticResource Text}"/>
+                                <TextBlock Text="  · 亮度／銳利度閾值"
+                                           Foreground="{StaticResource Muted}" FontSize="11"
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Expander.Header>
+                        <StackPanel Margin="0,13,0,0">
                     <GroupBox Header="亮度規格">
                         <StackPanel Margin="0">
                             <TextBlock Text="判定方式" Style="{StaticResource FieldLabel}"/>
@@ -807,8 +882,11 @@
 
                     <Button Command="{Binding SaveInspectionSettingsCommand}"
                             Content="儲存檢測設定"
-                            Margin="0,0,0,14"/>
-
+                            Style="{StaticResource HudPrimaryButton}"
+                            Margin="0,0,0,14"
+                            ToolTip="只有修改判定閾值後，才需要儲存到目前設定檔。"/>
+                        </StackPanel>
+                    </Expander>
                 </StackPanel>
             </ScrollViewer>
 

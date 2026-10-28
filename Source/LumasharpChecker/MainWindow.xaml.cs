@@ -53,6 +53,10 @@ namespace LumasharpChecker
 
         private void ShowMainPage(bool overview)
         {
+            // 切到另一站或從總覽返回時，預設先顯示檢測摘要，
+            // 不延續上一站展開的編輯閾值，減少誤操作。
+            if (!overview)
+                AdvancedSettingsExpander.IsExpanded = false;
             StationOverviewPage.Visibility = overview ? Visibility.Visible : Visibility.Collapsed;
             InspectionPage.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
             MainHeaderBar.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
