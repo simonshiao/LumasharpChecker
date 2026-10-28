@@ -38,6 +38,19 @@ namespace LumasharpChecker
             window.ShowDialog();
         }
 
+        private void OpenTestImagePicker_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not mainViewModel viewModel || viewModel.TestImageTree.Count == 0)
+                return;
+
+            var picker = new TestImagePickerWindow(viewModel.TestImageTree, viewModel.CurrentTestImagePath)
+            {
+                Owner = this
+            };
+            if (picker.ShowDialog() == true && !string.IsNullOrWhiteSpace(picker.SelectedFilePath))
+                viewModel.SelectTestImage(picker.SelectedFilePath);
+        }
+
         private void MainRoiCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (DataContext is not mainViewModel viewModel || !viewModel.IsRoiEditing)
