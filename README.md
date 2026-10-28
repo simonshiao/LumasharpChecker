@@ -10,10 +10,18 @@
 - `HANDOFF.md`：目前實作狀態、建置方式與待完成驗收清單。
 - `config.json`、`app-settings.json`、`profile/` 與 `recipes/`：執行時的本機設定、使用者設定檔及多站 Recipe，不納入 Git。
 
+## 開啟桌面程式（免系統安裝 Runtime）
+
+雙擊專案根目錄的 **`啟動 LumasharpChecker.vbs`**。啟動器會使用共用的 `D:\0_軟體開發區\6.模板與共用資源區\dotnet-sdk-8\dotnet.exe` 直接執行 Release 的 `LumasharpChecker.dll`，並將工作目錄切到 Release 輸出目錄。
+
+此電腦已具備 `Microsoft.WindowsDesktop.App 8.0.33`，不需重新下載或安裝 Desktop Runtime。直接雙擊建置出的 `LumasharpChecker.exe` 可能找不到這份共用 Runtime 而顯示安裝提示；請使用上述啟動器。
+
+Agent 的完整啟動命令及驗收判準見 `HANDOFF.md` 的「正確啟動方式」。`dotnet.exe` 是程式主機，因此正常啟動後的程序名稱可能是 `dotnet`；應同時核對 DLL 命令列與主視窗版本。
+
 ## 多站 Recipe
 
 - 在「設定」→「站別」選擇 8 站或 10 站；變更站數時不會刪除第 9、10 站資料。
-- 左側「Recipe / 站別」可建立或載入整份 Recipe，並切換各站。
+- 上方工具列可選擇、載入、新增或關閉 Recipe；圖片下方的數字按鈕可切換站別。尚未載入 Recipe 時站別按鈕停用。
 - 從「設定檔」選擇既有基準後，按「套用所選設定檔至本站」。程式會把設定與基準圖片複製到 Recipe，原設定檔不會被修改。
 - 各站可獨立調整 ROI、亮度／銳利度門檻；按「儲存檢測設定」即可保存目前站別。
 - Recipe 包含 `recipe.json` 及 `station01` 至 `station10` 目錄；已設定站別各自保存 `profile.json` 與 `pattern.jpg`。

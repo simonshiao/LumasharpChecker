@@ -216,8 +216,8 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <Border Background="{StaticResource Bg}" Padding="22,20,22,16">
-            <DockPanel LastChildFill="True">
+        <Border Background="{StaticResource Bg}" Padding="22,16,60,12">
+            <StackPanel>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock Text="光衰與影像品質檢測"
                                Foreground="{StaticResource Text}"
@@ -228,14 +228,43 @@
                                FontSize="12"
                                Margin="1,6,0,0"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding SaveSettingsMessage}"
-                               Foreground="{StaticResource Muted}"
-                               FontSize="12"
-                               VerticalAlignment="Center"
-                               Margin="0,0,52,0"/>
-                </StackPanel>
-            </DockPanel>
+                <WrapPanel Margin="0,12,0,0" VerticalAlignment="Center">
+                    <ToggleButton x:Name="RecipeToggle" Content="選擇 Recipe ▾"
+                                  Width="138" Height="36" FontSize="13" FontWeight="SemiBold"
+                                  ToolTip="開啟 Recipe 選擇與管理"/>
+                    <Popup IsOpen="{Binding IsChecked, ElementName=RecipeToggle, Mode=TwoWay}"
+                           Placement="Bottom" PlacementTarget="{Binding ElementName=RecipeToggle}"
+                           StaysOpen="False" AllowsTransparency="True"
+                           DataContext="{Binding DataContext, ElementName=RecipeToggle}">
+                        <Border Width="400" MaxWidth="400" Padding="16" Margin="0,6,0,8"
+                                Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                                BorderThickness="1" CornerRadius="14" Effect="{StaticResource CardShadow}">
+                            <StackPanel>
+                                <TextBlock Text="選擇 Recipe" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                                <TextBlock Text="選擇配方後按載入；各站的設定和基準圖片會一同切換。"
+                                           Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"/>
+                                <ComboBox ItemsSource="{Binding Recipes}" DisplayMemberPath="Name"
+                                          SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}"
+                                          ToolTip="選擇要載入或刪除的 Recipe"/>
+                                <WrapPanel Margin="0,10,0,0">
+                                    <Button Command="{Binding LoadSelectedRecipeCommand}" Content="載入 Recipe"
+                                            IsEnabled="{Binding HasSelectedRecipe}" MinWidth="110" Margin="0,0,8,0"/>
+                                    <Button Command="{Binding DeleteRecipeCommand}" Content="刪除所選 Recipe"
+                                            IsEnabled="{Binding HasSelectedRecipe}" Style="{StaticResource DestructiveButtonStyle}"/>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </Popup>
+                    <Button Command="{Binding CreateRecipeCommand}" Content="新增 Recipe" Margin="8,0,0,0"/>
+                    <Button Command="{Binding CloseRecipeCommand}" Content="關閉 Recipe" Margin="8,0,0,0"
+                            IsEnabled="{Binding IsRecipeActive}"/>
+                    <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="18,0,0,0"
+                               VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
+                               FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
+                    <TextBlock Text="{Binding SaveSettingsMessage}" Margin="14,0,0,0" VerticalAlignment="Center"
+                               MaxWidth="280" TextTrimming="CharacterEllipsis" Foreground="{StaticResource Muted}" FontSize="12"/>
+                </WrapPanel>
+            </StackPanel>
         </Border>
 
         <ToggleButton Grid.RowSpan="2"
@@ -288,7 +317,8 @@
                 <TabItem Header="站別">
                     <StackPanel Margin="10" FlowDirection="LeftToRight">
                         <TextBlock Text="目前站數" Style="{StaticResource FieldLabel}"/>
-                        <ComboBox ItemsSource="{Binding StationCountOptions}"
+                        <ComboBox x:Name="StationCountCombo" AutomationProperties.Name="站數"
+                                  ItemsSource="{Binding StationCountOptions}"
                                   SelectedItem="{Binding StationCount, Mode=TwoWay}"
                                   Margin="0,0,0,10"/>
                         <TextBlock Text="Recipe 會保存站數與各站設定。由 10 站切回 8 站時，第 9、10 站資料會保留，之後可再切回使用。"
@@ -308,77 +338,6 @@
 
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <GroupBox Header="Recipe / 站別">
-                        <StackPanel Margin="0">
-                            <ComboBox ItemsSource="{Binding Recipes}"
-                                      DisplayMemberPath="Name"
-                                      SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}"
-                                      ToolTip="選取要載入的多站 Recipe">
-                                <i:Interaction.Triggers>
-                                    <i:EventTrigger EventName="SelectionChanged">
-                                        <i:InvokeCommandAction Command="{Binding LoadSelectedRecipeCommand}"/>
-                                    </i:EventTrigger>
-                                </i:Interaction.Triggers>
-                            </ComboBox>
-                            <Grid Margin="0,8,0,8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="6"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="6"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                                <Button Command="{Binding CreateRecipeCommand}" Content="新增 Recipe" Padding="5,6"/>
-                                <Button Grid.Column="2" Command="{Binding DeleteRecipeCommand}" Content="刪除 Recipe" Padding="5,6" Style="{StaticResource DestructiveButtonStyle}"/>
-                                <Button Grid.Column="4" Command="{Binding CloseRecipeCommand}" Content="關閉 Recipe" Padding="5,6" IsEnabled="{Binding IsRecipeActive}"/>
-                            </Grid>
-                            <TextBlock Text="{Binding CurrentInspectionName}"
-                                       FontWeight="SemiBold"
-                                       Margin="0,0,0,4"
-                                       TextWrapping="Wrap"/>
-                            <TextBlock Text="{Binding StationStatusMessage}"
-                                       Foreground="{StaticResource Muted}"
-                                       FontSize="11"
-                                       TextWrapping="Wrap"
-                                       Margin="0,0,0,8"/>
-                            <ItemsControl ItemsSource="{Binding StationSlots}"
-                                          Visibility="{Binding IsRecipeActive, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <ItemsControl.ItemsPanel>
-                                    <ItemsPanelTemplate>
-                                        <WrapPanel/>
-                                    </ItemsPanelTemplate>
-                                </ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Button Content="{Binding ButtonText}"
-                                                Width="58"
-                                                MinHeight="32"
-                                                Margin="0,0,5,5"
-                                                Padding="3"
-                                                Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                CommandParameter="{Binding Number}"
-                                                ToolTip="按站別切換；✓ 代表已有設定，+ 代表尚未設定">
-                                            <Button.Style>
-                                                <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-                                                    <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
-                                                    <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                            <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
-                                                            <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
-                                                            <Setter Property="Foreground" Value="{StaticResource Blue}"/>
-                                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Button.Style>
-                                        </Button>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                        </StackPanel>
-                    </GroupBox>
-
                     <GroupBox Header="設定檔">
                         <StackPanel Margin="0">
                             <ComboBox ItemsSource="{Binding Items}"
@@ -507,6 +466,10 @@
             </ScrollViewer>
 
             <Grid Grid.Column="1" Margin="12,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
                 <Border Background="{StaticResource Surface}"
                         BorderBrush="{StaticResource Line}"
                         BorderThickness="1"
@@ -539,6 +502,46 @@
                             </Canvas>
                         </Grid>
                     </Viewbox>
+                </Border>
+                <Border Grid.Row="1" Margin="0,10,0,0" Padding="10,8"
+                        Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
+                        BorderThickness="1" CornerRadius="14">
+                    <StackPanel>
+                        <DockPanel Margin="2,0,2,6">
+                            <TextBlock Text="站別" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
+                                       FontSize="11" Margin="12,0,0,0" TextTrimming="CharacterEllipsis"/>
+                        </DockPanel>
+                        <ItemsControl ItemsSource="{Binding StationSlots}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding Number}" Margin="2,0" Padding="0" MinWidth="0" MinHeight="36"
+                                            Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding Number}"
+                                            IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            ToolTip="載入 Recipe 後按數字切換站別">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
                 </Border>
             </Grid>
 

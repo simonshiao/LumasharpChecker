@@ -182,7 +182,7 @@ namespace LumasharpChecker.viewmodel
         private int _currentStationNumber = 1;
 
         [ObservableProperty]
-        private string _stationStatusMessage = "Recipe 未載入；下方設定檔庫仍可單獨使用。";
+        private string _stationStatusMessage = "請先由上方選擇或新增 Recipe，再選擇站別。";
 
         [ObservableProperty]
         private ObservableCollection<string> _limitModeItems = new(new[] { ProfileManager.LimitMode.Percent, ProfileManager.LimitMode.Fixed });
@@ -466,7 +466,7 @@ namespace LumasharpChecker.viewmodel
             CurrentStationNumber = 1;
             RefreshStationSlots();
             LoadCurrentProfile(SelectedItem, isLibraryProfile: true);
-            StationStatusMessage = "Recipe 已關閉；目前使用設定檔庫。";
+            StationStatusMessage = "Recipe 已關閉；請由上方選擇或新增 Recipe。";
         }
 
         [RelayCommand]
@@ -780,6 +780,7 @@ namespace LumasharpChecker.viewmodel
         public bool IsSharpnessFixedMode => SharpnessLimitMode == ProfileManager.LimitMode.Fixed;
         public bool IsSharpnessEnabled => DetectionMode == ProfileManager.InspectionMode.BrightnessSharpness;
         public bool IsRecipeActive => CurrentRecipe != null;
+        public bool HasSelectedRecipe => SelectedRecipe != null;
         public bool CanApplyLibraryProfileToStation => CurrentRecipe != null && SelectedItem != null;
         public string CurrentInspectionName => CurrentRecipe == null
             ? CurrentProfile?.Name ?? "未選擇設定檔"
@@ -801,6 +802,8 @@ namespace LumasharpChecker.viewmodel
         {
             NotifyBaselineSummaryChanged();
         }
+
+        partial void OnSelectedRecipeChanged(RecipeManager.RecipeManifest? value) => OnPropertyChanged(nameof(HasSelectedRecipe));
 
         partial void OnCurrentRecipeChanged(RecipeManager.RecipeManifest? value)
         {

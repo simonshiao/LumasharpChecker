@@ -1,5 +1,54 @@
 # LumasharpChecker 開發交接／接手入口
 
+## 2026-10-28 Recipe 工具列與圖片下方站別（1.0.0.11）
+
+- 參考 DIAChip8Side 的上方 Recipe 入口與 InspTools 的圖片下方站別列，保留 LumasharpChecker 現有配色與檢測流程。
+- 上方工具列提供「選擇 Recipe」、「新增 Recipe」、「關閉 Recipe」；選擇面板可載入或刪除所選配方。切換配方需按「載入 Recipe」。
+- 圖片下方固定顯示 8 或 10 個站別按鈕，使用原有 `SelectStationCommand`、站別狀態與保存流程。未載入 Recipe 時按鈕停用。
+- 程式版本更新至 `1.0.0.11`，調整 `MainWindow.xaml`、站別提示、README 與 USER_GUIDE；仍使用共用 SDK 啟動器。
+- 使用共用 SDK 在獨立輸出目錄建置成功，0 個錯誤、128 個既有警告；已檢視實際主畫面，確認上方工具列及圖片下方 8 個站別按鈕顯示。
+- Release 正式輸出建置成功，0 個錯誤、3 個既有套件相容性警告；建置前後確認正式 `MyData.db` 的 SHA-256 未變。透過根目錄 VBS 啟動後，已檢視 `LumasharpChecker 1.0.0.11` 主畫面與既有設定檔／基準圖片。
+- 在獨立測試資料目錄建立測試 Recipe：確認關閉 Recipe 時站別停用、選擇 Recipe 後「載入 Recipe」啟用，載入後可切換至第 2、10 站。
+- 實際操作設定的 10 → 8 → 10 站，核對 Recipe 的站數各次均寫入，並確認測試用第 10 站檔案保留、按鈕再次出現。以上使用獨立測試資料，非使用者正式 Recipe。
+- 尚未以實際產品圖片完成全流程檢測與報表驗收；上一版啟動方式與其餘 Recipe 操作驗收清單見下方。
+
+## 2026-10-27 啟動修正（1.0.0.10）
+
+- 共用 SDK 已包含 `Microsoft.NETCore.App`、`Microsoft.AspNetCore.App`、`Microsoft.WindowsDesktop.App`，版本均為 `8.0.33`。SDK 路徑為 `D:\0_軟體開發區\6.模板與共用資源區\dotnet-sdk-8`。
+- 先前直接用 `Start-Process LumasharpChecker.exe`，沒有讓 apphost 找到共用 Runtime，開出的是 .NET 安裝提示。當時用 PID／Responding 判定「已開啟」不正確。
+- 根目錄 `啟動 LumasharpChecker.vbs` 改為使用共用 `dotnet.exe` 直接執行 `LumasharpChecker.dll`，先檢查程式與 Desktop Runtime 是否存在，並固定 Release 工作目錄。
+- `AGENTS.md` 與 `README.md` 已加入正確啟動入口。版本升為 `1.0.0.10`。
+
+### 正確啟動方式
+
+一般使用者：雙擊根目錄 **`啟動 LumasharpChecker.vbs`**。
+
+Agent 可直接使用以下 PowerShell 命令；不需要管理員權限或系統安裝：
+
+```powershell
+$projectDir = 'D:\0_軟體開發區\3.開發中專案區\1.進行中\LumasharpChecker'
+$sdkDir = 'D:\0_軟體開發區\6.模板與共用資源區\dotnet-sdk-8'
+$outputDir = Join-Path $projectDir 'LumasharpChecker\bin\Release\net8.0-windows\win-x64'
+$appDll = Join-Path $outputDir 'LumasharpChecker.dll'
+$env:DOTNET_ROOT = $sdkDir
+$env:DOTNET_ROOT_X64 = $sdkDir
+Start-Process -FilePath (Join-Path $sdkDir 'dotnet.exe') `
+  -ArgumentList ('"{0}"' -f $appDll) `
+  -WorkingDirectory $outputDir -WindowStyle Hidden
+```
+
+`Hidden` 隱藏的是 dotnet 主機的主控台；WPF 程式自行顯示主視窗。成功判準是 **LumasharpChecker 目前版本**主視窗及 Recipe／設定檔／檢測區域出現。程序名稱可能是 `dotnet`；核對其命令列應指向上方 `$appDll`。
+
+若失敗：先執行 `& (Join-Path $sdkDir 'dotnet.exe') --list-runtimes`，確認存在 `Microsoft.WindowsDesktop.App 8.0.x`，再核對 DLL、runtimeconfig.json 與工作目錄。直接開 EXE 出現的下載提示不代表共用 Runtime 缺失。
+
+### 本次驗證
+
+- 使用共用 SDK 執行 Release 建置成功：0 個錯誤、128 個既有警告。
+- 從 `C:\Windows\System32` 啟動根目錄 VBS，確認啟動器能自行定位專案／SDK；實際程序為共用 SDK 的 `dotnet.exe`，命令列指向 Release 的 `LumasharpChecker.dll`。
+- 已讀取程序載入模組：`coreclr.dll`、`PresentationFramework.dll`、`PresentationCore.dll` 均來自共用 SDK 的 `8.0.33` 目錄。
+- 已擷取並檢視實際視窗：標題為 `LumasharpChecker 1.0.0.10`，可見 Recipe／站別、設定檔、基準圖片、亮度上下限與測試圖片功能區，並非 Runtime 下載提示。畫面證據保存在已排除 Git 的 Release 輸出內 `startup-1.0.0.10.png`。
+- 多站 Recipe 的完整操作驗收仍見下方清單；啟動修正不代表已完成所有功能驗收。
+
 ## 2026-10-27 Recipe 與 8／10 站流程
 
 - 新增 Recipe 管理與 8 站／10 站切換。Recipe 為一份完整產品設定；各站保存獨立的檢測設定與基準圖。
