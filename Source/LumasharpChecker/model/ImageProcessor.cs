@@ -41,6 +41,17 @@ namespace LumasharpChecker.model
         private Mat? _templateImage;
         private Mat? _coarseTemplateImage;
         private Mat? _halfTemplateImage;
+        private sealed class TemplateVariant : IDisposable
+        {
+            public string Name = "";
+            public Mat Image = null!;
+            public Mat Coarse = null!;
+            public Mat Half = null!;
+            public MCvScalar Mean;
+            public double Variance;
+            public void Dispose() { Image.Dispose(); Coarse.Dispose(); Half.Dispose(); }
+        }
+        private readonly List<TemplateVariant> _additionalTemplates = new();
         private MCvScalar _templateMean;
         private double _templateVariance;
         private Rectangle _templatePatternRoi;
@@ -240,7 +251,28 @@ namespace LumasharpChecker.model
                         return CreateTemplateMatchFailure(includeSharpness);
                     }
 
+                    // 正／反面樣板都參與定位，取相關係數最高者，而不是先通過就採用。
                     var matchRoi = FindTemplateMatch(image, templateImage, patternMatchRoiRect, _coarseTemplateImage, _halfTemplateImage);
+                    string selectedTemplate = "pattern.jpg";
+                    if (_additionalTemplates.Count > 0)
+                    {
+                        double bestScore = matchRoi.HasValue
+                            ? ScoreMatchedTemplate(image, templateImage, matchRoi.Value)
+                            : double.NegativeInfinity;
+                        foreach (var alternative in _additionalTemplates)
+                        {
+                            var candidate = FindTemplateMatch(image, alternative.Image, patternMatchRoiRect,
+                                alternative.Coarse, alternative.Half, alternative.Mean, alternative.Variance);
+                            if (!candidate.HasValue) continue;
+                            double score = ScoreMatchedTemplate(image, alternative.Image, candidate.Value);
+                            if (score > bestScore)
+                            {
+                                bestScore = score;
+                                matchRoi = candidate;
+                                selectedTemplate = alternative.Name;
+                            }
+                        }
+                    }
                     if (!matchRoi.HasValue)
                     {
                         _logger.Warn($"模板匹配失敗，profile: {profile}");
@@ -249,7 +281,7 @@ namespace LumasharpChecker.model
 
                     patternMatchRoiRect = matchRoi.Value;
                     isMatched = true;
-                    _logger.Trace($"模板匹配成功: {patternMatchRoiRect}, profile: {profile}");
+                    _logger.Trace($"模板匹配成功: {patternMatchRoiRect}, template: {selectedTemplate}, profile: {profile}");
 
                     brightnessRoiRect = OffsetRoiFromMatchedPattern(
                         patternMatchRoiRect,
@@ -392,6 +424,7 @@ namespace LumasharpChecker.model
             _profileBrightnessMin = profileManager.BrightnessMin;
             _profileBrightnessMax = profileManager.BrightnessMax;
             _profileSharpnessMin = profileManager.SharpnessMin;
+            ClearAdditionalTemplates();
             _templateImage?.Dispose();
             _coarseTemplateImage?.Dispose();
             _halfTemplateImage?.Dispose();
@@ -414,6 +447,7 @@ namespace LumasharpChecker.model
                 return null;
             }
 
+            ClearAdditionalTemplates();
             _templateImage?.Dispose();
             _coarseTemplateImage?.Dispose();
             _halfTemplateImage?.Dispose();
@@ -452,7 +486,80 @@ namespace LumasharpChecker.model
                 CvInvoke.Resize(_templateImage, _halfTemplateImage, halfSize, 0, 0, Inter.Area);
             }
             _templatePatternRoi = safeRoi;
+            LoadAdditionalTemplates(profileManager.ImagePath, safeRoi, patternImage.Size);
             return _templateImage;
+        }
+
+        private void ClearAdditionalTemplates()
+        {
+            foreach (var entry in _additionalTemplates) entry.Dispose();
+            _additionalTemplates.Clear();
+        }
+
+        private void LoadAdditionalTemplates(string? primaryPath, Rectangle roi, System.Drawing.Size primarySize)
+        {
+            if (string.IsNullOrWhiteSpace(primaryPath)) return;
+            string? directory = Path.GetDirectoryName(primaryPath);
+            if (string.IsNullOrEmpty(directory)) return;
+            string variantsPath = Path.Combine(directory, "patterns");
+            if (!Directory.Exists(variantsPath)) return;
+            foreach (string path in Directory.EnumerateFiles(variantsPath, "pattern_*.*")
+                         .Where(path => new[] { ".jpg", ".jpeg", ".png", ".bmp" }
+                             .Contains(Path.GetExtension(path), StringComparer.OrdinalIgnoreCase))
+                         .OrderBy(path => path, StringComparer.OrdinalIgnoreCase).Take(7))
+            {
+                try
+                {
+                    using Mat fullImage = CvInvoke.Imread(path);
+                    // 共用 ROI 的附加樣板必須使用主樣板的影像尺寸／座標。
+                    if (fullImage.IsEmpty || fullImage.Size != primarySize ||
+                        Rectangle.Intersect(roi, new Rectangle(Point.Empty, fullImage.Size)) != roi)
+                    {
+                        Logmanager.loger.Warn($"忽略尺寸或 ROI 不相容的附加樣板：{path}");
+                        continue;
+                    }
+                    using Mat crop = new Mat(fullImage, roi);
+                    Mat main = crop.Clone();
+                    Mat coarse = new Mat(), half = new Mat();
+                    try
+                    {
+                        var mean = new MCvScalar();
+                        var std = new MCvScalar();
+                        CvInvoke.MeanStdDev(main, ref mean, ref std);
+                        double variance = std.V0 * std.V0 + std.V1 * std.V1 + std.V2 * std.V2;
+                        CvInvoke.Resize(main, coarse, new System.Drawing.Size(
+                            Math.Max(1, (int)Math.Round(main.Width / (double)CoarseTemplateMatchScale)),
+                            Math.Max(1, (int)Math.Round(main.Height / (double)CoarseTemplateMatchScale))),
+                            0, 0, Inter.Area);
+                        CvInvoke.Resize(main, half, new System.Drawing.Size(
+                            Math.Max(1, (int)Math.Round(main.Width / 2.0)),
+                            Math.Max(1, (int)Math.Round(main.Height / 2.0))), 0, 0, Inter.Area);
+                        _additionalTemplates.Add(new TemplateVariant
+                        {
+                            Name = Path.GetFileName(path), Image = main, Coarse = coarse,
+                            Half = half, Mean = mean, Variance = variance
+                        });
+                    }
+                    catch { main.Dispose(); coarse.Dispose(); half.Dispose(); throw; }
+                }
+                catch (Exception ex)
+                {
+                    Logmanager.loger.Warn($"附加樣板載入失敗：{path}；{ex.Message}");
+                }
+            }
+        }
+
+        private static double ScoreMatchedTemplate(Mat image, Mat pattern, Rectangle match)
+        {
+            if (Rectangle.Intersect(match, new Rectangle(Point.Empty, image.Size)) != match)
+                return double.NegativeInfinity;
+            using Mat candidate = new Mat(image, match);
+            using Mat scores = new Mat();
+            CvInvoke.MatchTemplate(candidate, pattern, scores, TemplateMatchingType.CcoeffNormed);
+            double min = 0, max = 0;
+            Point minLocation = Point.Empty, maxLocation = Point.Empty;
+            CvInvoke.MinMaxLoc(scores, ref min, ref max, ref minLocation, ref maxLocation);
+            return double.IsNaN(max) ? double.NegativeInfinity : max;
         }
 
         private static Rectangle OffsetRoiFromMatchedPattern(Rectangle matchedPattern, int? patternX, int? patternY, int? targetX, int? targetY, int? targetW, int? targetH)
@@ -493,7 +600,9 @@ namespace LumasharpChecker.model
             return stdDev.V0 * stdDev.V0;
         }
         
-        private Rectangle? FindTemplateMatch(Mat sourceImage, Mat patternImage, Rectangle patternRoi, Mat? coarsePatternImage = null, Mat? halfPatternImage = null)
+        private Rectangle? FindTemplateMatch(Mat sourceImage, Mat patternImage, Rectangle patternRoi,
+            Mat? coarsePatternImage = null, Mat? halfPatternImage = null,
+            MCvScalar? meanOverride = null, double? varianceOverride = null)
         {
             // 擴展搜尋範圍
             int expandX = (int)(patternRoi.Width * TemplateSearchExpandRatio);
@@ -520,18 +629,23 @@ namespace LumasharpChecker.model
             if (padTop > 0 || padLeft > 0 || padBottom > 0 || padRight > 0)
             {
                 CvInvoke.CopyMakeBorder(croppedRegion, paddedRegion, padTop, padBottom, padLeft, padRight, BorderType.Constant, new MCvScalar(0, 0, 0));
-                return FindTemplateMatchInRegion(paddedRegion, patternImage, coarsePatternImage, halfPatternImage, expandedRect.Location);
+                return FindTemplateMatchInRegion(paddedRegion, patternImage, coarsePatternImage, halfPatternImage,
+                    expandedRect.Location, meanOverride, varianceOverride);
             }
 
-            return FindTemplateMatchInRegion(croppedRegion, patternImage, coarsePatternImage, halfPatternImage, expandedRect.Location);
+            return FindTemplateMatchInRegion(croppedRegion, patternImage, coarsePatternImage, halfPatternImage,
+                expandedRect.Location, meanOverride, varianceOverride);
         }
 
-        private Rectangle? FindTemplateMatchInRegion(Mat region, Mat pattern, Mat? coarsePattern, Mat? halfPattern, Point origin)
+        private Rectangle? FindTemplateMatchInRegion(Mat region, Mat pattern, Mat? coarsePattern,
+            Mat? halfPattern, Point origin, MCvScalar? meanOverride = null, double? varianceOverride = null)
         {
-            if (coarsePattern == null || halfPattern == null || _templateVariance <= 1e-12 || pattern.NumberOfChannels != 3 || region.NumberOfChannels != 3)
+            double variance = varianceOverride ?? _templateVariance;
+            MCvScalar mean = meanOverride ?? _templateMean;
+            if (coarsePattern == null || halfPattern == null || variance <= 1e-12 || pattern.NumberOfChannels != 3 || region.NumberOfChannels != 3)
                 return FindFullResolutionTemplateMatch(region, pattern, origin);
 
-            if (TryFindFastTemplateMatch(region, pattern, coarsePattern, halfPattern, origin, _templateMean, _templateVariance, out Rectangle fastMatch))
+            if (TryFindFastTemplateMatch(region, pattern, coarsePattern, halfPattern, origin, mean, variance, out Rectangle fastMatch))
                 return fastMatch;
 
             // 接近門檻或候選分數相近時，使用原本完整搜尋區的全解析度比對。

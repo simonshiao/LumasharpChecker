@@ -1996,6 +1996,24 @@ namespace LumasharpChecker.viewmodel
             UpdateDisplayImage();
         }
 
+        /// <summary>定位樣板異動後清空舊判定，保留原圖清單供重新測試。</summary>
+        public void InvalidatePatternMatchResults()
+        {
+            if (IsAnalyzingTestImages || IsMultiStationTesting || IsContinuousTestRunning)
+                throw new InvalidOperationException("檢測進行中不能修改定位樣板。");
+            TestImageResults.Clear();
+            IsTestImageAnalysisComplete = false;
+            TestImageMatchFailed = string.Empty;
+            TestImageBrightness = 0;
+            TestImageBrightnessDeltaPercent = double.NaN;
+            TestImageSharpness = 0;
+            TestImageROI = System.Drawing.Rectangle.Empty;
+            TestImageBrightnessROI = System.Drawing.Rectangle.Empty;
+            TestImageSharpnessROI = System.Drawing.Rectangle.Empty;
+            ResetTestImageSummary();
+            SaveSettingsMessage = "定位樣板已更新，請重新執行測試以取得新的判定結果。";
+        }
+
         private bool LoadTestImageFolder(string folderPath)
         {
             try

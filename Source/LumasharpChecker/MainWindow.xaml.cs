@@ -13,6 +13,9 @@ using System.Windows.Shapes;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using System.IO;
+using LumasharpChecker.model;
+using LumasharpChecker.view;
 
 namespace LumasharpChecker
 {
@@ -102,6 +105,51 @@ namespace LumasharpChecker
             }
             var window = new DatabaseSetupWindow(this);
             window.ShowDialog();
+        }
+
+        private void OpenStationPatterns_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null ||
+                vm.CurrentProfile == null)
+                return;
+            if (vm.IsMultiStationTesting || vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning)
+            {
+                MessageBox.Show("請先停止檢測，再調整定位樣板。", "定位樣板",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var station = vm.CurrentRecipe.Stations.FirstOrDefault(s => s.Number == vm.CurrentStationNumber);
+            if (station?.IsConfigured != true ||
+                !Guid.TryParseExact(vm.CurrentRecipe.Id, "N", out _))
+            {
+                MessageBox.Show("請先將本站檢測參數儲存至 Recipe，再加入樣板。", "定位樣板",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string stationDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "recipes", vm.CurrentRecipe.Id, $"station{vm.CurrentStationNumber:00}");
+            try
+            {
+                string primary = System.IO.Path.GetFullPath(System.IO.Path.Combine(stationDir, "pattern.jpg"));
+                if (string.IsNullOrWhiteSpace(vm.CurrentProfile.ImagePath) ||
+                    !string.Equals(System.IO.Path.GetFullPath(vm.CurrentProfile.ImagePath), primary,
+                        StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("目前使用的不是本站 Recipe 設定，請先重新載入本站。");
+                var roi = new System.Drawing.Rectangle(
+                    vm.CurrentProfile.PatternMatchRoiX.GetValueOrDefault(),
+                    vm.CurrentProfile.PatternMatchRoiY.GetValueOrDefault(),
+                    vm.CurrentProfile.PatternMatchRoiW.GetValueOrDefault(),
+                    vm.CurrentProfile.PatternMatchRoiH.GetValueOrDefault());
+                var library = new StationPatternLibrary(primary, roi);
+                var manager = new StationPatternsWindow(this, vm.CurrentStationNumber, library, vm.CurrentTestImagePath);
+                manager.ShowDialog();
+                if (manager.Modified) vm.InvalidatePatternMatchResults();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("無法開啟本站定位樣板：" + ex.Message, "定位樣板",
+                    MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
         }
 
         private void CloseSettingsPanel_Click(object sender, RoutedEventArgs e)

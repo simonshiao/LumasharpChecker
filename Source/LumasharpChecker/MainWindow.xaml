@@ -621,6 +621,12 @@
                                         ToolTip="直接使用目前站別的全部 OK 圖片重算；缺少有效圖庫才用檔案總管選取資料夾。"
                                         Padding="10,4">
                                 </Button>
+                                <Button Content="定位樣板…"
+                                        Click="OpenStationPatterns_Click"
+                                        IsEnabled="{Binding HasCurrentProfile}"
+                                        AutomationProperties.Name="管理定位樣板"
+                                        ToolTip="加入反面或其他姿態的定位樣板；不覆蓋原始 pattern.jpg"
+                                        Margin="6,0,0,0" Padding="10,4"/>
                             </StackPanel>
                             <TextBlock Text="站" FontWeight="SemiBold"
                                        Foreground="{StaticResource Muted}" Margin="2,2,0,0"/>
