@@ -33,6 +33,7 @@ namespace LumasharpChecker
             this.Title += $" {version?.ToString()} [NET472 Slim]";
             // 首頁預設為 Chao8Side 風格的極簡看板，設定工具收在左側導覽。
             ToggleSidebar_Click(this, new RoutedEventArgs());
+            ShowMainPage(true);
         }
 
         private void ShowOverview_Click(object sender, RoutedEventArgs e) => ShowMainPage(true);
@@ -77,7 +78,6 @@ namespace LumasharpChecker
             SidebarFooter.Visibility = visibility;
             OverviewNavLabel.Visibility = visibility;
             InspectionNavLabel.Visibility = visibility;
-            DatabaseNavLabel.Visibility = visibility;
         }
 
         private void OpenRecipeManager_Click(object sender, RoutedEventArgs e)
