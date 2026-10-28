@@ -60,6 +60,14 @@ namespace LumasharpChecker.viewmodel
             : $"亮度 X:{BrightnessRoiX} Y:{BrightnessRoiY} W:{BrightnessRoiW} H:{BrightnessRoiH}";
     }
 
+    public class TestImageTreeNode
+    {
+        public string Name { get; set; } = string.Empty;
+        public string FilePath { get; set; } = string.Empty;
+        public bool IsFolder { get; set; }
+        public ObservableCollection<TestImageTreeNode> Children { get; set; } = new();
+    }
+
     public static class BatchPreviewModes
     {
         public const string All = "全部縮圖";
@@ -613,11 +621,13 @@ namespace LumasharpChecker.viewmodel
         [ObservableProperty]
         private ObservableCollection<string> testImageFiles = new();
         [ObservableProperty]
+        private ObservableCollection<TestImageTreeNode> testImageTree = new();
+        [ObservableProperty]
         private int currentTestImageIndex = -1;
         [ObservableProperty]
         private string currentTestImagePath = string.Empty;
         [ObservableProperty]
-        private string testImageInfo = string.Empty;
+        private string testImageInfo = "圖片 0 / 0";
         [ObservableProperty]
         private bool canNavigatePrevious = false;
         [ObservableProperty]
@@ -725,10 +735,9 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(IsSharpnessPercentMode));
             OnPropertyChanged(nameof(IsSharpnessFixedMode));
             NotifyBaselineSummaryChanged();
-            if (TestImageFiles.Count > 0)
+            if (IsTestImageAnalysisComplete && TestImageFiles.Count > 0)
             {
-                _ = AnalyzeTestImageFolderAsync();
-                ProcessCurrentTestImage();
+                _ = ReanalyzeLoadedTestImagesAsync();
             }
         }
         partial void OnShowRoiPanelChanged(bool value) => OnPropertyChanged(nameof(IsRoiPanelVisible));
@@ -1075,11 +1084,16 @@ namespace LumasharpChecker.viewmodel
                 SaveSettingsMessage = "檢測設定已儲存";
             }
             OnPropertyChanged(nameof(CurrentProfile));
-            if (reanalyzeTestImages && TestImageFiles.Count > 0)
+            if (reanalyzeTestImages && IsTestImageAnalysisComplete && TestImageFiles.Count > 0)
             {
-                _ = AnalyzeTestImageFolderAsync();
-                ProcessCurrentTestImage();
+                _ = ReanalyzeLoadedTestImagesAsync();
             }
+        }
+
+        private async Task ReanalyzeLoadedTestImagesAsync()
+        {
+            await AnalyzeTestImageFolderAsync();
+            ProcessCurrentTestImage();
         }
 
         [RelayCommand]
@@ -1122,9 +1136,10 @@ namespace LumasharpChecker.viewmodel
             SelectedItem = Items.FirstOrDefault();
             CurrentTestImageBitmap = null;
             TestImageFiles.Clear();
+            TestImageTree.Clear();
             CurrentTestImageIndex = -1;
             CurrentTestImagePath = string.Empty;
-            TestImageInfo = string.Empty;
+            TestImageInfo = "圖片 0 / 0";
             TestImageBrightness = 0;
             TestImageBrightnessDeltaPercent = double.NaN;
             TestImageSharpness = 0;
@@ -1239,29 +1254,25 @@ namespace LumasharpChecker.viewmodel
 
 
         [RelayCommand]
-        private async Task TestImage()
+        private void TestImage()
         {
             if (CurrentProfile == null) return;
 
-            var dialog = new Microsoft.Win32.OpenFileDialog
+            if (IsAnalyzingTestImages)
             {
-                Filter = "圖片檔案|*.jpg;*.jpeg;*.png;*.bmp;*.gif|所有檔案|*.*",
-                Multiselect = false
-            };
-            
-            if ((bool)!dialog.ShowDialog())
-            {
+                SaveSettingsMessage = "圖片仍在檢測中，請稍候再載入";
                 return;
             }
 
-            ResetTestImageState();
+            var dialog = new Microsoft.Win32.OpenFolderDialog
+            {
+                Title = "選擇測試圖片資料夾",
+                Multiselect = false
+            };
+            if (dialog.ShowDialog() != true) return;
 
-            // 取得選取的檔案路徑
-            string selectedFilePath = dialog.FileName;
-            string folderPath = Path.GetDirectoryName(selectedFilePath) ?? string.Empty;
-            
-            // 載入資料夾內所有圖片檔案
-            await LoadTestImageFolder(folderPath, selectedFilePath);
+            ResetTestImageState();
+            LoadTestImageFolder(dialog.FolderName);
         }
 
         [RelayCommand]
@@ -1289,6 +1300,7 @@ namespace LumasharpChecker.viewmodel
 
             ResetTestImageState();
             TestImageFiles.Add(dialog.FileName);
+            TestImageTree = BuildTestImageTree(TestImageFiles);
             CurrentTestImageIndex = 0;
 
             await AnalyzeTestImageFolderAsync();
@@ -1298,9 +1310,10 @@ namespace LumasharpChecker.viewmodel
         private void ResetTestImageState()
         {
             TestImageFiles.Clear();
+            TestImageTree.Clear();
             CurrentTestImageIndex = -1;
             CurrentTestImagePath = string.Empty;
-            TestImageInfo = string.Empty;
+            TestImageInfo = "圖片 0 / 0";
             CurrentTestImageBitmap = null;
             CanNavigatePrevious = false;
             CanNavigateNext = false;
@@ -1316,7 +1329,7 @@ namespace LumasharpChecker.viewmodel
             UpdateDisplayImage();
         }
 
-        private async Task LoadTestImageFolder(string folderPath, string selectedFilePath)
+        private void LoadTestImageFolder(string folderPath)
         {
             try
             {
@@ -1333,20 +1346,78 @@ namespace LumasharpChecker.viewmodel
                     TestImageFiles.Add(file);
                 }
 
-                // 設定當前選取的圖片索引
-                CurrentTestImageIndex = Array.IndexOf(files, selectedFilePath);
-                await AnalyzeTestImageFolderAsync();
-                
-                if (CurrentTestImageIndex >= 0)
+                TestImageTree = BuildTestImageTree(TestImageFiles);
+                if (files.Length == 0)
                 {
-                    ProcessCurrentTestImage();
+                    SaveSettingsMessage = "資料夾內沒有支援的圖片";
+                    return;
                 }
+
+                // 載入資料夾只建立清單並顯示第一張預覽，不執行影像檢測。
+                CurrentTestImageIndex = 0;
+                ProcessCurrentTestImage();
+                SaveSettingsMessage = $"已載入 {files.Length} 張圖片；按「連續測試」開始檢測";
             }
             catch (Exception ex)
             {
-                // 處理錯誤，可以記錄到日誌
                 System.Diagnostics.Debug.WriteLine($"載入測試圖片資料夾失敗: {ex.Message}");
+                SaveSettingsMessage = $"載入圖片失敗：{ex.Message}";
             }
+        }
+
+        private static ObservableCollection<TestImageTreeNode> BuildTestImageTree(IEnumerable<string> files)
+        {
+            var paths = files.ToList();
+            var root = new TestImageTreeNode
+            {
+                Name = paths.Count == 0 ? "圖片" : Path.GetFileName(Path.GetDirectoryName(paths[0]) ?? "圖片"),
+                IsFolder = true
+            };
+            foreach (string path in paths)
+            {
+                root.Children.Add(new TestImageTreeNode
+                {
+                    Name = Path.GetFileName(path),
+                    FilePath = path,
+                    IsFolder = false
+                });
+            }
+
+            return paths.Count == 0
+                ? new ObservableCollection<TestImageTreeNode>()
+                : new ObservableCollection<TestImageTreeNode> { root };
+        }
+
+        [RelayCommand]
+        private void StartContinuousTest()
+        {
+            if (IsAnalyzingTestImages)
+            {
+                SaveSettingsMessage = "圖片仍在檢測中，請稍候";
+                return;
+            }
+
+            if (TestImageFiles.Count == 0)
+            {
+                SaveSettingsMessage = "請先載入測試圖片資料夾";
+                return;
+            }
+
+            _ = RunContinuousTestAsync();
+        }
+
+        private async Task RunContinuousTestAsync()
+        {
+            await AnalyzeTestImageFolderAsync();
+            ProcessCurrentTestImage();
+        }
+
+        public void SelectTestImage(string filePath)
+        {
+            int index = TestImageFiles.IndexOf(filePath);
+            if (index < 0) return;
+            CurrentTestImageIndex = index;
+            ProcessCurrentTestImage();
         }
 
         private async void AnalyzeTestImageFolder()
@@ -1521,10 +1592,18 @@ namespace LumasharpChecker.viewmodel
 
             try
             {
-                ImageProcessor processor = CreateImageProcessor();
-                var result = AnalyzeSingleTestImage(processor, CurrentTestImagePath);
-                ApplyTestImageResult(result);
-                LoadCurrentPreviewIfNeeded(result);
+                // 導覽清單只切換預覽；分析只能由單張或連續測試命令啟動。
+                TestImageBrightness = 0;
+                TestImageBrightnessDeltaPercent = double.NaN;
+                TestImageSharpness = 0;
+                TestImageROI = new System.Drawing.Rectangle();
+                TestImageBrightnessROI = new System.Drawing.Rectangle();
+                TestImageSharpnessROI = new System.Drawing.Rectangle();
+                BrightnessColor = Brushes.Black;
+                SharpnessColor = Brushes.Black;
+                TestImageMatchFailed = string.Empty;
+                CurrentTestImageBitmap = LoadBitmapFromPath(CurrentTestImagePath);
+                UpdateDisplayImage();
             }
             catch (Exception ex)
             {
