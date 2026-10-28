@@ -1,0 +1,78 @@
+# LumasharpChecker-Slim: source-only GitHub branch.
+# Do not upload private original DIA images, models, runtime profiles or app binaries.
+
+# Published and diagnostic builds
+/App/
+/App-net472/
+/App-net472-Slim/
+# Older local-only reverse-engineering notes and agent machine instructions.
+# The Slim handoff documents in the repository root are the public-facing docs.
+/Source/AGENTS.md
+/Source/HANDOFF.md
+/Source/lumasharp_cognex_analyzer_ux_roi_export.py
+**/bin/
+**/obj/
+**/.vs/
+**/packages/
+**/TestResults/
+**/.idea/
+
+# Runtime content, recipes, caches and local inspection outputs
+**/TrainingImageCache/
+**/TrainingImage/
+**/recipes/
+**/Recipe/
+**/Results/
+**/Result/
+**/logs/
+**/Logs/
+**/profile/
+**/profiles/
+**/config.json
+**/app-settings.json
+**/pattern.jpg
+**/profile.json
+
+# Vendor/private model and inspection assets
+*.h5d
+*.pbd
+*.h5
+*.onnx
+*.pt
+*.pth
+*.weights
+*.tflite
+*.npy
+*.npz
+
+# Native binaries, packages, local machine credentials and publish profiles
+*.exe
+*.dll
+*.pdb
+*.dylib
+*.so
+*.nupkg
+*.snupkg
+*.zip
+*.7z
+*.rar
+*.msi
+*.user
+*.suo
+*.pubxml
+*.pubxml.user
+*.pfx
+*.p12
+*.pem
+*.key
+*.env
+.env.*
+*.log
+
+# Local IDE and Python caches
+__pycache__/
+.venv/
+venv/
+*.pyc
+Thumbs.db
+desktop.ini

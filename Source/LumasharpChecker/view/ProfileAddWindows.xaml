@@ -1,0 +1,111 @@
+<Window x:Class="LumasharpChecker.view.ProfileAddWindows"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:LumasharpChecker.view"
+        xmlns:vm="clr-namespace:LumasharpChecker.viewmodel"
+        mc:Ignorable="d"
+        Title="建立檢測參數" Height="820" Width="1160"
+        MinWidth="950" MinHeight="650" WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft JhengHei UI" FontSize="13"
+        Background="{DynamicResource Bg}" Foreground="{DynamicResource Text}">
+    <Window.Resources>
+        <vm:ProfileMultiValueConverter x:Key="MultiValueConverter" />
+        <vm:PathToImageConverter x:Key="ImageConverter"/>
+        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+    </Window.Resources>
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="260"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Border Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}"
+                BorderThickness="1" CornerRadius="11" Padding="12" Margin="0,0,8,8">
+            <StackPanel Margin="4">
+                <TextBlock Text="檢測區域" Style="{DynamicResource HudSectionTitle}" FontSize="17"
+                           Margin="0,0,0,8"/>
+                <TextBlock Text="{Binding SampleCountText}" TextWrapping="Wrap" FontSize="12"
+                           Foreground="#254C70" FontWeight="SemiBold" Margin="2,0,2,10"
+                           ToolTip="這些樣本會一起用來計算平均值、標準差與基準範圍。"/>
+                <Button Content="清除ROI" Click="Button_Click" Margin="0,5,0,0" Visibility="Collapsed"/>
+                
+                <Grid Margin="0,10,0,10">
+                    <StackPanel>
+                        <RadioButton x:Name="RB_PatternMatch" Content="設定定位框（綠色）" Margin="5,0,5,4" IsChecked="True" Checked="RoiMode_Checked"/>
+                        <RadioButton x:Name="RB_Brightness" Content="設定亮度檢測框（藍色）" Margin="5,0,5,4" Checked="RoiMode_Checked"/>
+                        <RadioButton x:Name="RB_Sharpness"
+                                     Content="設定銳利度檢測框（紅色）"
+                                     Margin="5,0,5,0"
+                                     Checked="RoiMode_Checked"
+                                     Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    </StackPanel>
+                    
+                </Grid>
+                <Button Content="計算全部樣本的標準值" Command="{Binding CalculateImagesCommand}"
+                        Style="{DynamicResource HudPrimaryButton}" Margin="0,8,0,0"
+                        ToolTip="以所有已選 OK 樣本計算亮度、銳利度與統計範圍"/>
+            </StackPanel>
+        </Border>
+        <Grid Grid.Column="1">
+            <StackPanel Margin="4">
+                <TextBlock>
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="定位框 X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                            <Binding Path="PatternMatchRoi.X" />
+                            <Binding Path="PatternMatchRoi.Y" />
+                            <Binding Path="PatternMatchRoi.Width" />
+                            <Binding Path="PatternMatchRoi.Height" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock>
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="亮度框 X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                            <Binding Path="BrightnessRoi.X" />
+                            <Binding Path="BrightnessRoi.Y" />
+                            <Binding Path="BrightnessRoi.Width" />
+                            <Binding Path="BrightnessRoi.Height" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <TextBlock.Text>
+                        <MultiBinding StringFormat="銳利度框 X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
+                            <Binding Path="SharpnessRoi.X" />
+                            <Binding Path="SharpnessRoi.Y" />
+                            <Binding Path="SharpnessRoi.Width" />
+                            <Binding Path="SharpnessRoi.Height" />
+                        </MultiBinding>
+                    </TextBlock.Text>
+                </TextBlock>
+                <TextBlock Text="{Binding BrightnessLowLimit, StringFormat='亮度下限: {0:F2}'}"/>
+                <TextBlock Text="{Binding BrightnessHighLimit, StringFormat='亮度上限: {0:F2}'}"/>
+                <TextBlock Text="{Binding SharpnessLowLimit, StringFormat='銳利度下限: {0:F2}'}"
+                           Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <TextBlock/>
+                <TextBlock/>
+            </StackPanel>
+        </Grid>
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" Margin="0,7,10,4"
+              Background="{DynamicResource HudViewport}">
+            <Viewbox>
+                <Grid>
+                <!-- 圖片容器 -->
+                <Image x:Name="MyImage" Source="{Binding TargetImageFilePath, Converter={StaticResource ImageConverter}}" Stretch="Uniform"/>
+
+                <!-- 用於繪製矩形框的透明 Canvas -->
+                <Canvas x:Name="DrawingCanvas" 
+            Background="Transparent"
+            MouseLeftButtonDown="DrawingCanvas_MouseLeftButtonDown"
+            MouseMove="DrawingCanvas_MouseMove"
+            MouseLeftButtonUp="DrawingCanvas_MouseLeftButtonUp"/>
+                </Grid>
+            </Viewbox>
+        </Grid>
+    </Grid>
+</Window>
