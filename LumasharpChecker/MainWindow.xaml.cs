@@ -28,6 +28,12 @@ namespace LumasharpChecker
             Version? version = Assembly.GetEntryAssembly().GetName().Version;
             this.Title += $" {version?.ToString()}";
         }
+
+        private void OpenRecipeManager_Click(object sender, RoutedEventArgs e)
+        {
+            var window = new RecipeManagerWindow(this);
+            window.ShowDialog();
+        }
         //[DllImport("user32.dll")]
         //private static extern bool SetForegroundWindow(IntPtr hWnd);
     }

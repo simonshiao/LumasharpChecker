@@ -182,7 +182,7 @@ namespace LumasharpChecker.viewmodel
         private int _currentStationNumber = 1;
 
         [ObservableProperty]
-        private string _stationStatusMessage = "請先由上方選擇或新增 Recipe，再選擇站別。";
+        private string _stationStatusMessage = "請先開啟 Recipe 與設定，選擇或新增 Recipe。";
 
         [ObservableProperty]
         private ObservableCollection<string> _limitModeItems = new(new[] { ProfileManager.LimitMode.Percent, ProfileManager.LimitMode.Fixed });
@@ -466,7 +466,7 @@ namespace LumasharpChecker.viewmodel
             CurrentStationNumber = 1;
             RefreshStationSlots();
             LoadCurrentProfile(SelectedItem, isLibraryProfile: true);
-            StationStatusMessage = "Recipe 已關閉；請由上方選擇或新增 Recipe。";
+            StationStatusMessage = "Recipe 已關閉；請開啟 Recipe 與設定。";
         }
 
         [RelayCommand]

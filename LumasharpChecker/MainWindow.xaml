@@ -229,35 +229,7 @@
                                Margin="1,6,0,0"/>
                 </StackPanel>
                 <WrapPanel Margin="0,12,0,0" VerticalAlignment="Center">
-                    <ToggleButton x:Name="RecipeToggle" Content="選擇 Recipe ▾"
-                                  Width="138" Height="36" FontSize="13" FontWeight="SemiBold"
-                                  ToolTip="開啟 Recipe 選擇與管理"/>
-                    <Popup IsOpen="{Binding IsChecked, ElementName=RecipeToggle, Mode=TwoWay}"
-                           Placement="Bottom" PlacementTarget="{Binding ElementName=RecipeToggle}"
-                           StaysOpen="False" AllowsTransparency="True"
-                           DataContext="{Binding DataContext, ElementName=RecipeToggle}">
-                        <Border Width="400" MaxWidth="400" Padding="16" Margin="0,6,0,8"
-                                Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
-                                BorderThickness="1" CornerRadius="14" Effect="{StaticResource CardShadow}">
-                            <StackPanel>
-                                <TextBlock Text="選擇 Recipe" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,10"/>
-                                <TextBlock Text="選擇配方後按載入；各站的設定和基準圖片會一同切換。"
-                                           Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                                <ComboBox ItemsSource="{Binding Recipes}" DisplayMemberPath="Name"
-                                          SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}"
-                                          ToolTip="選擇要載入或刪除的 Recipe"/>
-                                <WrapPanel Margin="0,10,0,0">
-                                    <Button Command="{Binding LoadSelectedRecipeCommand}" Content="載入 Recipe"
-                                            IsEnabled="{Binding HasSelectedRecipe}" MinWidth="110" Margin="0,0,8,0"/>
-                                    <Button Command="{Binding DeleteRecipeCommand}" Content="刪除所選 Recipe"
-                                            IsEnabled="{Binding HasSelectedRecipe}" Style="{StaticResource DestructiveButtonStyle}"/>
-                                </WrapPanel>
-                            </StackPanel>
-                        </Border>
-                    </Popup>
-                    <Button Command="{Binding CreateRecipeCommand}" Content="新增 Recipe" Margin="8,0,0,0"/>
-                    <Button Command="{Binding CloseRecipeCommand}" Content="關閉 Recipe" Margin="8,0,0,0"
-                            IsEnabled="{Binding IsRecipeActive}"/>
+                    <Button Content="Recipe 與設定" Click="OpenRecipeManager_Click" MinWidth="138" ToolTip="管理 Recipe、設定檔並查看基準摘要"/>
                     <TextBlock Text="{Binding CurrentInspectionName, StringFormat='目前：{0}'}" Margin="18,0,0,0"
                                VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis"
                                FontWeight="SemiBold" Foreground="{StaticResource Text}"/>
@@ -306,7 +278,7 @@
                 </TabItem>
                 <TabItem Header="顯示">
                     <StackPanel Margin="10" FlowDirection="LeftToRight">
-                        <CheckBox Content="顯示右側 ROI 資訊"
+                        <CheckBox Content="在 Recipe 與設定中顯示 ROI 資訊"
                                   IsChecked="{Binding ShowRoiPanel, Mode=TwoWay}"
                                   Margin="0,2,0,10"/>
                         <TextBlock Text="全部結果縮圖" Style="{StaticResource FieldLabel}"/>
@@ -338,39 +310,7 @@
 
             <ScrollViewer Grid.Column="0" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <GroupBox Header="設定檔">
-                        <StackPanel Margin="0">
-                            <ComboBox ItemsSource="{Binding Items}"
-                                      DisplayMemberPath="Name"
-                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}">
-                                <i:Interaction.Triggers>
-                                    <i:EventTrigger EventName="SelectionChanged">
-                                        <i:InvokeCommandAction Command="{Binding SelectionChangedCommand}"/>
-                                    </i:EventTrigger>
-                                </i:Interaction.Triggers>
-                            </ComboBox>
-                            <Grid Margin="0,8,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="8"/>
-                                    <ColumnDefinition Width="*"/>
-                                </Grid.ColumnDefinitions>
-                    <Button Command="{Binding AddNewProfileCommand}"
-                                        Content="建立新設定檔"/>
-                                <Button Grid.Column="2"
-                                        Command="{Binding DeleteSelectedProfileCommand}"
-                                        Style="{StaticResource DestructiveButtonStyle}"
-                                        Content="刪除設定檔"/>
-                            </Grid>
-                            <Button Command="{Binding ApplyLibraryProfileToStationCommand}"
-                                    Content="套用所選設定檔至本站"
-                                    Margin="0,8,0,0"
-                                    Visibility="{Binding IsRecipeActive, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                    IsEnabled="{Binding CanApplyLibraryProfileToStation}"/>
-                        </StackPanel>
-                    </GroupBox>
-
-                    <GroupBox Header="亮度規格">
+<GroupBox Header="亮度規格">
                         <StackPanel Margin="0">
                             <TextBlock Text="判定方式" Style="{StaticResource FieldLabel}"/>
                             <ComboBox ItemsSource="{Binding LimitModeItems}"
@@ -462,6 +402,8 @@
                     <Button Command="{Binding SaveInspectionSettingsCommand}"
                             Content="儲存檢測設定"
                             Margin="0,0,0,8"/>
+
+
                 </StackPanel>
             </ScrollViewer>
 
@@ -547,90 +489,9 @@
 
             <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
-                    <GroupBox Header="ROI"
-                              Visibility="{Binding IsRoiPanelVisible, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <StackPanel Margin="0">
-                            <TextBlock Text="定位框（綠色）" Style="{StaticResource FieldLabel}"/>
-                            <TextBlock Style="{StaticResource ResultValue}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
-                                        <Binding Path="CurrentProfile.PatternMatchRoiX"/>
-                                        <Binding Path="CurrentProfile.PatternMatchRoiY"/>
-                                        <Binding Path="CurrentProfile.PatternMatchRoiW"/>
-                                        <Binding Path="CurrentProfile.PatternMatchRoiH"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <TextBlock Text="亮度檢測框（藍色）" Style="{StaticResource FieldLabel}" Margin="0,8,0,3"/>
-                            <TextBlock Style="{StaticResource ResultValue}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
-                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiX"/>
-                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiY"/>
-                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiW"/>
-                                        <Binding Path="CurrentProfile.EffectiveBrightnessRoiH"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <TextBlock Text="銳利度檢測框（紅色）"
-                                       Style="{StaticResource FieldLabel}"
-                                       Margin="0,8,0,3"
-                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Style="{StaticResource ResultValue}"
-                                       Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="X: {0:F0} Y: {1:F0} W: {2:F0} H: {3:F0}">
-                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiX"/>
-                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiY"/>
-                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiW"/>
-                                        <Binding Path="CurrentProfile.EffectiveSharpnessRoiH"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <TextBlock Text="圖片尺寸" Style="{StaticResource FieldLabel}" Margin="0,8,0,3"/>
-                            <TextBlock Style="{StaticResource ResultValue}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="W: {0:F0} H: {1:F0} px">
-                                        <Binding Path="CurrentProfile.ImageWidth"/>
-                                        <Binding Path="CurrentProfile.ImageHeight"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                        </StackPanel>
-                    </GroupBox>
 
-                    <GroupBox Header="基準摘要">
-                        <StackPanel Margin="0">
-                            <TextBlock Text="{Binding DetectionMode, StringFormat='檢測模式: {0}'}" Style="{StaticResource ResultValue}"/>
-                            <TextBlock Text="{Binding ImageSizeSummary}" Style="{StaticResource ResultValue}"/>
-                            <TextBlock Style="{StaticResource ResultValue}">
-                                <TextBlock.Text>
-                                    <MultiBinding StringFormat="亮度平均 / σ: {0:F2} / {1:F2}">
-                                        <Binding Path="CurrentProfile.BrightnessMean"/>
-                                        <Binding Path="CurrentProfile.BrightnessSigma"/>
-                                    </MultiBinding>
-                                </TextBlock.Text>
-                            </TextBlock>
-                            <TextBlock Text="{Binding BrightnessCvSummary}" Style="{StaticResource ResultValue}"/>
-                            <StackPanel Orientation="Horizontal" Margin="0,6,0,2">
-                                <TextBlock Text="百分位數"
-                                           Style="{StaticResource FieldLabel}"
-                                           VerticalAlignment="Center"
-                                           Margin="0,0,8,0"/>
-                                <ComboBox ItemsSource="{Binding BaselinePercentileItems}"
-                                          SelectedItem="{Binding SelectedBaselinePercentile, Mode=TwoWay}"
-                                          Width="78"/>
-                            </StackPanel>
-                            <TextBlock Text="{Binding BrightnessPercentileSummary}" Style="{StaticResource ResultValue}"/>
-                            <TextBlock Text="{Binding BrightnessRoiAreaSummary}" Style="{StaticResource ResultValue}"/>
-                            <TextBlock Text="{Binding CurrentProfile.SharpnessMean, StringFormat='銳利度平均: {0:F2}'}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Text="{Binding CurrentProfile.SharpnessSigma, StringFormat='銳利度 σ: {0:F2}'}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Text="{Binding SharpnessCvSummary}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Text="{Binding SharpnessPercentileSummary}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Text="{Binding SharpnessRoiAreaSummary}" Style="{StaticResource ResultValue}" Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <TextBlock Text="{Binding CurrentProfile.ModifyDateTime, StringFormat='編輯時間: {0}'}" Style="{StaticResource ResultValue}" Margin="0,8,0,0"/>
-                        </StackPanel>
-                    </GroupBox>
+
+
 
                     <GroupBox Header="測試圖片">
                         <StackPanel Margin="0">
