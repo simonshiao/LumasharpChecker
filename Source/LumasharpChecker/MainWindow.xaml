@@ -455,7 +455,7 @@
                 </Border>
                 <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="0,0,15,0"
                             MinWidth="100">
-                    <TextBlock Text="站別／參數" FontSize="10" Foreground="{StaticResource HudTextSoft}"/>
+                    <TextBlock Text="站別" FontSize="10" Foreground="{StaticResource HudTextSoft}"/>
                     <TextBlock Text="{Binding CurrentStationStatusText}"
                                FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource HudText}"
                                Margin="0,3,0,0"/>
@@ -477,55 +477,73 @@
             </Grid>
         </Border>
 
-        <!-- Settings panel drops down by the toolbar's gear icon. -->
+        <!-- Compact settings panel with clear sections and a close action. -->
         <Border Grid.Column="0" Grid.ColumnSpan="2" Grid.Row="1"
                 Panel.ZIndex="20"
-                Width="360"
+                Width="402"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Top"
-                Margin="245,8,0,0"
+                Margin="231,8,0,0"
                 Background="White"
-                BorderBrush="{StaticResource Line}"
+                BorderBrush="{StaticResource HudBorder}"
                 BorderThickness="1"
-                CornerRadius="16"
-                Padding="14"
+                CornerRadius="12"
+                Padding="0"
                 Effect="{StaticResource CardShadow}"
                 Visibility="{Binding IsSettingsPanelOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TabControl FlowDirection="RightToLeft">
+            <StackPanel>
+                <Border CornerRadius="12,12,0,0" Background="{StaticResource HudHeaderGradient}"
+                        Padding="16,12,12,10">
+                    <DockPanel>
+                        <Button DockPanel.Dock="Right" Content="×" Width="31" Height="29"
+                                MinHeight="0" Padding="0" FontSize="18"
+                                Click="CloseSettingsPanel_Click" ToolTip="收合設定面板"
+                                AutomationProperties.Name="關閉設定面板"/>
+                        <StackPanel>
+                            <TextBlock Text="設定" FontSize="17" FontWeight="SemiBold"
+                                       Foreground="{StaticResource HudText}"/>
+                        </StackPanel>
+                    </DockPanel>
+                </Border>
+            <TabControl FlowDirection="LeftToRight" Margin="14,11,14,0">
                 <TabItem Header="檢測">
-                    <StackPanel Margin="10" FlowDirection="LeftToRight">
-                        <TextBlock Text="檢測項目" Style="{StaticResource FieldLabel}"/>
+                    <StackPanel Margin="12" FlowDirection="LeftToRight">
+                        <TextBlock Text="項目" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,7"/>
                         <ComboBox ItemsSource="{Binding InspectionModeItems}"
                                   SelectedItem="{Binding DetectionMode, Mode=TwoWay}"
-                                  Margin="0,0,0,10"/>
-                        <TextBlock Text="亮度模式只判定亮度，不計算銳利度與紅色 ROI。"
+                                  AutomationProperties.Name="檢測項目"
+                                  Margin="0,0,0,12"/>
+                        <TextBlock Text="亮度模式不計算銳利度"
                                    Foreground="{StaticResource Muted}"
-                                   TextWrapping="Wrap"/>
+                                   FontSize="12" TextWrapping="Wrap"/>
                     </StackPanel>
                 </TabItem>
                 <TabItem Header="顯示">
-                    <StackPanel Margin="10" FlowDirection="LeftToRight">
-                        <CheckBox Content="在 Recipe 與設定中顯示 ROI 資訊"
+                    <StackPanel Margin="12" FlowDirection="LeftToRight">
+                        <TextBlock Text="檢測畫面" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,10"/>
+                        <CheckBox Content="顯示 ROI 資訊"
                                   IsChecked="{Binding ShowRoiPanel, Mode=TwoWay}"
-                                  Margin="0,2,0,10"/>
-                        <TextBlock Text="全部結果縮圖" Style="{StaticResource FieldLabel}"/>
+                                  Margin="0,2,0,15"/>
+                        <TextBlock Text="批次結果縮圖" Style="{StaticResource FieldLabel}"/>
                         <ComboBox ItemsSource="{Binding BatchPreviewModeItems}"
                                   SelectedItem="{Binding BatchPreviewMode, Mode=TwoWay}"/>
                     </StackPanel>
                 </TabItem>
                 <TabItem Header="站別">
-                    <StackPanel Margin="10" FlowDirection="LeftToRight">
-                        <TextBlock Text="目前站數" Style="{StaticResource FieldLabel}"/>
+                    <StackPanel Margin="12" FlowDirection="LeftToRight">
+                        <TextBlock Text="目前站數" FontWeight="SemiBold" FontSize="13" Margin="0,0,0,7"/>
                         <ComboBox x:Name="StationCountCombo" AutomationProperties.Name="站數"
                                   ItemsSource="{Binding StationCountOptions}"
                                   SelectedItem="{Binding StationCount, Mode=TwoWay}"
-                                  Margin="0,0,0,10"/>
-                        <TextBlock Text="Recipe 會保存站數與各站設定。由 10 站切回 8 站時，第 9、10 站資料會保留，之後可再切回使用。"
+                                  Margin="0,0,0,12"/>
+                        <TextBlock Text="切回 8 站仍保留第 9、10 站設定。"
                                    Foreground="{StaticResource Muted}"
-                                   TextWrapping="Wrap"/>
+                                   FontSize="12" TextWrapping="Wrap"/>
                     </StackPanel>
                 </TabItem>
             </TabControl>
+                <Border Height="10" Background="Transparent"/>
+            </StackPanel>
         </Border>
 
         <Grid x:Name="InspectionPage" Grid.Column="1" Grid.Row="1" Margin="22,0,22,20"
@@ -1020,7 +1038,7 @@
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Command="{Binding RunMultiStationInspectionCommand}"
                                 IsEnabled="{Binding IsRecipeActive}"
-                                Content="▶  測試勾選站別"
+                                Content="▶  開始"
                                 AutomationProperties.Name="測試勾選站別"
                                 ToolTip="逐站測試勾選的站別；使用每站 OK／NG 圖庫影像和該站檢測 Profile 判定，未校準站跳過。"
                                 Background="#D2F5FF" BorderBrush="{StaticResource HudAccentStrong}"
@@ -1034,7 +1052,7 @@
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Background="{StaticResource HudAccent}" Width="4"
                                 CornerRadius="2" Margin="0,2,13,2"/>
-                        <TextBlock Text="多站離線檢測"
+                        <TextBlock Text="總覽"
                                    FontWeight="Bold" FontSize="17" VerticalAlignment="Center"
                                    Foreground="{StaticResource HudText}" Margin="0,0,19,0"/>
                         <TextBlock Text="{Binding MultiStationTotal}" VerticalAlignment="Center"
@@ -1042,7 +1060,8 @@
                     </StackPanel>
                 </DockPanel>
                 <TextBlock Grid.Row="1" Text="{Binding MultiStationProgress}"
-                           Foreground="{StaticResource HudTextSoft}" FontSize="11" Margin="16,6,0,0"/>
+                           Foreground="{StaticResource HudTextSoft}" FontSize="11"
+                           Margin="16,4,0,0" MaxHeight="16" TextTrimming="CharacterEllipsis"/>
             </Grid>
             </Border>
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
@@ -1073,7 +1092,7 @@
                                         <StackPanel Orientation="Horizontal">
                                             <Border Width="4" CornerRadius="2" Background="{StaticResource HudAccent}"
                                                     Margin="0,1,9,1"/>
-                                            <TextBlock Text="{Binding Number, StringFormat=CCD {0:00}}" FontSize="18"
+                                            <TextBlock Text="{Binding Number}" FontSize="20"
                                                        FontWeight="Bold" Foreground="{StaticResource HudText}"
                                                        VerticalAlignment="Center"/>
                                         </StackPanel>
@@ -1092,31 +1111,6 @@
                                             BorderThickness="1.5" Margin="0,0,0,9" ClipToBounds="True">
                                         <Grid>
                                             <Image Source="{Binding PreviewImage}" Stretch="Uniform" Margin="4"/>
-                                            <Border Background="#AC0A354A" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                    CornerRadius="0,0,4,0" Padding="7,3">
-                                                <TextBlock Text="IMAGE" FontFamily="Segoe UI" FontSize="9"
-                                                           FontWeight="SemiBold" Foreground="{StaticResource HudAccent}"/>
-                                            </Border>
-                                            <Border HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                                                    Padding="7,3" Margin="4" CornerRadius="4"
-                                                    Background="#D80B2942">
-                                                <TextBlock Text="{Binding PreviewLabel}" FontSize="10"
-                                                           Foreground="#DFF7FF"/>
-                                            </Border>
-                                            <TextBlock Text="NO IMAGE" HorizontalAlignment="Center"
-                                                       VerticalAlignment="Center" Foreground="#79A8BA" FontSize="14"
-                                                       FontFamily="Segoe UI" FontWeight="SemiBold">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding PreviewImage}" Value="{x:Null}">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
                                         </Grid>
                                     </Border>
                                     <Grid Grid.Row="2" Margin="0,1,0,8">

@@ -1,12 +1,12 @@
 # LumasharpChecker Slim｜整體 UI／UX 設計交接
 
-日期：2026-10-28　版本：1.0.0.46　平台：WPF / .NET Framework 4.7.2
+日期：2026-10-28　版本：1.0.0.49　平台：WPF / .NET Framework 4.7.2
 
 ## 參考設計與工具
 
 - 以 CHAO2 MCP 直接檢視 `Chao8Side/src/Chao8Side.Main/SystemSource/UI/MainWindow.RecoveredBrightTheme.cs`，複用亮色工業 HUD 的視覺語彙；不複製相機／RTX／PLC 依賴。
 - 共用 WPF `Source/LumasharpChecker/DesignSystem/HudTheme.xaml`，由 `App.xaml` 載入。所有非主畫面視窗使用相同的 Palette／Button／TextBox／ComboBox／GroupBox／DataGrid／TabControl／對話框標題／Focus／Disabled 狀態。
-- 主畫面既有 `Window.Resources` 仍保留特定樣式，但已對齊全域配色。首頁保留 CCD01～08 卡片與深色影像區，不再放重複的設定按鈕。
+- 主畫面既有 `Window.Resources` 仍保留特定樣式，但已對齊全域配色。首頁用 1～8 站卡片與深色影像區，不再放重複的設定按鈕。
 
 ## 設計原則
 
@@ -53,6 +53,11 @@
 
 ## 後續 UX 工作
 
+- **v49 圖像化圖庫**：取代純文字八站清單，以 4 欄 × 2 排視覺卡片容納 1～8 站。每卡片兩張 OK／NG 縮圖；直接點擊圖片開 Explorer 選取當前站別與分類。縮圖僅從資料夾載入第一張照片並限制 DecodePixelWidth=140，使用 OnLoad／Freeze 避免鎖住原始檔；來源不存在或沒有圖片時顯示資料夾圖示。保留先前對單站儲存、批次覆蓋確認、取消不變更的安全流程。
+- **v49 GUI 驗收**：NET472 1.0.0.49 成功發布、啟動；UI Automation 確認 1～8 站、16 個可點擊 OK／NG 圖片控制項與 16 個圖片控制項。第 5 站 OK 點擊後原生 Explorer 顯示正確標題，取消前後 R002 recipe.json SHA-256 相同。尚未在正式 Recipe 實際換路徑並重開測試（避免覆寫使用者設定）。
+- **v47～v48 圖庫路徑設定**：每站 OK／NG 可個別選取（Explorer IFileOpenDialog），只改動指定站別／類別，成功立即 SaveManifest；儲存失敗還原舊值。分類相反或 OK／NG 指向同一個資料夾會拒絕。批次覆蓋既有圖庫需確認，取消無資料寫入。原廠 TrainingImage 匯入入口保留並改為 Explorer。
+- **v48 減法設計**：圖庫窗改成橫列清單，每站只顯示 1～8、OK／NG 路徑、可用狀態圓點、兩個選取鈕；主畫面與目前站別只顯示 1～8，不再加 CCD。移除影像視窗 IMAGE／NO IMAGE 等字樣，收短設定面板內容。
+- **驗證界線**：NET472 x64 Release 建置 0 errors、1.0.0.48 主視窗啟動成功，UIAutomation 確認 1～8 數字及無 CCD 標題；圖庫可開啟。獨立路徑的「成功寫入→關閉→重開」尚待不影響現有 Recipe 的隔離驗收。
 - **v46 導覽／功能分流**：使用者要求首頁與單站不出現在上方。正式移除頂部兩個分頁按鈕，左側只剩八站／單站導航；各站圖庫是工具對話窗，統一從頂部圖示開啟，不再在左側重複。頂部 5 圖示為 Recipe、圖庫、報表、結果、設定。齒輪面板錨定點改在圖示附近。正式執行驗證：頂部 5 圖示可見、頂部首頁／單站不存在、左側兩個導航可操作，設定可展開收合；Release build 0 errors。
 - **v45 純圖示功能列**：回應 Chao8Side 現場截圖，移除頂部「LUMA」「光源點檢」文字及 Recipe 長文字按鈕，左側 7 個固定 48×45 圖示按鈕＋分隔線，右側為目前 Recipe、CCD 與執行狀態。功能依序為 Recipe 管理、八站總覽、單站檢測、各站圖庫、Excel 報表、單站結果、設定。所有圖示有原有 Command／Click 與 ToolTip／AutomationProperties.Name；報表與結果沒有假造多站匯出能力。設定面板靠近齒輪、當前頁面圖示顯示高亮。
 - **v45 GUI 驗證**：正式 App 已啟動、7 個頂部圖示皆在正確序列且均可見、兩段品牌文字不再出現；1130×740 下各圖示與右側配方／CCD／檢測狀態仍可見。八站與單站切換及齒輪展開／收合已操作驗證。

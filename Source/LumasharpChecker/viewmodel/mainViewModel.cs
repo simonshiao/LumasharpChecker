@@ -77,6 +77,41 @@ namespace LumasharpChecker.viewmodel
         public bool NgDirectoryExists { get; init; }
         public string OkStatus => string.IsNullOrWhiteSpace(OkPath) ? "未設定" : OkDirectoryExists ? "可用" : "不存在";
         public string NgStatus => string.IsNullOrWhiteSpace(NgPath) ? "未設定" : NgDirectoryExists ? "可用" : "不存在";
+        public string OkPathDisplay => string.IsNullOrWhiteSpace(OkPath) ? "—" : OkPath;
+        public string NgPathDisplay => string.IsNullOrWhiteSpace(NgPath) ? "—" : NgPath;
+        public Brush OkStatusBrush => string.IsNullOrWhiteSpace(OkPath) ? Brushes.LightGray :
+            OkDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
+        public Brush NgStatusBrush => string.IsNullOrWhiteSpace(NgPath) ? Brushes.LightGray :
+            NgDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
+        // 圖像式圖庫：只載入每個目錄的一張低解析度預覽；不複製、不修改來源圖片。
+        public BitmapImage? OkPreviewImage => LoadFolderPreview(OkPath);
+        public BitmapImage? NgPreviewImage => LoadFolderPreview(NgPath);
+
+        private static BitmapImage? LoadFolderPreview(string folder)
+        {
+            if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder)) return null;
+            try
+            {
+                string? file = Directory.EnumerateFiles(folder)
+                    .Where(name => new[] { ".jpg", ".jpeg", ".png", ".bmp" }
+                        .Contains(Path.GetExtension(name), StringComparer.OrdinalIgnoreCase))
+                    .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (file == null) return null;
+                var preview = new BitmapImage();
+                preview.BeginInit();
+                preview.UriSource = new Uri(file);
+                preview.CacheOption = BitmapCacheOption.OnLoad;
+                preview.DecodePixelWidth = 140;
+                preview.EndInit();
+                preview.Freeze();
+                return preview;
+            }
+            catch (IOException) { return null; }
+            catch (UnauthorizedAccessException) { return null; }
+            catch (NotSupportedException) { return null; }
+            catch (System.Runtime.InteropServices.COMException) { return null; }
+        }
     }
 
     public static class BatchPreviewModes
@@ -211,6 +246,9 @@ namespace LumasharpChecker.viewmodel
 
         [ObservableProperty]
         private string _databaseDayFolderDisplay = string.Empty;
+
+        [ObservableProperty]
+        private string _databaseSaveMessage = "選取後自動儲存";
 
         [ObservableProperty]
         private bool _isRoiEditing;
@@ -491,21 +529,20 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void ImportTrainingImage()
         {
-            if (IsAnalyzingTestImages)
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
             {
                 SaveSettingsMessage = "圖片檢測進行中，請完成後再匯入。";
                 return;
             }
             var defaultPath = @"D:\0_軟體開發區\6.模板與共用資源區\原廠母本\DIAChip8Side_Welding\TrainingImage\R002-CCD1";
-            using var dialog = new System.Windows.Forms.FolderBrowserDialog
-            {
-                Description = "選取 R002-CCD1 或其 Origional 站別資料夾；自動快取每站 OK／NG 各 6 張。",
-                SelectedPath = Directory.Exists(defaultPath) ? defaultPath : Environment.CurrentDirectory
-            };
-            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
             try
             {
-                ImportTrainingImageRecipeFromPath(dialog.SelectedPath);
+                Window owner = Application.Current.Windows.OfType<DatabaseSetupWindow>()
+                    .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
+                string? selectedFolder = view.ExplorerFolderPicker.PickFolder(owner,
+                    "匯入 TrainingImage", Directory.Exists(defaultPath) ? defaultPath : Environment.CurrentDirectory);
+                if (selectedFolder == null) return;
+                ImportTrainingImageRecipeFromPath(selectedFolder);
             }
             catch (Exception ex)
             {
@@ -715,24 +752,38 @@ namespace LumasharpChecker.viewmodel
                 SaveSettingsMessage = "請先載入 Recipe，再設定各站 OK／NG 圖庫路徑。";
                 return;
             }
-            if (IsAnalyzingTestImages)
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
             {
                 SaveSettingsMessage = "圖片仍在檢測中，請完成後再設定圖庫路徑。";
                 return;
             }
 
-            using var dialog = new System.Windows.Forms.FolderBrowserDialog
-            {
-                Description = "選取日期、站號或 OK／NG 資料夾",
-                SelectedPath = Directory.Exists(CurrentRecipe.DatabaseDayFolder)
-                    ? CurrentRecipe.DatabaseDayFolder
-                    : string.Empty
-            };
-            if (dialog.ShowDialog() != System.Windows.Forms.DialogResult.OK) return;
-
             try
             {
-                ApplyDatabaseDayFolder(dialog.SelectedPath, true);
+                // 批次設定視窗是 modal：Explorer 必須隸屬於目前對話窗，
+                // 否則可能被 Recipe／圖庫視窗蓋在後面。
+                Window owner = Application.Current.Windows.OfType<DatabaseSetupWindow>()
+                    .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
+                string? folder = view.ExplorerFolderPicker.PickFolder(
+                    owner,
+                    "批次設定全部站別 · 選擇日期／站號／OK 或 NG 資料夾",
+                    CurrentRecipe.DatabaseDayFolder ?? CurrentRecipe.TrainingImageRoot);
+                if (folder == null) return;
+                string? dayFolder = ResolveDatabaseDayFolder(Path.GetFullPath(folder));
+                if (dayFolder == null)
+                {
+                    MessageBox.Show("找不到符合站號的上層資料夾，請選取包含 1～8（或 10）站資料夾的日期層。", "路徑結構不符",
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                    return;
+                }
+                bool hasConfiguredPaths = CurrentRecipe.Stations.Any(station =>
+                    station.Number <= CurrentRecipe.StationCount &&
+                    (!string.IsNullOrWhiteSpace(station.OkDatabasePath) || !string.IsNullOrWhiteSpace(station.NgDatabasePath)));
+                if (hasConfiguredPaths && MessageBox.Show(
+                    $"批次設定會覆蓋目前 Recipe 全部 {CurrentRecipe.StationCount} 站的 OK／NG 路徑，包含已單獨設定的站別。\n\n新資料夾：{dayFolder}\n\n確定覆蓋嗎？",
+                    "確認覆蓋所有站別路徑", MessageBoxButton.YesNo, MessageBoxImage.Warning) != MessageBoxResult.Yes)
+                    return;
+                ApplyDatabaseDayFolder(folder, true);
             }
             catch (Exception ex)
             {
@@ -771,6 +822,7 @@ namespace LumasharpChecker.viewmodel
             recipeManager.SaveManifest(CurrentRecipe);
             RefreshStationDatabasePaths();
             RefreshStationSlots(); // 更新八站總覽的 OK／NG 圖庫狀態。
+            DatabaseSaveMessage = $"已更新全部 {CurrentRecipe.StationCount} 站圖庫路徑。";
             if (_activeStationDatabase != null)
             {
                 ResetTestImageState();
@@ -841,6 +893,54 @@ namespace LumasharpChecker.viewmodel
                         NgDirectoryExists = !string.IsNullOrWhiteSpace(station.NgDatabasePath)
                             && Directory.Exists(recipeManager.ResolveDatabasePath(station.NgDatabasePath))
                     }));
+        }
+
+        // 各站 OK／NG 可個別指定；只改對應站別與分類，不搬移或修改來源圖片。
+        public void SetStationDatabaseFolder(int stationNumber, bool isOk, string selectedFolder)
+        {
+            var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入 Recipe。");
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                throw new InvalidOperationException("檢測進行中，請完成或停止後再調整圖庫路徑。");
+            if (stationNumber < 1 || stationNumber > recipe.StationCount)
+                throw new ArgumentOutOfRangeException(nameof(stationNumber), "站別不在目前 Recipe 範圍內。");
+            string fullPath = Path.GetFullPath(selectedFolder);
+            if (!Directory.Exists(fullPath))
+                throw new DirectoryNotFoundException("資料夾不存在：" + fullPath);
+            var station = recipe.Stations.Single(s => s.Number == stationNumber);
+            string? previousPath = isOk ? station.OkDatabasePath : station.NgDatabasePath;
+            string? oppositePath = isOk ? station.NgDatabasePath : station.OkDatabasePath;
+            if (!string.IsNullOrWhiteSpace(oppositePath)
+                && string.Equals(recipeManager.ResolveDatabasePath(oppositePath), fullPath,
+                    StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("OK 與 NG 圖庫不能指向同一個資料夾。");
+            string appRoot = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string savedPath = fullPath.StartsWith(appRoot, StringComparison.OrdinalIgnoreCase)
+                ? fullPath.Substring(appRoot.Length) : fullPath;
+            if (string.Equals(recipeManager.ResolveDatabasePath(previousPath), fullPath,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                DatabaseSaveMessage = $"第 {stationNumber:00} 站 {(isOk ? "OK" : "NG")} 路徑未變更。";
+                return;
+            }
+            if (isOk) station.OkDatabasePath = savedPath;
+            else station.NgDatabasePath = savedPath;
+            try { recipeManager.SaveManifest(recipe); }
+            catch
+            {
+                if (isOk) station.OkDatabasePath = previousPath;
+                else station.NgDatabasePath = previousPath;
+                throw;
+            }
+            RefreshStationDatabasePaths();
+            RefreshStationSlots();
+            if (stationNumber == CurrentStationNumber && _activeStationDatabase != null &&
+                string.Equals(_activeStationDatabase, isOk ? "OK" : "NG", StringComparison.OrdinalIgnoreCase))
+            {
+                ResetTestImageState();
+                LoadStationDatabase(_activeStationDatabase);
+            }
+            DatabaseSaveMessage = $"已儲存第 {stationNumber:00} 站 {(isOk ? "OK" : "NG")} 圖庫；其餘站別及路徑保持不變。";
         }
 
         private string GetProcessingProfileName() => CurrentRecipe == null
@@ -1061,7 +1161,7 @@ namespace LumasharpChecker.viewmodel
         public string RecipeConfigurationSummary => CurrentRecipe == null
             ? "未選擇" : $"已設定 {StationSlots.Count(slot => slot.IsConfigured)}/{StationCount} 站";
         public string CurrentStationStatusText => CurrentRecipe == null
-            ? "—" : $"CCD {CurrentStationNumber:00} · {(StationSlots.FirstOrDefault(slot => slot.Number == CurrentStationNumber)?.IsConfigured == true ? "已設定" : "待校準")}";
+            ? "—" : $"{CurrentStationNumber} · {(StationSlots.FirstOrDefault(slot => slot.Number == CurrentStationNumber)?.IsConfigured == true ? "已設定" : "待校準")}";
         public string GlobalRunStatusText => CurrentRecipe == null
             ? "請先選擇 Recipe"
             : IsMultiStationTesting ? MultiStationProgress
@@ -1132,6 +1232,7 @@ namespace LumasharpChecker.viewmodel
         {
             MultiStationProgress = "尚未執行檢測";
             MultiStationTotal = "OK —   NG —   良率 —";
+            DatabaseSaveMessage = "選取後自動儲存";
             OnPropertyChanged(nameof(IsRecipeActive));
             OnPropertyChanged(nameof(GlobalStatusBrush));
             OnPropertyChanged(nameof(GlobalRunStatusText));

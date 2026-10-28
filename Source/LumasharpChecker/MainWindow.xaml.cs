@@ -104,6 +104,12 @@ namespace LumasharpChecker
             window.ShowDialog();
         }
 
+        private void CloseSettingsPanel_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is mainViewModel vm)
+                vm.IsSettingsPanelOpen = false;
+        }
+
         private void OpenTestImagePicker_Click(object sender, RoutedEventArgs e)
         {
             if (DataContext is not mainViewModel viewModel || viewModel.TestImageTree.Count == 0)
