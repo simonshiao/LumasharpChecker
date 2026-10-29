@@ -1,0 +1,159 @@
+<Window x:Class="LumasharpChecker.RecipeManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
+        Title="Recipe 與站別設定" Width="900" Height="760"
+        MinWidth="760" MinHeight="620" WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft JhengHei UI" FontSize="13"
+        Foreground="{DynamicResource Text}" Background="{DynamicResource Bg}">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="0,0,0,18">
+            <TextBlock Text="Recipe 與站別設定" Style="{DynamicResource HudSectionTitle}"/>
+            <TextBlock Text="雙擊 Recipe 可直接載入，再逐站套用設定檔。重設參數可回主畫面選取多張樣本重新計算。"
+                       Foreground="{StaticResource Muted}" Margin="0,5,0,0"/>
+        </StackPanel>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <GroupBox Header="Recipe">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <ListBox ItemsSource="{Binding Recipes}" SelectedItem="{Binding SelectedRecipe, Mode=TwoWay}"
+                                     MinHeight="118" MaxHeight="190" BorderBrush="{StaticResource Line}"
+                                     Background="{StaticResource SurfaceSubtle}" Padding="4">
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem">
+                                        <EventSetter Event="MouseDoubleClick" Handler="RecipeItem_MouseDoubleClick"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Padding="10,8" BorderBrush="{StaticResource Line}" BorderThickness="0,0,0,1">
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding Name}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding StationCount, StringFormat={}{0} 站}"
+                                                           Foreground="{StaticResource Muted}" FontSize="11" Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                            <WrapPanel Margin="0,10,0,0">
+                                <Button Content="載入所選 Recipe" Command="{Binding LoadSelectedRecipeCommand}"
+                                        Style="{DynamicResource HudSecondaryButton}"
+                                        IsEnabled="{Binding HasSelectedRecipe}" Margin="0,0,8,0"/>
+                                <Button Content="新增 Recipe" Command="{Binding CreateRecipeCommand}" Margin="0,0,8,0"/>
+                                <Button Content="匯入原廠資料" Command="{Binding ImportVendorRecipeSnapshotCommand}" Margin="0,0,8,0"
+                                        IsEnabled="{Binding IsRecipeActive}"
+                                        ToolTip="將原廠資料副本加入目前 Recipe；檢測參數尚未轉換"/>
+                                <Button Content="原生 Recipe" Command="{Binding OpenNativeRecipeCommand}" Margin="0,0,8,0"
+                                        IsEnabled="{Binding IsRecipeActive}"
+                                        ToolTip="使用已匯入的原廠 Recipe，由 InspTools R3 驗證並開啟目前站別（獨立測試副本；原生視窗可能允許編輯）"/>
+                                <Button Content="關閉目前 Recipe" Command="{Binding CloseRecipeCommand}"
+                                        IsEnabled="{Binding IsRecipeActive}" Margin="0,0,8,0"/>
+                                <Button Content="刪除所選 Recipe" Command="{Binding DeleteRecipeCommand}"
+                                        IsEnabled="{Binding HasSelectedRecipe}"/>
+                            </WrapPanel>
+                        </StackPanel>
+                        <Border Grid.Column="1" Margin="18,0,0,0" Padding="14"
+                                Background="{StaticResource SurfaceSubtle}" CornerRadius="12"
+                                VerticalAlignment="Top">
+                            <StackPanel Width="150">
+                                <TextBlock Text="Recipe 站數" FontWeight="SemiBold"/>
+                                <TextBlock Text="建立 Recipe 時會使用這個站數。"
+                                           Foreground="{StaticResource Muted}" FontSize="11"
+                                           TextWrapping="Wrap" Margin="0,4,0,8"/>
+                                <ComboBox ItemsSource="{Binding StationCountOptions}"
+                                          SelectedItem="{Binding StationCount, Mode=TwoWay}"/>
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+                </GroupBox>
+
+                <GroupBox Header="本站設定檔" IsEnabled="{Binding IsRecipeActive}">
+                    <StackPanel>
+                        <DockPanel Margin="0,0,0,12">
+                            <TextBlock Text="{Binding CurrentInspectionName}" FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding CurrentStationSettingsLabel, StringFormat='目前設定檔：{0}'}"
+                                       Foreground="{StaticResource Muted}" Margin="16,0,0,0"/>
+                        </DockPanel>
+
+                        <ItemsControl ItemsSource="{Binding StationSlots}">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate><UniformGrid Columns="5"/></ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button Content="{Binding Number}"
+                                            Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding Number}"
+                                            Margin="0,0,8,8" MinWidth="52" Padding="10,7">
+                                        <Button.Style>
+                                            <Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+                                                <Setter Property="Background" Value="{StaticResource SurfaceSubtle}"/>
+                                                <Setter Property="BorderBrush" Value="{StaticResource Line}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="{StaticResource BlueSoft}"/>
+                                                        <Setter Property="BorderBrush" Value="{StaticResource Blue}"/>
+                                                        <Setter Property="Foreground" Value="{StaticResource Blue}"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Button.Style>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="選擇一份既有設定檔套用至本站；Recipe 會保存獨立副本，不會改動設定檔庫原檔。"
+                                   Foreground="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,2,0,10"/>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <ComboBox ItemsSource="{Binding Items}" DisplayMemberPath="Name"
+                                      SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                                      VerticalAlignment="Top">
+                                <i:Interaction.Triggers>
+                                    <i:EventTrigger EventName="SelectionChanged">
+                                        <i:InvokeCommandAction Command="{Binding SelectionChangedCommand}"/>
+                                    </i:EventTrigger>
+                                </i:Interaction.Triggers>
+                            </ComboBox>
+                            <WrapPanel Grid.Column="1" Margin="10,0,0,0">
+                                <Button Content="新增設定檔" Command="{Binding AddNewProfileCommand}" Margin="0,0,8,0"/>
+                                <Button Content="刪除設定檔" Command="{Binding DeleteSelectedProfileCommand}"
+                                        IsEnabled="{Binding HasSelectedProfile}" Margin="0,0,8,0"/>
+                                <Button Content="套用至本站" Command="{Binding ApplyLibraryProfileToStationCommand}"
+                                        IsEnabled="{Binding CanApplyLibraryProfileToStation}"
+                                        Background="{StaticResource Blue}" Foreground="White" BorderBrush="{StaticResource Blue}"/>
+                            </WrapPanel>
+                        </Grid>
+                        <TextBlock Text="{Binding StationStatusMessage}" Foreground="{StaticResource Muted}"
+                                   TextWrapping="Wrap" Margin="0,12,0,0"/>
+                    </StackPanel>
+                </GroupBox>
+            </StackPanel>
+        </ScrollViewer>
+
+        <DockPanel Grid.Row="2" Margin="0,14,0,0">
+            <TextBlock Text="{Binding SaveSettingsMessage}" Foreground="{StaticResource Muted}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+            <Button DockPanel.Dock="Right" Content="完成" MinWidth="100"
+                    Style="{DynamicResource HudPrimaryButton}" Click="Done_Click"/>
+        </DockPanel>
+    </Grid>
+</Window>

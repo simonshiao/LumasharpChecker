@@ -1,0 +1,24 @@
+<Window x:Class="LumasharpChecker.view.ProfileDetailWindows"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:LumasharpChecker.view"
+        mc:Ignorable="d"
+        Title="檢測設定詳細資料" Height="450" Width="800"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource Bg}"
+        Foreground="{DynamicResource Text}">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="9*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="9*"/>
+            <ColumnDefinition Width="3*"/>
+        </Grid.ColumnDefinitions>
+
+        <TextBlock Text="檢測設定詳細資料" FontSize="21" FontWeight="SemiBold"
+                   Foreground="{DynamicResource Text}"/>
+    </Grid>
+</Window>
