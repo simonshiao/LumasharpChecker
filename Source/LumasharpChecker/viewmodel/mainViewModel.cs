@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -30,6 +30,8 @@ namespace LumasharpChecker.viewmodel
         public string FileName { get; set; } = string.Empty;
         public string FilePath { get; set; } = string.Empty;
         public double Brightness { get; set; }
+        public double? BrightnessMin { get; set; }
+        public double? BrightnessMax { get; set; }
         public double BrightnessDeltaPercent { get; set; }
         public double Sharpness { get; set; }
         public bool BrightnessSafe { get; set; }
@@ -561,6 +563,35 @@ namespace LumasharpChecker.viewmodel
         }
 
         [RelayCommand]
+        private void ImportVendorRecipeSnapshot()
+        {
+            if (CurrentRecipe == null)
+            {
+                MessageBox.Show("請先載入要匯入的現有 Recipe。", "匯入原廠 Recipe", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+            {
+                MessageBox.Show("檢測進行中，請先完成或停止。", "匯入原廠 Recipe", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            try
+            {
+                Window owner = Application.Current.Windows.OfType<RecipeManagerWindow>()
+                    .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
+                string? folder = ExplorerFolderPicker.PickFolder(owner, "選擇原廠 Recipe 資料夾", Environment.CurrentDirectory);
+                if (folder == null) return;
+                recipeManager.AttachVendorSnapshot(CurrentRecipe, folder);
+                SaveSettingsMessage = $"已匯入 {CurrentRecipe.Name} 的原廠資料副本；站別參數尚未轉換。";
+                MessageBox.Show(owner, "已將原廠資料副本加入目前 Recipe，並校驗檔案。\n原本 Luma 設定保留；原廠定位尚未轉為正式檢測參數。", "匯入完成", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "原廠 Recipe 匯入失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        [RelayCommand]
         private void ApplyTrainingImageToCurrentRecipe()
         {
             if (CurrentRecipe == null) return;
@@ -1046,6 +1077,47 @@ namespace LumasharpChecker.viewmodel
         private string GetProcessingProfileBasePath() => CurrentRecipe == null
             ? "profile"
             : recipeManager.GetProfileBasePath(CurrentRecipe);
+
+        public string? GetVendorRecipeSnapshotPath()
+        {
+            if (CurrentRecipe == null) return null;
+            string path = Path.Combine(recipeManager.GetProfileBasePath(CurrentRecipe), "vendor-source");
+            return Directory.Exists(path) ? path : null;
+        }
+
+        public Task<System.Drawing.Rectangle> TestNativeLocationAsync(string imageFile)
+        {
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                throw new InvalidOperationException("請等待目前檢測完成。");
+            string snapshot = GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("目前 Recipe 沒有原廠定位參數。");
+            return NativeLocationService.LocateAsync(snapshot, CurrentStationNumber, imageFile);
+        }
+
+        internal Task<NativeLocationService.Frame> LocateLightFrameAsync(string imageFile)
+        {
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting) throw new InvalidOperationException("請等待目前檢測完成。");
+            return NativeLocationService.LocateFrameAsync(GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("請先將原廠參數匯入目前 Recipe。"), CurrentStationNumber, imageFile);
+        }
+
+        private string LightSettingsPath() => CurrentRecipe == null ? throw new InvalidOperationException("請先載入 Recipe。") :
+            Path.Combine(recipeManager.GetProfileBasePath(CurrentRecipe), RecipeManager.GetStationDirectoryName(CurrentStationNumber), "light-inspection.json");
+
+        public LightInspectionSettings LoadLightSettings()
+        {
+            string path = LightSettingsPath();
+            var settings = File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<LightInspectionSettings>(File.ReadAllText(path)) ?? throw new InvalidDataException("光源設定無法讀取。") : new LightInspectionSettings();
+            settings.Validate(); return settings;
+        }
+
+        public void SaveLightSettings(LightInspectionSettings settings)
+        {
+            settings.Validate();
+            if (!settings.HasRoi) throw new InvalidOperationException("請先設定光源 ROI。");
+            string path = LightSettingsPath(); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            string temp = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            File.WriteAllText(temp, System.Text.Json.JsonSerializer.Serialize(settings, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
+            if (File.Exists(path)) File.Replace(temp, path, path + ".bak"); else File.Move(temp, path);
+        }
 
         private ImageProcessor CreateImageProcessor() => new(GetProcessingProfileBasePath());
 
@@ -1855,6 +1927,21 @@ namespace LumasharpChecker.viewmodel
             }
         }
 
+        public async Task RetestFromAoiAsync()
+        {
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+            {
+                MessageBox.Show("檢測進行中，請先等待或停止。", "重新檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (CurrentProfile == null || _allLoadedTestImageFiles.Count == 0)
+            {
+                MessageBox.Show("請先選擇已校準的站別並載入圖片。", "重新檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            await ReanalyzeLoadedTestImagesAsync();
+        }
+
         private async Task ReanalyzeLoadedTestImagesAsync()
         {
             await AnalyzeTestImageFolderAsync();
@@ -2475,6 +2562,20 @@ namespace LumasharpChecker.viewmodel
             return AnalyzeSingleTestImage(processor, imageFile, GetProcessingProfileName(), IsSharpnessEnabled, BrightnessBaseValue);
         }
 
+        public Task<TestImageResultRow> TestLightImageAsync(string imageFile)
+        {
+            if (CurrentProfile == null || CurrentRecipe == null)
+                throw new InvalidOperationException("請先載入已校準的 Recipe 與站別。");
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                throw new InvalidOperationException("目前正在檢測，請完成或停止後再測試光源。");
+            if (string.IsNullOrWhiteSpace(imageFile) || !File.Exists(imageFile))
+                throw new FileNotFoundException("請先選擇目前站別的圖片。");
+            string profileName = GetProcessingProfileName();
+            string profileBasePath = GetProcessingProfileBasePath();
+            double baseValue = BrightnessBaseValue;
+            return Task.Run(() => AnalyzeSingleTestImage(new ImageProcessor(profileBasePath), imageFile, profileName, false, baseValue));
+        }
+
         private TestImageResultRow AnalyzeSingleTestImage(ImageProcessor processor, string imageFile, string profileName, bool includeSharpness, double brightnessBaseValue)
         {
             try
@@ -2488,6 +2589,8 @@ namespace LumasharpChecker.viewmodel
                     FileName = Path.GetFileName(imageFile),
                     FilePath = imageFile,
                     Brightness = result.Brightness,
+                    BrightnessMin = result.BrightnessMin,
+                    BrightnessMax = result.BrightnessMax,
                     BrightnessDeltaPercent = CalculateBrightnessDeltaPercent(result.Brightness, brightnessBaseValue),
                     Sharpness = result.Sharpness,
                     BrightnessSafe = result.BrightnessSafe,

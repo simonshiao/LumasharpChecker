@@ -8,18 +8,22 @@ using System.Windows.Shapes;
 
 namespace LumasharpChecker.view
 {
-    /// <summary>Isolated workflow preview; no station or Recipe state is written here.</summary>
+    /// <summary>Preview of AOI tools; settings remain in each tool window.</summary>
     public sealed class AoiWorkflowPanel : UserControl
     {
-        private readonly CheckBox _locateToggle = new()
+        private readonly CheckBox _locateToggle = new CheckBox
         {
-            Content = "定位", IsChecked = true, FontSize = 10,
-            HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-            Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4)
+            Content = "啟用定位", IsChecked = true, FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center
         };
 
         public event EventHandler? LocatorRequested;
         public event EventHandler? LocatorEnabledChanged;
+        public event EventHandler? CollapseRequested;
+        public event EventHandler? LightRequested;
+        public event EventHandler? RetestRequested;
+        public event EventHandler? ParetoRequested;
+        public event EventHandler? ResultsRequested;
         public bool IsLocatorEnabled => _locateToggle.IsChecked == true;
 
         public AoiWorkflowPanel()
@@ -32,118 +36,121 @@ namespace LumasharpChecker.view
 
         private UIElement BuildContent()
         {
-            var content = new StackPanel { Margin = new Thickness(10, 12, 10, 12) };
-            content.Children.Add(new TextBlock { Text = "AOI工具流程", FontSize = 16, FontWeight = FontWeights.SemiBold, Foreground = Brush("#113044") });
-            content.Children.Add(new TextBlock
+            var content = new StackPanel { Margin = new Thickness(16) };
+            var header = new DockPanel { LastChildFill = true };
+            var collapse = new Button { Content = "收合", Padding = new Thickness(9, 3, 9, 3), MinHeight = 30, ToolTip = "收合 AOI 工具側欄" };
+            collapse.Click += (_, _) => CollapseRequested?.Invoke(this, EventArgs.Empty);
+            DockPanel.SetDock(collapse, Dock.Right);
+            header.Children.Add(collapse);
+            header.Children.Add(new TextBlock { Text = "AOI 工具流程", FontSize = 17, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#18354A") });
+            content.Children.Add(header);
+            var flow = new Grid { Margin = new Thickness(-3, 0, -3, 0) };
+            var wiring = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
+            var route = new Polyline { Stroke = Brush("#A4CEDC"), StrokeThickness = 2, StrokeLineJoin = PenLineJoin.Round, Opacity = 0.85 };
+            wiring.Children.Add(route);
+            flow.Children.Add(wiring);
+            var grid = new UniformGrid { Columns = 4 };
+            grid.Children.Add(ToolCard("定位", "\uE707", "定位設定", true, () => LocatorRequested?.Invoke(this, EventArgs.Empty)));
+            grid.Children.Add(ToolCard("選向", "\uE7AD", "", false, null));
+            grid.Children.Add(ToolCard("選面", "\uE77B", "", false, null));
+            grid.Children.Add(ToolCard("AI前處理", "\uE9CE", "", false, null));
+            grid.Children.Add(ToolCard("二值化", "\uE790", "", false, null));
+            grid.Children.Add(ToolCard("遮罩", "\uE7B7", "", false, null));
+            grid.Children.Add(ToolCard("尺寸量測", "\uE8F1", "", false, null));
+            grid.Children.Add(ToolCard("進階定位", "\uE8AD", "", false, null));
+            grid.Children.Add(ToolCard("AI", "\uE99A", "", false, null));
+            grid.Children.Add(ToolCard("光源檢測", "\uEA80", "使用 Luma 亮度檢測", true, () => LightRequested?.Invoke(this, EventArgs.Empty)));
+            grid.Children.Add(ToolCard("結果", "\uE9D9", "", false, null));
+            int toolCount = grid.Children.Count;
+            int rowCount = (toolCount + 3) / 4;
+            while (grid.Children.Count < rowCount * 4) grid.Children.Add(new Border());
+            // Reverse alternate rows so the visual order follows the serpentine route.
+            for (int row = 1; row < rowCount; row += 2)
             {
-                Text = "流程試作：勾選定位，點圖示開啟設定與測試",
-                FontSize = 11, TextWrapping = TextWrapping.Wrap, Foreground = Brush("#526E7F"),
-                Margin = new Thickness(0, 5, 0, 12)
-            });
-
-            var grid = new Grid { Height = 432, ClipToBounds = true };
-            for (int i = 0; i < 4; i++) grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(108) });
-            var path = new Polyline { Stroke = Brush("#F05B5B"), StrokeThickness = 4, Opacity = 0.65, StrokeLineJoin = PenLineJoin.Round, IsHitTestVisible = false };
-            var wiring = new Canvas { IsHitTestVisible = false };
-            wiring.Children.Add(path);
-            Grid.SetRowSpan(wiring, 4);
-            grid.Children.Add(wiring);
-            grid.SizeChanged += (_, e) =>
-            {
-                double left = e.NewSize.Width / 10.0;
-                double right = e.NewSize.Width - left;
-                path.Points = new PointCollection
+                int start = row * 4;
+                int end = Math.Min(start + 4, grid.Children.Count) - 1;
+                while (start < end)
                 {
-                    new Point(left, 49), new Point(right, 49),
-                    new Point(right, 157), new Point(left, 157),
-                    new Point(left, 265), new Point(right, 265),
-                    new Point(right, 373), new Point(left, 373)
-                };
+                    var first = grid.Children[start];
+                    var last = grid.Children[end];
+                    grid.Children.RemoveAt(end);
+                    grid.Children.RemoveAt(start);
+                    grid.Children.Insert(start, last);
+                    grid.Children.Insert(end, first);
+                    start++; end--;
+                }
+            }
+            flow.Children.Add(grid);
+            flow.SizeChanged += (_, e) =>
+            {
+                double width = e.NewSize.Width;
+                double rowHeight = e.NewSize.Height / rowCount;
+                double left = width / 8.0, right = width * 7.0 / 8.0;
+                var points = new PointCollection();
+                for (int row = 0; row < rowCount; row++)
+                {
+                    double y = rowHeight * row + 16 + 5 + 34;
+                    int count = Math.Min(4, toolCount - row * 4);
+                    double end = row % 2 == 0 ? width * (count - 0.5) / 4.0 : width * (4 - count + 0.5) / 4.0;
+                    points.Add(new Point(row % 2 == 0 ? left : right, y));
+                    points.Add(new Point(end, y));
+                }
+                route.Points = points;
             };
-
-            AddRow(grid, 0, new[]
-            {
-                ("定位", "\uE707", "#42C973", true), ("選向", "\uE7AD", "#8C82DF", false),
-                ("選面", "\uE77B", "#D881C4", false), ("前處理", "\uE91B", "#B4C35B", false),
-                ("AI前處理", "\uE9CE", "#B8CF67", false)
-            });
-            AddRow(grid, 1, new[]
-            {
-                ("平滑二值", "\uE9D9", "#6097C6", false), ("二值化", "\uE790", "#4BAA83", false),
-                ("遮罩", "\uE7B7", "#777C87", false), ("尺寸量測", "\uE8F1", "#54AEC5", false),
-                ("進階定位", "\uE8AD", "#CF78B7", false)
-            });
-            AddRow(grid, 2, new[]
-            {
-                ("區域二值", "\uE8A7", "#A478B0", false), ("差異二值", "\uE8D4", "#A96E72", false),
-                ("線段分析", "\uE9D2", "#68A9B2", false), ("圖形比對", "\uE71A", "#C9A36F", false),
-                ("AI", "\uE99A", "#B8CF67", false)
-            });
-            AddRow(grid, 3, new[]
-            {
-                ("結果", "\uE9D9", "#8DA0AC", false), ("", "", "#FFFFFF", false),
-                ("", "", "#FFFFFF", false), ("色碼工具", "\uE8A5", "#728DA4", false),
-                ("文字比對", "\uE8D2", "#CC88BC", false)
-            });
-            content.Children.Add(grid);
-            content.Children.Add(new TextBlock
-            {
-                Text = "灰色工具尚未開放。定位的勾選與設定只用於此測試區，不會改變正式檢測或站別參數。",
-                FontSize = 11, Foreground = Brush("#526E7F"), TextWrapping = TextWrapping.Wrap,
-                Margin = new Thickness(0, 6, 0, 0)
-            });
-            var border = new Border
-            {
-                Background = Brushes.White, BorderBrush = Brush("#C6E5F1"), BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(7), Child = content
-            };
-            return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = border };
+            content.Children.Add(flow);
+            content.Children.Add(new TextBlock { Text = "檢測與分析", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("#29465B"), Margin = new Thickness(3, 14, 0, 6) });
+            var actions = new UniformGrid { Columns = 4, Margin = new Thickness(-3, 0, -3, 0) };
+            actions.Children.Add(AuxiliaryCard("重新檢測", "\uE72C", () => RetestRequested?.Invoke(this, EventArgs.Empty)));
+            actions.Children.Add(AuxiliaryCard("柏拉圖", "\uE9D2", () => ParetoRequested?.Invoke(this, EventArgs.Empty)));
+            actions.Children.Add(AuxiliaryCard("尺寸統計", "\uE80A"));
+            actions.Children.Add(AuxiliaryCard("檢測結果", "\uE890", () => ResultsRequested?.Invoke(this, EventArgs.Empty)));
+            actions.Children.Add(AuxiliaryCard("AI 訓練", "\uE99A"));
+            content.Children.Add(actions);
+            content.Children.Add(new TextBlock { Text = "工具時間待檢測流程接入後顯示；光源測試使用已儲存的站別設定。", TextWrapping = TextWrapping.Wrap, Foreground = Brush("#526D7C"), FontSize = 11, Margin = new Thickness(3, 12, 3, 0) });
+            var frame = new Border { Background = Brushes.White, BorderBrush = Brush("#D8E5EC"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Child = content };
+            return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = frame };
         }
 
-        private void AddRow(Grid grid, int rowIndex, (string Name, string Icon, string Color, bool IsLocator)[] items)
+        private UIElement ToolCard(string name, string glyph, string detail, bool enabled, Action? action)
         {
-            var row = new UniformGrid { Columns = 5, Rows = 1 };
-            foreach (var item in items)
+            var body = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            body.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 21, Foreground = Brush(enabled ? "#087AAF" : "#8597A4"), HorizontalAlignment = HorizontalAlignment.Center });
+            body.Children.Add(new TextBlock { Text = name, FontSize = 11, Foreground = Brush(enabled ? "#1D455B" : "#657D8B"), HorizontalAlignment = HorizontalAlignment.Center, TextAlignment = TextAlignment.Center, Margin = new Thickness(0, 7, 0, 0) });
+            var button = new Button { Content = body, Margin = new Thickness(5), Padding = new Thickness(2, 8, 2, 8), Height = 68, MinHeight = 0, Background = Brush(enabled ? "#E8F7FD" : "#F5F8FA"), BorderBrush = Brush(enabled ? "#A5D8E9" : "#E1EAF0"), BorderThickness = new Thickness(1), IsEnabled = enabled, ToolTip = enabled ? detail : "尚未開放" };
+            AutomationProperties.SetName(button, enabled ? "開啟" + name : name + "尚未開放");
+            ToolTipService.SetShowOnDisabled(button, true);
+            if (action != null) button.Click += (_, _) => action();
+            var cell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Stretch };
+            if (name == "定位")
             {
-                if (item.Name.Length == 0)
-                {
-                    row.Children.Add(new Border());
-                    continue;
-                }
-                var cell = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, 5, 0, 0) };
-                if (item.IsLocator) cell.Children.Add(_locateToggle);
-                else
-                {
-                    var check = new CheckBox
-                    {
-                        Content = item.Name, IsEnabled = false, FontSize = 10,
-                        HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center,
-                        Padding = new Thickness(0), Margin = new Thickness(0, 0, 0, 4), ToolTip = "尚未開放"
-                    };
-                    ToolTipService.SetShowOnDisabled(check, true);
-                    cell.Children.Add(check);
-                }
-                var icon = new Button
-                {
-                    Width = 47, Height = 47, MinWidth = 0, MinHeight = 0, Padding = new Thickness(0),
-                    HorizontalAlignment = HorizontalAlignment.Center,
-                    BorderThickness = new Thickness(3), BorderBrush = Brush(item.Color),
-                    Background = Brushes.White, Foreground = Brush("#152D3A"),
-                    IsEnabled = item.IsLocator, ToolTip = item.IsLocator ? "開啟定位設定與測試" : "尚未開放"
-                };
-                ToolTipService.SetShowOnDisabled(icon, true);
-                AutomationProperties.SetName(icon, item.IsLocator ? "開啟定位設定" : item.Name + "尚未開放");
-                icon.Content = new TextBlock
-                {
-                    Text = item.Icon, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 22,
-                    HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center
-                };
-                if (item.IsLocator) icon.Click += (_, _) => LocatorRequested?.Invoke(this, EventArgs.Empty);
-                cell.Children.Add(icon);
-                row.Children.Add(cell);
+                _locateToggle.Content = null;
+                _locateToggle.HorizontalAlignment = HorizontalAlignment.Center;
+                _locateToggle.ToolTip = "啟用定位設定入口（目前不影響正式檢測）";
+                cell.Children.Add(_locateToggle);
             }
-            Grid.SetRow(row, rowIndex);
-            grid.Children.Add(row);
+            else if (name != "光源檢測" && name != "結果")
+            {
+                var toggle = new CheckBox { IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Center, ToolTip = "工具尚未接入" };
+                AutomationProperties.SetName(toggle, name + "尚未開放");
+                ToolTipService.SetShowOnDisabled(toggle, true);
+                cell.Children.Add(toggle);
+            }
+            else cell.Children.Add(new Border { Height = 16 });
+            cell.Children.Add(button);
+            cell.Children.Add(new TextBlock { Text = name == "光源檢測" || name == "結果" ? "" : "— ms", HorizontalAlignment = HorizontalAlignment.Center, Foreground = Brush("#758A98"), FontSize = 10, Margin = new Thickness(0, 0, 0, 4) });
+            return cell;
+        }
+
+        private static UIElement AuxiliaryCard(string name, string glyph, Action? action = null)
+        {
+            var body = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+            body.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 21, Foreground = Brush(action != null ? "#087AAF" : "#8597A4"), HorizontalAlignment = HorizontalAlignment.Center });
+            body.Children.Add(new TextBlock { Text = name, FontSize = 11, Foreground = Brush(action != null ? "#1D455B" : "#657D8B"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 7, 0, 0) });
+            var button = new Button { Content = body, Margin = new Thickness(5), Padding = new Thickness(2, 8, 2, 8), Height = 68, MinHeight = 0, Background = Brush(action != null ? "#E8F7FD" : "#F5F8FA"), BorderBrush = Brush(action != null ? "#A5D8E9" : "#E1EAF0"), BorderThickness = new Thickness(1), IsEnabled = action != null, ToolTip = action != null ? "開啟" + name : "尚未接入" };
+            if (action != null) button.Click += (_, _) => action();
+            AutomationProperties.SetName(button, action != null ? "開啟" + name : name + "尚未接入");
+            ToolTipService.SetShowOnDisabled(button, true);
+            return button;
         }
 
         private static Brush Brush(string color) => (Brush)new BrushConverter().ConvertFromString(color);

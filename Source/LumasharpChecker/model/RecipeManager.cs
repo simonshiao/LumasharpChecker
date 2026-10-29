@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using System.Security.Cryptography;
 using static ProfileManager;
 
 namespace LumasharpChecker.model;
@@ -144,6 +145,110 @@ public sealed class RecipeManager
         for (int station = 1; station <= MaximumStations; station++)
             Directory.CreateDirectory(GetStationDirectory(recipe, station));
         WriteJsonAtomically(Path.Combine(GetRecipeDirectory(recipe), "recipe.json"), recipe);
+    }
+
+    /// <summary>Creates an unconfigured Luma recipe containing a verified vendor source snapshot.
+    /// This preserves vendor data; it does not translate inspection parameters.</summary>
+    public RecipeManifest ImportVendorSnapshot(string selectedPath, string name)
+    {
+        string source = Path.GetFullPath(selectedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!Directory.Exists(source)) throw new DirectoryNotFoundException("找不到原廠 Recipe 資料夾。");
+        if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("原廠 Recipe 不能是連結資料夾。");
+        name = name.Trim();
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Recipe 名稱不可空白。");
+        if (LoadAllRecipes().Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
+            throw new InvalidOperationException("已有同名 Recipe，請使用不同名稱。");
+        var stations = Enumerable.Range(1, 8).Where(n => File.Exists(Path.Combine(source, $"station{n}.ini"))).ToArray();
+        if (stations.Length == 0 || !File.Exists(Path.Combine(source, "Setting.ini")))
+            throw new InvalidDataException("請選擇含 Setting.ini 與 station1.ini 等站別檔案的原廠 Recipe 資料夾。");
+        string baseFull = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string sourcePrefix = source + Path.DirectorySeparatorChar;
+        if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) ||
+            baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("原廠來源與 Luma Recipe 目錄不可互相包含。");
+
+        var recipe = new RecipeManifest { Name = name, StationCount = 8, VendorRecipePath = source };
+        string staging = Path.Combine(BasePath, ".vendor-import-" + recipe.Id);
+        string finalPath = GetRecipeDirectory(recipe);
+        if (Directory.Exists(staging) || Directory.Exists(finalPath)) throw new IOException("匯入目的地已存在。");
+        try
+        {
+            Directory.CreateDirectory(staging);
+            CopyVendorDirectory(source, Path.Combine(staging, "vendor-source"));
+            Directory.Move(staging, finalPath);
+            SaveManifest(recipe);
+            return recipe;
+        }
+        catch
+        {
+            // A failed import must not appear in the recipe list. Keep any partially
+            // staged data for diagnosis; never remove an existing recipe or source.
+            throw;
+        }
+    }
+
+    /// <summary>Attach a verified vendor snapshot to an existing Luma recipe.
+    /// Existing Luma profiles and the previous snapshot are retained.</summary>
+    public void AttachVendorSnapshot(RecipeManifest recipe, string selectedPath)
+    {
+        if (recipe == null) throw new ArgumentNullException(nameof(recipe));
+        string recipeDir = GetRecipeDirectory(recipe);
+        if (!File.Exists(Path.Combine(recipeDir, "recipe.json")))
+            throw new InvalidOperationException("目前 Recipe 不存在，無法匯入。");
+        string source = Path.GetFullPath(selectedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!Directory.Exists(source)) throw new DirectoryNotFoundException("找不到原廠 Recipe 資料夾。");
+        if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("原廠 Recipe 不能是連結資料夾。");
+        if (!File.Exists(Path.Combine(source, "Setting.ini")) ||
+            !Enumerable.Range(1, 8).Any(n => File.Exists(Path.Combine(source, $"station{n}.ini"))))
+            throw new InvalidDataException("請選擇含 Setting.ini 與 station1.ini 等站別檔案的原廠 Recipe 資料夾。");
+        string baseFull = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string sourcePrefix = source + Path.DirectorySeparatorChar;
+        if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) || baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("原廠來源與 Luma Recipe 目錄不可互相包含。");
+        string nonce = Guid.NewGuid().ToString("N");
+        string stage = Path.Combine(recipeDir, ".vendor-stage-" + nonce);
+        string target = Path.Combine(recipeDir, "vendor-source");
+        string backup = Path.Combine(recipeDir, "vendor-backup-" + nonce);
+        string? previousPath = recipe.VendorRecipePath;
+        bool movedOld = false, movedNew = false;
+        CopyVendorDirectory(source, stage);
+        try
+        {
+            if (Directory.Exists(target)) { Directory.Move(target, backup); movedOld = true; }
+            Directory.Move(stage, target); movedNew = true;
+            recipe.VendorRecipePath = source;
+            SaveManifest(recipe);
+        }
+        catch
+        {
+            recipe.VendorRecipePath = previousPath;
+            if (movedNew && Directory.Exists(target)) Directory.Move(target, stage);
+            if (movedOld && Directory.Exists(backup) && !Directory.Exists(target)) Directory.Move(backup, target);
+            throw;
+        }
+    }
+
+    private static void CopyVendorDirectory(string source, string destination)
+    {
+        if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("原廠 Recipe 含連結，無法安全複製：" + source);
+        Directory.CreateDirectory(destination);
+        foreach (string file in Directory.EnumerateFiles(source))
+        {
+            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("原廠 Recipe 含連結檔案：" + file);
+            string target = Path.Combine(destination, Path.GetFileName(file));
+            File.Copy(file, target, false);
+            using var sha = SHA256.Create();
+            using var a = File.OpenRead(file);
+            using var b = File.OpenRead(target);
+            if (!sha.ComputeHash(a).SequenceEqual(sha.ComputeHash(b)))
+                throw new IOException("匯入檔案校驗失敗：" + file);
+        }
+        foreach (string dir in Directory.EnumerateDirectories(source))
+            CopyVendorDirectory(dir, Path.Combine(destination, Path.GetFileName(dir)));
     }
 
     /// <summary>

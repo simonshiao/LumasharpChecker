@@ -1,4 +1,4 @@
-<Window x:Class="LumasharpChecker.MainWindow"
+﻿<Window x:Class="LumasharpChecker.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
@@ -16,6 +16,32 @@
         Background="{DynamicResource Bg}">
 
     <Window.Resources>
+        <Style x:Key="NavigationRailButton" TargetType="Button">
+            <Setter Property="Foreground" Value="#535C70"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinHeight" Value="68"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="RailTile" Background="Transparent" CornerRadius="14" Padding="4,10">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RailTile" Property="Background" Value="#E9ECF3"/></Trigger>
+                            <Trigger Property="Tag" Value="Active">
+                                <Setter TargetName="RailTile" Property="Background" Value="#DCE5FA"/>
+                                <Setter Property="Foreground" Value="#244C99"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RailTile" Property="BorderBrush" Value="#4368AC"/><Setter TargetName="RailTile" Property="BorderThickness" Value="1"/></Trigger>
+                            <Trigger Property="IsPressed" Value="True"><Setter TargetName="RailTile" Property="Background" Value="#C7D6F4"/></Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
         <vm:PathToImageConverter x:Key="ImageConverter"/>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <!-- Shared LUMA HUD palette — aligns single-station and overview pages. -->
@@ -356,8 +382,8 @@
 
         <!-- 與 ChaoMcpHub 一致的輕量收合式導覽，保留原有單站檢測頁。 -->
         <Border x:Name="SidebarPanel" Grid.Column="0" Grid.Row="1"
-                Background="{StaticResource HudHeaderGradient}" BorderBrush="{StaticResource HudBorder}"
-                BorderThickness="0,0,1,0" Padding="10,14">
+                Background="#F2F3F8" BorderBrush="#E1E5ED"
+                BorderThickness="0,0,1,0" Padding="8,14">
             <DockPanel LastChildFill="False">
                 <StackPanel DockPanel.Dock="Top">
                     <Grid Margin="3,0,3,21">
@@ -373,29 +399,29 @@
                     </Grid>
                     <TextBlock x:Name="SidebarSectionLabel" Text="檢測工作區"
                                Foreground="{StaticResource Muted}" FontSize="11" Margin="10,0,0,8"/>
-                    <Button x:Name="OverviewNavButton" Click="ShowOverview_Click"
+                    <Button Style="{StaticResource NavigationRailButton}" x:Name="OverviewNavButton" Click="ShowOverview_Click"
                             ToolTip="八站總覽" AutomationProperties.Name="八站總覽"
                             Background="{StaticResource BlueSoft}" BorderBrush="{StaticResource Blue}"
-                            Padding="10,10" Margin="0,0,0,6" HorizontalContentAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="24"/>
-                            <TextBlock x:Name="OverviewNavLabel" Text="八站總覽" VerticalAlignment="Center" Margin="7,0,0,0"/>
+                            Padding="4,7" Margin="0,0,0,6" HorizontalContentAlignment="Center">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="&#xE80F;" FontFamily="Segoe MDL2 Assets" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="OverviewNavLabel" Text="八站總覽" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="InspectionNavButton" Click="ShowInspection_Click"
+                    <Button Style="{StaticResource NavigationRailButton}" x:Name="InspectionNavButton" Click="ShowInspection_Click"
                             ToolTip="單站檢測" AutomationProperties.Name="單站檢測"
-                            Padding="10,10" Margin="0,0,0,6" HorizontalContentAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="24"/>
-                            <TextBlock x:Name="InspectionNavLabel" Text="單站檢測" VerticalAlignment="Center" Margin="7,0,0,0"/>
+                            Padding="4,7" Margin="0,0,0,6" HorizontalContentAlignment="Center">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="InspectionNavLabel" Text="單站檢測" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="AoiToolsNavButton" Click="ShowAoiTools_Click"
+                    <Button Style="{StaticResource NavigationRailButton}" x:Name="AoiToolsNavButton" Click="ShowAoiTools_Click"
                             ToolTip="AOI工具（測試）" AutomationProperties.Name="AOI工具"
-                            Padding="10,10" Margin="0,0,0,6" HorizontalContentAlignment="Left">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="24"/>
-                            <TextBlock x:Name="AoiToolsNavLabel" Text="AOI工具" VerticalAlignment="Center" Margin="7,0,0,0"/>
+                            Padding="4,7" Margin="0,0,0,6" HorizontalContentAlignment="Center">
+                        <StackPanel Orientation="Vertical">
+                            <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="19" HorizontalAlignment="Center"/>
+                            <TextBlock x:Name="AoiToolsNavLabel" Text="AOI工具" FontSize="11" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -570,7 +596,7 @@
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="322"/>
+                <ColumnDefinition x:Name="InspectionSideColumn" Width="322"/>
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Margin="0,0,10,0">
@@ -579,13 +605,32 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
-                <Border Background="#111F2C"
-                        BorderBrush="#638EA3"
+                <Border Background="#20252D"
+                        BorderBrush="#D7DEE8"
                         BorderThickness="1"
-                        CornerRadius="7"
-                        Padding="5"
+                        CornerRadius="12"
+                        Padding="18"
                         PreviewMouseWheel="MainImage_PreviewMouseWheel">
+                    <Grid ClipToBounds="True">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers><DataTrigger Binding="{Binding DisplayImage}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <TextBlock Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" FontSize="36" Foreground="#8D9BAD" HorizontalAlignment="Center"/>
+                        <TextBlock Text="選擇一張圖片，開始檢視" Foreground="#E4E9F1" FontSize="17" Margin="0,18,0,8" HorizontalAlignment="Center"/>
+                        <TextBlock Text="載入單張圖片或資料夾，再選擇右側工具" Foreground="#A7B1C1" FontSize="12" HorizontalAlignment="Center"/>
+                        <Button Content="開啟圖片" Command="{Binding SelectSingleImageCommand}" HorizontalAlignment="Center" Margin="0,18,0,0" Padding="20,8"/>
+                    </StackPanel>
                     <Viewbox Stretch="Uniform">
+                        <Viewbox.Style>
+                            <Style TargetType="Viewbox">
+                                <Setter Property="Visibility" Value="Visible"/>
+                                <Style.Triggers><DataTrigger Binding="{Binding DisplayImage}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers>
+                            </Style>
+                        </Viewbox.Style>
                         <Grid>
                             <Image Source="{Binding DisplayImage}" Stretch="None" IsHitTestVisible="False"/>
                             <Canvas x:Name="MainRoiCanvas"
@@ -621,6 +666,7 @@
                             </Canvas>
                         </Grid>
                     </Viewbox>
+                    </Grid>
                 </Border>
                 <Border Grid.Row="1" Margin="0,7,0,0" Padding="9,6"
                         Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
@@ -658,14 +704,15 @@
                             <TextBlock Text="站" FontWeight="SemiBold"
                                        Foreground="{StaticResource Muted}" Margin="2,2,0,0"/>
                         </DockPanel>
-                        <ItemsControl ItemsSource="{Binding StationSlots}">
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                        <ItemsControl ItemsSource="{Binding StationSlots}" HorizontalAlignment="Left">
                             <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate><UniformGrid Rows="1"/></ItemsPanelTemplate>
+                                <ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <Grid Margin="2,0">
-                                        <Button Content="{Binding Number}" Padding="0" MinWidth="0" MinHeight="32"
+                                        <Button Content="{Binding Number}" Width="58" Padding="0" MinWidth="0" MinHeight="32"
                                                 Command="{Binding DataContext.SelectStationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding Number}"
                                                 IsEnabled="{Binding DataContext.IsRecipeActive, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -689,6 +736,7 @@
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
+                        </ScrollViewer>
                     </StackPanel>
                 </Border>
                 <Border Grid.Row="2" Margin="0,6,0,0" Padding="7,4"
@@ -697,7 +745,7 @@
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
@@ -745,7 +793,7 @@
                                     IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
                                     ToolTip="載入站號資料夾內未分類的圖片"/>
                         </StackPanel>
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,20,0">
                         <Button Click="OpenTestImagePicker_Click"
                                 Content="&#xE8FD;" FontFamily="Segoe MDL2 Assets" FontSize="16"
                                 Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
@@ -961,6 +1009,10 @@
 
             <view:AoiWorkflowPanel x:Name="AoiWorkflow" Grid.Row="0" Grid.Column="1"
                                    Visibility="Collapsed"/>
+            <Button x:Name="AoiPanelReopen" Grid.Row="0" Grid.Column="1" VerticalAlignment="Top"
+                    Visibility="Collapsed" Content="&#xE8A7;" FontFamily="Segoe MDL2 Assets"
+                    Click="OpenAoiPanel_Click" Width="40" Height="40" Padding="0" MinWidth="0"
+                    ToolTip="展開 AOI 工具" AutomationProperties.Name="展開 AOI 工具"/>
 
             <!-- Dark machine telemetry strip: not a pastel dashboard, actions remain clickable. -->
             <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0"

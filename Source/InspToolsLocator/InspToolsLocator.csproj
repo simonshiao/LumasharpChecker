@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <Platforms>x64</Platforms>
+    <InspRuntimeDir Condition="'$(InspRuntimeDir)' == '' and Exists('$(MSBuildThisFileDirectory)..\..\External\InspTools\output\InspToolsV2\InspTools.dll')">$(MSBuildThisFileDirectory)..\..\External\InspTools\output\InspToolsV2</InspRuntimeDir>
+    <InspRuntimeDir Condition="'$(InspRuntimeDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\InspTools\output\InspToolsV2</InspRuntimeDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="InspTools"><HintPath>$(InspRuntimeDir)\InspTools.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="OpenCvSharp"><HintPath>$(InspRuntimeDir)\OpenCvSharp.dll</HintPath><Private>false</Private></Reference>
+    <Content Include="$(InspRuntimeDir)\*.dll"><Link>%(Filename)%(Extension)</Link><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
+  </ItemGroup>
+</Project>

@@ -383,7 +383,12 @@ namespace LumasharpChecker.view
 
         public void UseInitialTarget(string? path)
         {
-            if (!string.IsNullOrWhiteSpace(path) && File.Exists(path)) SetTarget(path!);
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) return;
+
+            // Reopening the locator follows the currently selected inspection image,
+            // while keeping its manually drawn search ROI if that image is unchanged.
+            if (!string.Equals(_targetPath, path, StringComparison.OrdinalIgnoreCase))
+                SetTarget(path);
         }
 
         private void SetTarget(string path)

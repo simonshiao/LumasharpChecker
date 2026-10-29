@@ -1,4 +1,4 @@
-using LumasharpChecker.viewmodel;
+﻿using LumasharpChecker.viewmodel;
 using System.Reflection;
 using System.Text;
 using System.Windows;
@@ -28,15 +28,30 @@ namespace LumasharpChecker
         private System.Windows.Point _roiDragStart;
         private System.Windows.Shapes.Rectangle? _roiDraft;
         private bool _sidebarCollapsed;
-        private AoiToolsPreviewWindow? _aoiToolsWindow;
 
         public MainWindow()
         {
             InitializeComponent();
 
             AoiWorkflow.LocatorRequested += OpenAoiLocator_Click;
-            AoiWorkflow.LocatorEnabledChanged += (_, _) =>
-                _aoiToolsWindow?.SetLocatorEnabled(AoiWorkflow.IsLocatorEnabled);
+            AoiWorkflow.LightRequested += OpenAoiLight_Click;
+            AoiWorkflow.RetestRequested += async (_, _) =>
+            {
+                if (DataContext is mainViewModel vm) await vm.RetestFromAoiAsync();
+            };
+            AoiWorkflow.ResultsRequested += (_, _) =>
+            {
+                if (DataContext is mainViewModel vm) vm.ShowTestImageResultsCommand.Execute(null);
+            };
+            AoiWorkflow.ParetoRequested += (_, _) =>
+            {
+                if (DataContext is mainViewModel vm)
+                {
+                    var window = new ParetoPreviewWindow(vm.TestImageResults) { Owner = this };
+                    window.ShowDialog();
+                }
+            };
+            AoiWorkflow.CollapseRequested += (_, _) => SetAoiPanelExpanded(false);
 
             Version? version = Assembly.GetEntryAssembly().GetName().Version;
             this.Title += $" {version?.ToString()} [NET472 Slim]";
@@ -53,29 +68,80 @@ namespace LumasharpChecker
         {
             ShowMainPage(false);
             InspectionSettingsPanel.Visibility = Visibility.Collapsed;
-            AoiWorkflow.Visibility = Visibility.Visible;
+            SetAoiPanelExpanded(true);
+            InspectionNavButton.Tag = null;
+            AoiToolsNavButton.Tag = "Active";
             InspectionNavButton.Background = System.Windows.Media.Brushes.Transparent;
             InspectionNavButton.BorderBrush = System.Windows.Media.Brushes.Transparent;
             AoiToolsNavButton.Background = (System.Windows.Media.Brush)FindResource("BlueSoft");
             AoiToolsNavButton.BorderBrush = (System.Windows.Media.Brush)FindResource("Blue");
         }
 
+        private void OpenAoiPanel_Click(object sender, RoutedEventArgs e) => SetAoiPanelExpanded(true);
+
+        private void SetAoiPanelExpanded(bool expanded)
+        {
+            InspectionSideColumn.Width = new GridLength(expanded ? 322 : 44);
+            AoiWorkflow.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+            AoiPanelReopen.Visibility = expanded ? Visibility.Collapsed : Visibility.Visible;
+        }
+
         private void OpenAoiLocator_Click(object? sender, EventArgs e)
         {
-            if (_aoiToolsWindow != null)
+            if (!AoiWorkflow.IsLocatorEnabled)
             {
-                _aoiToolsWindow.SetLocatorEnabled(AoiWorkflow.IsLocatorEnabled);
-                if (!_aoiToolsWindow.IsVisible) _aoiToolsWindow.Show();
-                _aoiToolsWindow.Activate();
+                MessageBox.Show("請先勾選定位。", "定位", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
+            {
+                MessageBox.Show("請先載入 Recipe。", "定位", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            var source = vm.GetVendorRecipeSnapshotPath();
+            if (source == null || !File.Exists(System.IO.Path.Combine(source, $"station{vm.CurrentStationNumber}.ini")))
+            {
+                MessageBox.Show("目前 Recipe 沒有此站的原廠定位資料。Luma 定位參數與原廠定位設定格式不同，尚未自動轉換。", "定位", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            OpenInspToolsPage("locate", source, vm.CurrentStationNumber);
+        }
 
-            _aoiToolsWindow = new AoiToolsPreviewWindow(this);
-            if (DataContext is mainViewModel vm)
-                _aoiToolsWindow.UseInitialTarget(vm.CurrentTestImagePath);
-            _aoiToolsWindow.SetLocatorEnabled(AoiWorkflow.IsLocatorEnabled);
-            _aoiToolsWindow.Closed += (_, _) => _aoiToolsWindow = null;
-            _aoiToolsWindow.Show();
+        private void OpenAoiLight_Click(object? sender, EventArgs e)
+        {
+            if (DataContext is not mainViewModel vm || string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) || !File.Exists(vm.CurrentTestImagePath))
+            {
+                MessageBox.Show("請先在單站檢測選擇圖片。", "光源檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            if (vm.CurrentRecipe == null || (vm.CurrentProfile == null && vm.GetVendorRecipeSnapshotPath() == null))
+            {
+                MessageBox.Show("請先載入已校準的 Recipe 與站別。", "光源檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            try { new LightInspectionWindow(vm, vm.CurrentTestImagePath) { Owner = this }.ShowDialog(); }
+            catch (Exception ex) { MessageBox.Show(ex.GetBaseException().Message, "光源檢測", MessageBoxButton.OK, MessageBoxImage.Error); }
+        }
+
+        private void OpenInspToolsPage(string mode, string source, int station)
+        {
+            string? imagePath = (DataContext as mainViewModel)?.CurrentTestImagePath;
+            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
+            {
+                MessageBox.Show("請先在單站檢測選擇圖片。", "定位", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string exe = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "InspToolsLocator", "InspToolsLocator.exe");
+            try
+            {
+                if (!File.Exists(exe)) throw new FileNotFoundException("找不到 InspTools 定位元件，請重新建置程式。", exe);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, mode + " \"" + imagePath + "\" \"" + source + "\" " + station)
+                { UseShellExecute = false, WorkingDirectory = System.IO.Path.GetDirectoryName(exe)! });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show("無法開啟定位工具：" + ex.Message, "定位", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void OverviewStation_Click(object sender, RoutedEventArgs e)
@@ -100,6 +166,11 @@ namespace LumasharpChecker
             InspectionPage.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
             InspectionSettingsPanel.Visibility = Visibility.Visible;
             AoiWorkflow.Visibility = Visibility.Collapsed;
+            AoiPanelReopen.Visibility = Visibility.Collapsed;
+            InspectionSideColumn.Width = new GridLength(322);
+            OverviewNavButton.Tag = overview ? "Active" : null;
+            InspectionNavButton.Tag = overview ? null : "Active";
+            AoiToolsNavButton.Tag = null;
             var activeBackground = (System.Windows.Media.Brush)FindResource("BlueSoft");
             var activeBorder = (System.Windows.Media.Brush)FindResource("Blue");
             OverviewNavButton.Background = overview ? activeBackground : System.Windows.Media.Brushes.Transparent;
@@ -113,14 +184,11 @@ namespace LumasharpChecker
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
         {
             _sidebarCollapsed = !_sidebarCollapsed;
-            SidebarColumn.Width = new GridLength(_sidebarCollapsed ? 64 : 182);
+            SidebarColumn.Width = new GridLength(_sidebarCollapsed ? 88 : 182);
             var visibility = _sidebarCollapsed ? Visibility.Collapsed : Visibility.Visible;
             SidebarBrand.Visibility = visibility;
             SidebarSectionLabel.Visibility = visibility;
             SidebarFooter.Visibility = visibility;
-            OverviewNavLabel.Visibility = visibility;
-            InspectionNavLabel.Visibility = visibility;
-            AoiToolsNavLabel.Visibility = visibility;
         }
 
         private void OpenRecipeManager_Click(object sender, RoutedEventArgs e)

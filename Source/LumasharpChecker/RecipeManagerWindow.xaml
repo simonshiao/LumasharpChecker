@@ -53,6 +53,9 @@
                                         Style="{DynamicResource HudSecondaryButton}"
                                         IsEnabled="{Binding HasSelectedRecipe}" Margin="0,0,8,0"/>
                                 <Button Content="新增 Recipe" Command="{Binding CreateRecipeCommand}" Margin="0,0,8,0"/>
+                                <Button Content="匯入原廠資料" Command="{Binding ImportVendorRecipeSnapshotCommand}" Margin="0,0,8,0"
+                                        IsEnabled="{Binding IsRecipeActive}"
+                                        ToolTip="將原廠資料副本加入目前 Recipe；檢測參數尚未轉換"/>
                                 <Button Content="關閉目前 Recipe" Command="{Binding CloseRecipeCommand}"
                                         IsEnabled="{Binding IsRecipeActive}" Margin="0,0,8,0"/>
                                 <Button Content="刪除所選 Recipe" Command="{Binding DeleteRecipeCommand}"

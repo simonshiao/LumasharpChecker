@@ -11,17 +11,26 @@
     <UseWPF>true</UseWPF>
 	<PublishSingleFile>false</PublishSingleFile>
 	<GeneratePackageOnBuild>False</GeneratePackageOnBuild> <!-- 可选：生成单个文件 -->
-	<Version>1.0.0.62</Version>
-	<AssemblyVersion>1.0.0.62</AssemblyVersion>
-	<FileVersion>1.0.0.62</FileVersion>
-	<InformationalVersion>1.0.0.62-net472-slim</InformationalVersion>
+	<Version>1.0.0.64</Version>
+	<AssemblyVersion>1.0.0.64</AssemblyVersion>
+	<FileVersion>1.0.0.64</FileVersion>
+	<InformationalVersion>1.0.0.64-net472-slim</InformationalVersion>
 	<ApplicationIcon>Icons\CyntecAppIcon.ico</ApplicationIcon>
 	<Product>$(AssemblyName)</Product>
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\InspToolsLocator\InspToolsLocator.csproj" ReferenceOutputAssembly="false" />
     <None Remove="Icons\Computers.ico" />
   </ItemGroup>
+
+  <Target Name="CopyInspToolsLocator" AfterTargets="Build;Publish">
+    <ItemGroup>
+      <_LocatorFiles Include="$(MSBuildProjectDirectory)\..\InspToolsLocator\bin\$(Platform)\$(Configuration)\net472\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(TargetDir)InspToolsLocator" SkipUnchangedFiles="true" Condition="'$(TargetDir)' != ''" />
+    <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(PublishDir)InspToolsLocator" SkipUnchangedFiles="true" Condition="'$(PublishDir)' != ''" />
+  </Target>
 
   <ItemGroup>
     <Content Include="Icons\CyntecAppIcon.ico" />

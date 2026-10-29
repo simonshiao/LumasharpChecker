@@ -5,6 +5,7 @@
 /App/
 /App-net472/
 /App-net472-Slim/
+/TestArtifacts/
 # Older local-only reverse-engineering notes and agent machine instructions.
 # The Slim handoff documents in the repository root are the public-facing docs.
 /Source/AGENTS.md
