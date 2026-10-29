@@ -64,6 +64,11 @@ namespace LumasharpChecker
                 }
             }
             mainWindow.Show();
+            if (e.Args.Any(arg => string.Equals(arg, "--show-multi-appearance-preview", StringComparison.OrdinalIgnoreCase)))
+            {
+                mainWindow.Dispatcher.BeginInvoke(new Action(() =>
+                    viewModel.OpenMultiAppearanceCalibrationPreviewCommand.Execute(null)));
+            }
         }
         private void ActivateExistingWindow()
         {

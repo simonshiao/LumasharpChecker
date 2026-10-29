@@ -76,3 +76,8 @@ venv/
 *.pyc
 Thumbs.db
 desktop.ini
+
+# Local backup and verification snapshot directories (do not upload)
+/_backup_*/
+/_verify_*/
+/_verify_*.tsv

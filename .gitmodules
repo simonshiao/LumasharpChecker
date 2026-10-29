@@ -1,0 +1,3 @@
+[submodule "External/InspTools"]
+	path = External/InspTools
+	url = https://github.com/simonshiao/InspTools.git

@@ -5,6 +5,8 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:i="http://schemas.microsoft.com/xaml/behaviors"
         xmlns:vm="clr-namespace:LumasharpChecker.viewmodel"
+        xmlns:local="clr-namespace:LumasharpChecker"
+        xmlns:view="clr-namespace:LumasharpChecker.view"
         mc:Ignorable="d"
         Title="LumasharpChecker" Height="900" Width="1440"
         MinHeight="720" MinWidth="1130"
@@ -338,6 +340,8 @@
                 </DataTrigger>
             </Style.Triggers>
         </Style>
+        <!-- ROI 顯示模式：設定框 / 結果框 切換 -->
+        <local:RoiModeToBoolConverter x:Key="RoiModeToBool"/>
     </Window.Resources>
 
     <Grid Background="{StaticResource Bg}">
@@ -384,6 +388,14 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock Text="&#xE8A7;" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="24"/>
                             <TextBlock x:Name="InspectionNavLabel" Text="單站檢測" VerticalAlignment="Center" Margin="7,0,0,0"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="AoiToolsNavButton" Click="ShowAoiTools_Click"
+                            ToolTip="AOI工具（測試）" AutomationProperties.Name="AOI工具"
+                            Padding="10,10" Margin="0,0,0,6" HorizontalContentAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="&#xE9D9;" FontFamily="Segoe MDL2 Assets" FontSize="17" Width="24"/>
+                            <TextBlock x:Name="AoiToolsNavLabel" Text="AOI工具" VerticalAlignment="Center" Margin="7,0,0,0"/>
                         </StackPanel>
                     </Button>
                 </StackPanel>
@@ -458,7 +470,15 @@
                     <TextBlock Text="{Binding RecipeConfigurationSummary}" FontSize="10"
                                Foreground="{StaticResource HudAccentStrong}"/>
                 </StackPanel>
+                <!-- ROI 顯示模式切換 -->
                 <StackPanel Grid.Column="4" VerticalAlignment="Center" Width="159">
+                    <TextBlock Text="ROI 顯示" FontSize="10" Foreground="{StaticResource HudTextSoft}"/>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                        <RadioButton Content="設定" IsChecked="{Binding RoiDisplayMode, Converter={StaticResource RoiModeToBool}, Mode=TwoWay, ConverterParameter=Design}"
+                                     GroupName="RoiModeGroup" FontSize="11" Padding="8,2" Margin="0,0,6,0" Cursor="Hand"/>
+                        <RadioButton Content="結果" IsChecked="{Binding RoiDisplayMode, Converter={StaticResource RoiModeToBool}, Mode=TwoWay, ConverterParameter=Result}"
+                                     GroupName="RoiModeGroup" FontSize="11" Padding="8,2" Cursor="Hand"/>
+                    </StackPanel>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Ellipse Width="7" Height="7" Fill="{Binding GlobalStatusBrush}" Margin="0,0,6,0"/>
                         <TextBlock Text="檢測狀態" Foreground="{StaticResource HudTextSoft}"
@@ -577,25 +597,26 @@
                                     MouseLeftButtonUp="MainRoiCanvas_MouseLeftButtonUp">
                                     <Rectangle Stroke="#FF43A047"
                                                StrokeThickness="{Binding StrokeThickness}"
-                                               Width="{Binding RectWidth}"
-                                               Height="{Binding RectHeight}"
-                                               Canvas.Left="{Binding RectX}"
-                                               Canvas.Top="{Binding RectY}"
+                                               Width="{Binding DisplayRectWidth}"
+                                               Height="{Binding DisplayRectHeight}"
+                                               Canvas.Left="{Binding DisplayRectX}"
+                                               Canvas.Top="{Binding DisplayRectY}"
+                                               Visibility="{Binding IsGreenBoxVisible, Converter={StaticResource BooleanToVisibilityConverter}}"
                                                IsHitTestVisible="False"/>
                                     <Rectangle Stroke="#FF039BE5"
                                                StrokeThickness="{Binding StrokeThickness2}"
-                                               Width="{Binding RectWidth2}"
-                                               Height="{Binding RectHeight2}"
-                                               Canvas.Left="{Binding RectX2}"
-                                               Canvas.Top="{Binding RectY2}"
+                                               Width="{Binding DisplayRectWidth2}"
+                                               Height="{Binding DisplayRectHeight2}"
+                                               Canvas.Left="{Binding DisplayRectX2}"
+                                               Canvas.Top="{Binding DisplayRectY2}"
                                                IsHitTestVisible="False"/>
                                     <Rectangle Stroke="#FFE53935"
                                                Visibility="{Binding IsSharpnessEnabled, Converter={StaticResource BooleanToVisibilityConverter}}"
                                                StrokeThickness="{Binding StrokeThickness3}"
-                                               Width="{Binding RectWidth3}"
-                                               Height="{Binding RectHeight3}"
-                                               Canvas.Left="{Binding RectX3}"
-                                               Canvas.Top="{Binding RectY3}"
+                                               Width="{Binding DisplayRectWidth3}"
+                                               Height="{Binding DisplayRectHeight3}"
+                                               Canvas.Left="{Binding DisplayRectX3}"
+                                               Canvas.Top="{Binding DisplayRectY3}"
                                                IsHitTestVisible="False"/>
                             </Canvas>
                         </Grid>
@@ -615,6 +636,12 @@
                                         Margin="0,0,6,0" Padding="10,4"
                                         Background="{StaticResource BlueSoft}"
                                         BorderBrush="{StaticResource Blue}"/>
+                                <Button Command="{Binding OpenMultiAppearanceCalibrationPreviewCommand}"
+                                        IsEnabled="{Binding IsRecipeActive}"
+                                        Content="多外觀試作"
+                                        AutomationProperties.Name="開啟多外觀參數試作"
+                                        ToolTip="預覽多外觀分組、獨立 ROI 和各組統計流程；試作不會修改 Recipe。"
+                                        Margin="0,0,6,0" Padding="10,4"/>
                                 <Button Command="{Binding ResetCurrentParametersCommand}"
                                         IsEnabled="{Binding CanEditRoi}"
                                         Content="重設參數"
@@ -754,21 +781,21 @@
                         </Button>
                         </StackPanel>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
-                            <Button Command="{Binding ShowTestImageResultsByStatusCommand}" CommandParameter="ALL"
+                            <Button Command="{Binding FilterTestImageFilesByStatusCommand}" CommandParameter="ALL"
                                     Content="ALL" Width="46" Height="34" MinHeight="0" Padding="0" Margin="2"
-                                    ToolTip="檢視全部檢測結果" AutomationProperties.Name="檢視全部結果"/>
-                            <Button Command="{Binding ShowTestImageResultsByStatusCommand}" CommandParameter="OK"
+                                    ToolTip="主畫面清單顯示全部已判定圖片" AutomationProperties.Name="篩選全部圖片"/>
+                            <Button Command="{Binding FilterTestImageFilesByStatusCommand}" CommandParameter="OK"
                                     Content="OK" Width="42" Height="34" MinHeight="0" Padding="0" Margin="2"
-                                    Foreground="#248A3D" ToolTip="只檢視 OK 結果" AutomationProperties.Name="檢視 OK 結果"/>
-                            <Button Command="{Binding ShowTestImageResultsByStatusCommand}" CommandParameter="NG"
+                                    Foreground="#248A3D" ToolTip="主畫面清單只顯示已判定 OK 的圖片" AutomationProperties.Name="篩選 OK 圖片"/>
+                            <Button Command="{Binding FilterTestImageFilesByStatusCommand}" CommandParameter="NG"
                                     Content="NG" Width="42" Height="34" MinHeight="0" Padding="0" Margin="2"
-                                    Foreground="#D32F2F" ToolTip="只檢視 NG 結果" AutomationProperties.Name="檢視 NG 結果"/>
+                                    Foreground="#D32F2F" ToolTip="主畫面清單只顯示已判定 NG 的圖片" AutomationProperties.Name="篩選 NG 圖片"/>
                         </StackPanel>
                     </Grid>
                 </Border>
             </Grid>
 
-            <ScrollViewer Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto">
+            <ScrollViewer x:Name="InspectionSettingsPanel" Grid.Row="0" Grid.Column="1" VerticalScrollBarVisibility="Auto">
                 <StackPanel>
                     <!-- 避免將可編輯閾值作為單站頁預設內容；檢測員先看本站狀態與結果。 -->
                     <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Line}"
@@ -932,12 +959,16 @@
                 </StackPanel>
             </ScrollViewer>
 
+            <view:AoiWorkflowPanel x:Name="AoiWorkflow" Grid.Row="0" Grid.Column="1"
+                                   Visibility="Collapsed"/>
+
             <!-- Dark machine telemetry strip: not a pastel dashboard, actions remain clickable. -->
             <Border Grid.Row="1" Grid.ColumnSpan="2" Margin="0,8,0,0"
                     Background="#0B2232" BorderBrush="#2D596D" BorderThickness="1"
                     CornerRadius="7" Padding="18,12">
                 <Grid>
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
@@ -1020,6 +1051,8 @@
                                      Foreground="#1CBDE3" Background="#335568"
                                      BorderThickness="0" VerticalAlignment="Center"/>
                     </Grid>
+                    <TextBlock Grid.Row="2" Text="{Binding SaveSettingsMessage}" Foreground="#C9E7F2"
+                               FontSize="11" Margin="9,5,9,0" TextWrapping="Wrap"/>
                 </Grid>
             </Border>
         </Grid>

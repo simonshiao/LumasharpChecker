@@ -29,6 +29,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="批次" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="0,0,11,0"/>
@@ -40,9 +41,13 @@
                         Command="{Binding SelectDatabaseDayFolderCommand}"
                         Style="{DynamicResource HudSecondaryButton}"
                         AutomationProperties.Name="批次選取所有站別圖庫"/>
-                <Button Grid.Column="3" Content="匯入…" Margin="6,0,0,0"
+                <Button Grid.Column="3" Content="訓練圖庫…" Margin="6,0,0,0"
+                        Command="{Binding ApplyTrainingImageToCurrentRecipeCommand}"
+                        ToolTip="依產品前綴選擇各站訓練圖庫版本，套用至目前配方"
+                        AutomationProperties.Name="套用訓練圖庫"/>
+                <Button Grid.Column="4" Content="匯入…" Margin="6,0,0,0"
                         Command="{Binding ImportTrainingImageCommand}"
-                        AutomationProperties.Name="匯入 TrainingImage"/>
+                        AutomationProperties.Name="匯入訓練圖庫"/>
             </Grid>
         </Border>
 

@@ -13,6 +13,7 @@ using System.Windows.Shapes;
 using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
+using System.Globalization;
 using System.IO;
 using LumasharpChecker.model;
 using LumasharpChecker.view;
@@ -27,10 +28,15 @@ namespace LumasharpChecker
         private System.Windows.Point _roiDragStart;
         private System.Windows.Shapes.Rectangle? _roiDraft;
         private bool _sidebarCollapsed;
+        private AoiToolsPreviewWindow? _aoiToolsWindow;
 
         public MainWindow()
         {
             InitializeComponent();
+
+            AoiWorkflow.LocatorRequested += OpenAoiLocator_Click;
+            AoiWorkflow.LocatorEnabledChanged += (_, _) =>
+                _aoiToolsWindow?.SetLocatorEnabled(AoiWorkflow.IsLocatorEnabled);
 
             Version? version = Assembly.GetEntryAssembly().GetName().Version;
             this.Title += $" {version?.ToString()} [NET472 Slim]";
@@ -42,6 +48,35 @@ namespace LumasharpChecker
         private void ShowOverview_Click(object sender, RoutedEventArgs e) => ShowMainPage(true);
 
         private void ShowInspection_Click(object sender, RoutedEventArgs e) => ShowMainPage(false);
+
+        private void ShowAoiTools_Click(object sender, RoutedEventArgs e)
+        {
+            ShowMainPage(false);
+            InspectionSettingsPanel.Visibility = Visibility.Collapsed;
+            AoiWorkflow.Visibility = Visibility.Visible;
+            InspectionNavButton.Background = System.Windows.Media.Brushes.Transparent;
+            InspectionNavButton.BorderBrush = System.Windows.Media.Brushes.Transparent;
+            AoiToolsNavButton.Background = (System.Windows.Media.Brush)FindResource("BlueSoft");
+            AoiToolsNavButton.BorderBrush = (System.Windows.Media.Brush)FindResource("Blue");
+        }
+
+        private void OpenAoiLocator_Click(object? sender, EventArgs e)
+        {
+            if (_aoiToolsWindow != null)
+            {
+                _aoiToolsWindow.SetLocatorEnabled(AoiWorkflow.IsLocatorEnabled);
+                if (!_aoiToolsWindow.IsVisible) _aoiToolsWindow.Show();
+                _aoiToolsWindow.Activate();
+                return;
+            }
+
+            _aoiToolsWindow = new AoiToolsPreviewWindow(this);
+            if (DataContext is mainViewModel vm)
+                _aoiToolsWindow.UseInitialTarget(vm.CurrentTestImagePath);
+            _aoiToolsWindow.SetLocatorEnabled(AoiWorkflow.IsLocatorEnabled);
+            _aoiToolsWindow.Closed += (_, _) => _aoiToolsWindow = null;
+            _aoiToolsWindow.Show();
+        }
 
         private void OverviewStation_Click(object sender, RoutedEventArgs e)
         {
@@ -63,12 +98,16 @@ namespace LumasharpChecker
                 AdvancedSettingsExpander.IsExpanded = false;
             StationOverviewPage.Visibility = overview ? Visibility.Visible : Visibility.Collapsed;
             InspectionPage.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
+            InspectionSettingsPanel.Visibility = Visibility.Visible;
+            AoiWorkflow.Visibility = Visibility.Collapsed;
             var activeBackground = (System.Windows.Media.Brush)FindResource("BlueSoft");
             var activeBorder = (System.Windows.Media.Brush)FindResource("Blue");
             OverviewNavButton.Background = overview ? activeBackground : System.Windows.Media.Brushes.Transparent;
             OverviewNavButton.BorderBrush = overview ? activeBorder : System.Windows.Media.Brushes.Transparent;
             InspectionNavButton.Background = overview ? System.Windows.Media.Brushes.Transparent : activeBackground;
             InspectionNavButton.BorderBrush = overview ? System.Windows.Media.Brushes.Transparent : activeBorder;
+            AoiToolsNavButton.Background = System.Windows.Media.Brushes.Transparent;
+            AoiToolsNavButton.BorderBrush = System.Windows.Media.Brushes.Transparent;
         }
 
         private void ToggleSidebar_Click(object sender, RoutedEventArgs e)
@@ -81,6 +120,7 @@ namespace LumasharpChecker
             SidebarFooter.Visibility = visibility;
             OverviewNavLabel.Visibility = visibility;
             InspectionNavLabel.Visibility = visibility;
+            AoiToolsNavLabel.Visibility = visibility;
         }
 
         private void OpenRecipeManager_Click(object sender, RoutedEventArgs e)
@@ -260,5 +300,25 @@ namespace LumasharpChecker
         };
         //[DllImport("user32.dll")]
         //private static extern bool SetForegroundWindow(IntPtr hWnd);
+    }
+
+    /// <summary>
+    /// RoiModeToBoolConverter — 在 mainViewModel.RoiDisplayStyle (Design/Result) 與 RadioButton.IsChecked 之間轉換。
+    /// </summary>
+    public class RoiModeToBoolConverter : IValueConverter
+    {
+        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is mainViewModel.RoiDisplayStyle mode && parameter is string param)
+                return mode.ToString() == param;
+            return false;
+        }
+
+        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        {
+            if (value is bool isChecked && isChecked && parameter is string param)
+                return Enum.Parse(typeof(mainViewModel.RoiDisplayStyle), param);
+            return Binding.DoNothing;
+        }
     }
 }

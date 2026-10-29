@@ -305,6 +305,11 @@ namespace LumasharpChecker.model
                 }
                 else
                 {
+                    patternMatchRoiRect = new Rectangle(
+                        profileManager.RoiX.GetValueOrDefault(),
+                        profileManager.RoiY.GetValueOrDefault(),
+                        profileManager.RoiW.GetValueOrDefault(),
+                        profileManager.RoiH.GetValueOrDefault());
                     brightnessRoiRect = new Rectangle(
                         profileManager.RoiX2.GetValueOrDefault(),
                         profileManager.RoiY2.GetValueOrDefault(),
@@ -366,7 +371,7 @@ namespace LumasharpChecker.model
                     BrightnessMax = _profileBrightnessMax,
                     SharpnessSafe = !includeSharpness || CheckSharpnessSafety(sharpness),
                     SharpnessMin = _profileSharpnessMin,
-                    RoiCoords = brightnessRoiRect,
+                    RoiCoords = patternMatchRoiRect,
                     BrightnessRoiCoords = brightnessRoiRect,
                     SharpnessRoiCoords = sharpnessRoiRect,
                     IsMatched = isMatched
