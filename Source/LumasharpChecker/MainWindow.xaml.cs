@@ -275,13 +275,7 @@ namespace LumasharpChecker
                     vm.CurrentStationNumber != station || vm.CurrentTestImagePath != imagePath)
                     throw new InvalidOperationException("檢測期間 Recipe、站別或圖片已改變，結果不採用。");
                 AoiWorkflow.SetPipelineStatus(native.Summary + " → Luma 光源檢測");
-                if (vm.CurrentProfile == null)
-                {
-                    MessageBox.Show("原生定位通過，但本站的 Luma 光源 ROI／亮度規格尚未校準。\n" +
-                        native.Summary + "\n請先新增本站參數，才能做光源 OK／NG 判定。",
-                        "光源待校準", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+                // 光源設定必須允許尚未校準的站別進入，ROI 在視窗內建立。
                 new LightInspectionWindow(vm, imagePath) { Owner = this }.ShowDialog();
             }
             catch (Exception ex)

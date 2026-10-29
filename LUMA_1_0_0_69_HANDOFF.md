@@ -1,5 +1,27 @@
 # 本機交接
 
+## 2026-10-30 光源設定解除 Profile Gate、切換圖片與純 ROI 單張試算
+
+- `MainWindow.OpenAoiLight_Click` 已移除 `CurrentProfile == null` 的阻擋；前置原生流程本身仍執行，若失敗依既有機制中止，下一階段需將參數編輯和前置檢測分離。
+- `LightInspectionWindow` 現在接 Luma `TestImageFiles` 的快照、目前圖片索引，新增上一張／下一張；光源 ROI 尚未設定時可開窗並顯示操作指引。自訂光源測試改用 `LocateLightFrameAsync` 和 `Measure` 的 HSV V ROI 量測，不再呼叫 `TestLightImageAsync / ImageProcessor.ProcessImage2` 的樣板比對結果。
+- 未完成：原廠定位前置流程完全分離、舊 Profile 基準亮度 ±% 自動繼承、跨視窗即時同步、主畫面其餘檢測統一切換、真實定位/光源 OK NG 驗收。禁止誤報完整驗收通過。
+- Release x64 0 errors／150 warnings；舊 PID 55588 已關閉、備份並更新測試 EXE、新 PID 46220 Responding=True。未覆蓋正式成品與原廠 Recipe。
+
+## 2026-10-30 光源設定「百分比偏差／固定上下限」模式切換
+
+- 研究結果：Luma 既有 `MainWindow.xaml` 亮度規格已使用 `ComboBox` 切換模式；`ProfilerManager.ApplyBrightnessThreshold` 的百分比公式為基準值 × (1 - 下限%/100)、基準值 × (1 + 上限%/100)。InspTools 的 `BinaryWindow` 也採 ComboBox 選單風格。未重造共用控件。
+- `LightInspectionSettings.cs` 新增 `LimitMode`、`BaseValue`、`PercentLower`、`PercentUpper`、`EffectiveLimits()`，既有只有 Minimum/Maximum 的 JSON 預設以「固定上下限」相容讀取，避免無聲更改舊設定。
+- `LightInspectionWindow.cs` 新增「百分比偏差／固定上下限」下拉切換；百分比模式提供基準值、下限偏差%、上限偏差%；固定模式沿用原本 Min/Max。自訂 ROI 的 `Measure()` 已依生效上下限做 OK／NG。百分比沒有有效基準亮度時會明確拒絕量測，避免假 OK。
+- Release x64 0 errors／150 warnings。已備份／更新測試 EXE，啟動 PID 55588（Responding=True）。本次查無在相同測試路徑的執行中舊 Luma PID；正式成品與原廠 Recipe 未動。
+- **未完成 Gate：** `MainWindow.OpenAoiLight_Click` 仍會在 CurrentProfile 為 null 時阻止光源設定開窗；`TestLightImageAsync` 仍走 ImageProcessor.ProcessImage2() 的樣板比對與舊判定。需下一階段將光源主流程完全切為定位 ROI + 光源 ROI + 亮度規格，且將原本的基準值／偏差設定轉入光源設定，不能宣稱已完成整套光源 OK/NG 整合。GUI 選單尚待實測。
+
+## 2026-10-30 光源點檢參數流程研究（待改造）
+
+- 使用者明確指定下一版以「原廠非 AI 定位 ROI + Luma 光源 ROI + 亮度門檻」作為單站光源檢測依據，不再使用 Luma 樣板比對；設定應集中於既有 `view/LightInspectionWindow.cs`，可直接選擇 Luma 已載入圖庫的圖片、切換上下張、畫 ROI、測試並儲存，不應因未建立 Profile／尚未校準就擋住設定視窗。
+- 程式現況：`MainWindow.xaml.cs OpenAoiLight_Click()` 在 `CurrentProfile == null` 時直接阻止開窗；`LightInspectionWindow.RunLocalLightCheckAsync()` 呼叫 `mainViewModel.TestLightImageAsync()`，其要求 CurrentProfile 且進入 `ImageProcessor.ProcessImage2()`。舊 ProcessImage2 含樣板比對，現況並非純定位 ROI 光源測量。
+- 既有可沿用：`LightInspectionSettings`（相對定位框 Left/Top/Right/Bottom、HasRoi、Minimum/Maximum）、`LoadLightSettings/SaveLightSettings`（每 Recipe/站別 light-inspection.json）、`LocateLightFrameAsync`、`LightInspectionWindow.Measure()` 的 HSV V 平均值。
+- 下步先放行無 Profile 開窗，但正式 OK／NG 前應依 Recipe/站別取得定位框、轉換相對 ROI 並處理定位失敗；無光源 ROI 時允許開窗與選圖，但不得出具 OK 判定。需確認原生前置影像是否已傳入 Luma，避免假設原圖等於定位後影像。未修改程式／未部署，不能宣稱新流程已完成。
+
 ## 2026-10-30 選向／選面直開工具與 Luma 圖片清單
 
 - Luma `MainWindow.xaml.cs` 的「選向」「選面」改傳 `TestImageFiles`、`CurrentTestImagePath` 至 `NativeRecipeBridge.OpenSandbox`，分別帶 `--open-select-way` 與 `--open-select-face`，不再只開原生 ToolsWindow。

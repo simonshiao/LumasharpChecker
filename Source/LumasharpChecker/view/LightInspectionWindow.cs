@@ -18,7 +18,9 @@ namespace LumasharpChecker.view
     internal sealed class LightInspectionWindow : Window
     {
         private readonly mainViewModel _vm;
-        private readonly string _path;
+        private string _path;
+        private readonly string[] _images;
+        private int _imageIndex;
         private readonly LightInspectionSettings _settings;
         private NativeLocationService.Frame? _frame;
         private readonly Canvas _canvas = new Canvas { Background = Brushes.Transparent };
@@ -28,29 +30,70 @@ namespace LumasharpChecker.view
         private readonly TextBlock _status = new TextBlock { Text = "先執行定位，再於綠色框內拖曳設定光源 ROI。", TextWrapping = TextWrapping.Wrap, LineHeight = 23, Margin = new Thickness(0, 16, 0, 0) };
         private readonly TextBox _min = new TextBox { Height = 32, Margin = new Thickness(0, 4, 0, 8) };
         private readonly TextBox _max = new TextBox { Height = 32, Margin = new Thickness(0, 4, 0, 8) };
+        private readonly ComboBox _mode = new ComboBox { Height = 32, Margin = new Thickness(0, 4, 0, 8) };
+        private readonly TextBox _base = new TextBox { Height = 32, Margin = new Thickness(0, 4, 0, 8) };
+        private readonly TextBox _percentLow = new TextBox { Height = 32, Margin = new Thickness(0, 4, 0, 8) };
+        private readonly TextBox _percentHigh = new TextBox { Height = 32, Margin = new Thickness(0, 4, 0, 8) };
+        private readonly StackPanel _fixedPanel = new StackPanel();
+        private readonly StackPanel _percentPanel = new StackPanel();
         private readonly StackPanel _controls = new StackPanel { Margin = new Thickness(20) };
         private Point? _start;
         public LightInspectionWindow(mainViewModel vm, string imagePath)
         {
             _vm = vm; _path = imagePath; _settings = vm.LoadLightSettings();
+            _images = vm.TestImageFiles.Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            _imageIndex = Array.FindIndex(_images, p => string.Equals(p, imagePath, StringComparison.OrdinalIgnoreCase));
+            if (_imageIndex < 0) _imageIndex = 0;
             Title = "光源檢測 · Luma（取代原廠燈泡）"; Width = 1100; Height = 720; MinWidth = 800; MinHeight = 560; WindowStartupLocation = WindowStartupLocation.CenterOwner;
             var root = new Grid { Margin = new Thickness(16) }; root.ColumnDefinitions.Add(new ColumnDefinition()); root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
             var picture = new Grid(); picture.Children.Add(_image); picture.Children.Add(_canvas); _canvas.Children.Add(_located); _canvas.Children.Add(_roi);
             root.Children.Add(new Border { Background = new SolidColorBrush(Color.FromRgb(32,37,45)), Padding = new Thickness(12), Margin = new Thickness(0,0,14,0), Child = new Viewbox { Stretch = Stretch.Uniform, Child = picture } });
             _controls.Children.Add(new TextBlock { Text = "光源檢測", FontSize = 21, FontWeight = FontWeights.SemiBold });
             _controls.Children.Add(new TextBlock { Text = $"{vm.CurrentRecipe?.Name} · 第 {vm.CurrentStationNumber} 站", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0,8,0,16) });
+            var navigation = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+            var previous = new Button { Content = "上一張", Padding = new Thickness(8,5,8,5) };
+            var next = new Button { Content = "下一張", Padding = new Thickness(8,5,8,5), Margin = new Thickness(8,0,0,0) };
+            var indexText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9,0,0,0) };
+            navigation.Children.Add(previous); navigation.Children.Add(next); navigation.Children.Add(indexText);
+            _controls.Children.Add(navigation);
+            void SelectImage(int offset)
+            {
+                if (_images.Length == 0) return;
+                _imageIndex = (_imageIndex + offset + _images.Length) % _images.Length;
+                _path = _images[_imageIndex];
+                _frame = null; _roi.Visibility = _located.Visibility = Visibility.Collapsed;
+                SetImage(_path);
+                indexText.Text = (_imageIndex + 1) + " / " + _images.Length;
+                _status.Text = "已切換圖檔，請定位並設定光源 ROI。";
+            }
+            previous.Click += (_,__) => SelectImage(-1);
+            next.Click += (_,__) => SelectImage(1);
+            indexText.Text = _images.Length == 0 ? "0 / 0" : (_imageIndex + 1) + " / " + _images.Length;
             // 光源點檢優先使用 Luma 已校準的定位／亮度引擎，
             // 不把原廠 CheckAuth 當成離線光源檢測的必要前置條件。
             AddButton("以本站參數重新檢測", RunLocalLightCheckAsync);
             AddButton("原廠定位（需授權）", async () => {
                 _frame = null; _roi.Visibility = _located.Visibility = Visibility.Collapsed; _status.Text = "原廠定位中…";
-                var frame = await vm.LocateLightFrameAsync(imagePath); _frame = frame; SetImage(frame.ImagePath); Show(_located, frame.Bounds);
+                var frame = await vm.LocateLightFrameAsync(_path); _frame = frame; SetImage(frame.ImagePath); Show(_located, frame.Bounds);
                 _status.Text = "定位成功。綠框：定位區；藍框：光源 ROI。";
                 if (_settings.HasRoi) Show(_roi, _settings.GetRoi(frame.Bounds));
             });
-            _controls.Children.Add(new TextBlock { Text = "亮度下限（0～255）", Margin = new Thickness(0,16,0,0) }); _controls.Children.Add(_min);
-            _controls.Children.Add(new TextBlock { Text = "亮度上限（0～255）" }); _controls.Children.Add(_max);
+            _controls.Children.Add(new TextBlock { Text = "亮度規格模式", Margin = new Thickness(0,16,0,0) });
+            _mode.Items.Add("百分比偏差"); _mode.Items.Add("固定上下限");
+            _mode.SelectedItem = _settings.LimitMode;
+            _controls.Children.Add(_mode);
+            _fixedPanel.Children.Add(new TextBlock { Text = "固定下限（0～255）" }); _fixedPanel.Children.Add(_min);
+            _fixedPanel.Children.Add(new TextBlock { Text = "固定上限（0～255）" }); _fixedPanel.Children.Add(_max);
+            _percentPanel.Children.Add(new TextBlock { Text = "基準亮度（0～255）" }); _percentPanel.Children.Add(_base);
+            _percentPanel.Children.Add(new TextBlock { Text = "下限偏差 %（基準 -%）" }); _percentPanel.Children.Add(_percentLow);
+            _percentPanel.Children.Add(new TextBlock { Text = "上限偏差 %（基準 +%）" }); _percentPanel.Children.Add(_percentHigh);
+            _controls.Children.Add(_fixedPanel); _controls.Children.Add(_percentPanel);
             _min.Text = _settings.Minimum.ToString(CultureInfo.CurrentCulture); _max.Text = _settings.Maximum.ToString(CultureInfo.CurrentCulture);
+            _base.Text = _settings.BaseValue.ToString(CultureInfo.CurrentCulture);
+            _percentLow.Text = _settings.PercentLower.ToString(CultureInfo.CurrentCulture);
+            _percentHigh.Text = _settings.PercentUpper.ToString(CultureInfo.CurrentCulture);
+            _mode.SelectionChanged += (_, __) => UpdateModeVisibility();
+            UpdateModeVisibility();
             AddButton("測試自訂 ROI", () => { Measure(); return System.Threading.Tasks.Task.CompletedTask; });
             AddButton("儲存本站光源設定", () => { ReadLimits(); vm.SaveLightSettings(_settings); _status.Text = "已儲存本站光源 ROI 與上下限。"; return System.Threading.Tasks.Task.CompletedTask; });
             _controls.Children.Add(_status);
@@ -75,24 +118,18 @@ namespace LumasharpChecker.view
             _frame = null;
             _located.Visibility = _roi.Visibility = Visibility.Collapsed;
             _status.Text = "本站亮度檢測中…";
-            var result = await _vm.TestLightImageAsync(_path);
-            if (!result.IsMatched)
+            if (!_settings.HasRoi)
             {
-                _status.Text = "定位未匹配：本張不判 OK。請確認本站定位樣板及 ROI。";
+                _status.Text = "尚未設定光源 ROI。請先定位、拖曳光源 ROI，設定亮度規格後儲存。";
                 return;
             }
-            if (result.RoiW > 0 && result.RoiH > 0)
-                Show(_located, new RectD(result.RoiX, result.RoiY, result.RoiW, result.RoiH));
-            if (result.BrightnessRoiW > 0 && result.BrightnessRoiH > 0)
-                Show(_roi, new RectD(result.BrightnessRoiX, result.BrightnessRoiY,
-                    result.BrightnessRoiW, result.BrightnessRoiH));
-            string range = result.BrightnessMin.HasValue && result.BrightnessMax.HasValue
-                ? $"{result.BrightnessMin.Value:F2} ～ {result.BrightnessMax.Value:F2}"
-                : "未設定";
-            _status.Text = $"Luma 光源檢測：{(result.IsOverallPass ? "OK" : "NG")}\n" +
-                $"亮度 {result.Brightness:F2} / 規格 {range}\n" +
-                $"定位 ROI {result.RoiW} × {result.RoiH} px\n" +
-                $"亮度 ROI {result.BrightnessRoiW} × {result.BrightnessRoiH} px";
+            if (_frame == null)
+            {
+                _frame = await _vm.LocateLightFrameAsync(_path);
+                SetImage(_frame.ImagePath);
+            }
+            ReadLimits();
+            Measure();
         }
         private void AddButton(string text, Func<System.Threading.Tasks.Task> action)
         {
@@ -104,14 +141,31 @@ namespace LumasharpChecker.view
             var b=new BitmapImage(); b.BeginInit(); b.UriSource=new Uri(path,UriKind.Absolute); b.CacheOption=BitmapCacheOption.OnLoad; b.EndInit(); b.Freeze(); _image.Source=b; _canvas.Width=_image.Width=b.PixelWidth; _canvas.Height=_image.Height=b.PixelHeight;
         }
         private static void Show(Shape shape,RectD r) { Canvas.SetLeft(shape,r.X); Canvas.SetTop(shape,r.Y); shape.Width=r.Width; shape.Height=r.Height; shape.Visibility=Visibility.Visible; }
-        private void ReadLimits() { if(!double.TryParse(_min.Text,out var min)||!double.TryParse(_max.Text,out var max))throw new InvalidOperationException("請輸入有效亮度數值。"); _settings.Minimum=min; _settings.Maximum=max; _settings.Validate(); }
+        private void UpdateModeVisibility()
+        {
+            bool percent = (string)_mode.SelectedItem == "百分比偏差";
+            _fixedPanel.Visibility = percent ? Visibility.Collapsed : Visibility.Visible;
+            _percentPanel.Visibility = percent ? Visibility.Visible : Visibility.Collapsed;
+        }
+        private void ReadLimits()
+        {
+            if (!double.TryParse(_min.Text, out var min) || !double.TryParse(_max.Text, out var max) ||
+                !double.TryParse(_base.Text, out var baseValue) ||
+                !double.TryParse(_percentLow.Text, out var low) || !double.TryParse(_percentHigh.Text, out var high))
+                throw new InvalidOperationException("請輸入有效亮度或百分比數值。");
+            _settings.LimitMode = (string)_mode.SelectedItem;
+            _settings.Minimum = min; _settings.Maximum = max;
+            _settings.BaseValue = baseValue; _settings.PercentLower = low; _settings.PercentUpper = high;
+            _settings.EffectiveLimits();
+        }
         private void Measure()
         {
             if(_frame==null)throw new InvalidOperationException("請先定位目前圖片。"); ReadLimits(); var r=_settings.GetRoi(_frame.Bounds);
             using var image=new Mat(); CvInvoke.Imdecode(File.ReadAllBytes(_frame.ImagePath),ImreadModes.Color,image);
             if(r.Left<0||r.Top<0||r.Right>image.Width||r.Bottom>image.Height)throw new InvalidOperationException("ROI 超出定位後影像範圍。");
             using var crop=new Mat(image,r); using var hsv=new Mat(); CvInvoke.CvtColor(crop,hsv,ColorConversion.Bgr2Hsv); double value=CvInvoke.Mean(hsv).V2;
-            _status.Text=$"亮度 {(value>=_settings.Minimum&&value<=_settings.Maximum?"OK":"NG")}\n平均 {value:F2}\n範圍 {_settings.Minimum:F2} ～ {_settings.Maximum:F2}\nROI {r.X}, {r.Y}, {r.Width} × {r.Height}";
+            var limits = _settings.EffectiveLimits();
+            _status.Text=$"亮度 {(value>=limits.Min&&value<=limits.Max?"OK":"NG")}\n平均 {value:F2}\n範圍 {limits.Min:F2} ～ {limits.Max:F2}\nROI {r.X}, {r.Y}, {r.Width} × {r.Height}";
         }
     }
 }
