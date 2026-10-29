@@ -1,5 +1,12 @@
 # 本機交接
 
+## 2026-10-30 光源全部樣本基準值／逐張亮度與 R3 選向選面開關
+
+- Luma `LightInspectionWindow` 新增「計算全部樣本的基準值」按鈕：遍歷目前站別 `TestImageFiles`，每張執行 `LocateLightFrameAsync`，以定位框內同一套相對光源 ROI 取 HSV V 平均，計算成功張數的平均，顯示有效／失敗張數並帶入百分比模式 BaseValue 欄位。不將失敗圖片當作 0，全部失敗拒絕建立基準值。
+- 上一張／下一張切換後，會試著以原生定位及光源 ROI 顯示「本張亮度」；未設定 ROI 或定位失敗顯示原因，不假裝有亮度。設定頁開啟不再預先強制執行 NativeRecipeBridge.RunPreLightAsync，讓使用者可以先校準。
+- InspTools R3 `R3IsolatedEditor.EditNativeTool` 的直接選向／選面視窗新增「啟用選向／啟用選面」勾選，對應原廠 ParamFile 的 SelectWayON／SelectFaceON，並有「儲存 Recipe」呼叫已存在的 SaveNativeChanges (SaveAllRecipe、備份、重讀驗證)。目前仍是 Luma 啟用的 R3 工作副本，**不等於直接寫回來源原廠 Recipe**。使用者希望可修改原廠 Recipe，後續必須先明確設計可寫入目標與回讀驗證。
+- Luma Release x64 0 errors／150 warnings，InspTools R3 Release x64 0 errors／0 warnings，關閉 Luma 舊 PID 46220、備份兩個 EXE 並更新測試目錄、新 Luma PID 44104 Responding=True。尚未完成 GUI 點擊驗收、全數 22 張定位成功率及原生開關存取驗收。
+
 ## 2026-10-30 光源設定解除 Profile Gate、切換圖片與純 ROI 單張試算
 
 - `MainWindow.OpenAoiLight_Click` 已移除 `CurrentProfile == null` 的阻擋；前置原生流程本身仍執行，若失敗依既有機制中止，下一階段需將參數編輯和前置檢測分離。

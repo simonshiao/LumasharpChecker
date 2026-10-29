@@ -268,14 +268,8 @@ namespace LumasharpChecker
             string imagePath = vm.CurrentTestImagePath;
             try
             {
-                AoiWorkflow.SetPipelineStatus("原生非 AI 定位／選向／選面檢查中…");
-                var native = await NativeRecipeBridge.RunPreLightAsync(
-                    recipe, station, imagePath, AppDomain.CurrentDomain.BaseDirectory);
-                if (vm.CurrentRecipe?.Id != recipe.Id ||
-                    vm.CurrentStationNumber != station || vm.CurrentTestImagePath != imagePath)
-                    throw new InvalidOperationException("檢測期間 Recipe、站別或圖片已改變，結果不採用。");
-                AoiWorkflow.SetPipelineStatus(native.Summary + " → Luma 光源檢測");
-                // 光源設定必須允許尚未校準的站別進入，ROI 在視窗內建立。
+                // 設定頁不以定位成功作開窗 Gate；定位結果在單張測試時判斷。
+                AoiWorkflow.SetPipelineStatus("光源設定已開啟，請選圖、定位及校準 ROI。");
                 new LightInspectionWindow(vm, imagePath) { Owner = this }.ShowDialog();
             }
             catch (Exception ex)

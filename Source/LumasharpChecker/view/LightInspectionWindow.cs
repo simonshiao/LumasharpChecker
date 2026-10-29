@@ -37,6 +37,8 @@ namespace LumasharpChecker.view
         private readonly StackPanel _fixedPanel = new StackPanel();
         private readonly StackPanel _percentPanel = new StackPanel();
         private readonly StackPanel _controls = new StackPanel { Margin = new Thickness(20) };
+        private readonly TextBlock _sampleBrightness = new TextBlock { Text = "本張亮度：尚未量測", Margin = new Thickness(0, 10, 0, 4), FontWeight = FontWeights.SemiBold };
+        private readonly TextBlock _sampleAverage = new TextBlock { Text = "全部樣本平均：尚未計算", TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 8), FontWeight = FontWeights.SemiBold };
         private Point? _start;
         public LightInspectionWindow(mainViewModel vm, string imagePath)
         {
@@ -56,7 +58,9 @@ namespace LumasharpChecker.view
             var indexText = new TextBlock { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(9,0,0,0) };
             navigation.Children.Add(previous); navigation.Children.Add(next); navigation.Children.Add(indexText);
             _controls.Children.Add(navigation);
-            void SelectImage(int offset)
+            _controls.Children.Add(_sampleBrightness);
+            _controls.Children.Add(_sampleAverage);
+            async System.Threading.Tasks.Task SelectImage(int offset)
             {
                 if (_images.Length == 0) return;
                 _imageIndex = (_imageIndex + offset + _images.Length) % _images.Length;
@@ -64,14 +68,17 @@ namespace LumasharpChecker.view
                 _frame = null; _roi.Visibility = _located.Visibility = Visibility.Collapsed;
                 SetImage(_path);
                 indexText.Text = (_imageIndex + 1) + " / " + _images.Length;
-                _status.Text = "已切換圖檔，請定位並設定光源 ROI。";
+                _sampleBrightness.Text = "本張亮度：量測中…";
+                _status.Text = "已切換圖檔。";
+                await ShowCurrentSampleAsync();
             }
-            previous.Click += (_,__) => SelectImage(-1);
-            next.Click += (_,__) => SelectImage(1);
+            previous.Click += async (_,__) => await SelectImage(-1);
+            next.Click += async (_,__) => await SelectImage(1);
             indexText.Text = _images.Length == 0 ? "0 / 0" : (_imageIndex + 1) + " / " + _images.Length;
             // 光源點檢優先使用 Luma 已校準的定位／亮度引擎，
             // 不把原廠 CheckAuth 當成離線光源檢測的必要前置條件。
             AddButton("以本站參數重新檢測", RunLocalLightCheckAsync);
+            AddButton("計算全部樣本的基準值", CalculateAllSamplesAsync);
             AddButton("原廠定位（需授權）", async () => {
                 _frame = null; _roi.Visibility = _located.Visibility = Visibility.Collapsed; _status.Text = "原廠定位中…";
                 var frame = await vm.LocateLightFrameAsync(_path); _frame = frame; SetImage(frame.ImagePath); Show(_located, frame.Bounds);
@@ -97,7 +104,7 @@ namespace LumasharpChecker.view
             AddButton("測試自訂 ROI", () => { Measure(); return System.Threading.Tasks.Task.CompletedTask; });
             AddButton("儲存本站光源設定", () => { ReadLimits(); vm.SaveLightSettings(_settings); _status.Text = "已儲存本站光源 ROI 與上下限。"; return System.Threading.Tasks.Task.CompletedTask; });
             _controls.Children.Add(_status);
-            _controls.Children.Add(new TextBlock { Text = "本站參數檢測直接使用 Luma 現有樣板／ROI／規格，不需要原廠授權；原廠定位與自訂 ROI 則另外測試。亮度使用 HSV V 平均值。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0,18,0,0) });
+            _controls.Children.Add(new TextBlock { Text = "亮度以定位後的光源 ROI 內 HSV V 平均值計算；全部樣本採相同 ROI，失敗張數另行顯示。", TextWrapping = TextWrapping.Wrap, Foreground = Brushes.DimGray, Margin = new Thickness(0,18,0,0) });
             var side = new ScrollViewer { Content = _controls, VerticalScrollBarVisibility = ScrollBarVisibility.Auto }; Grid.SetColumn(side,1); root.Children.Add(side); Content = root;
             _canvas.MouseLeftButtonDown += (_,e) => { if (_frame == null) return; var p=e.GetPosition(_canvas); if (!_frame.Bounds.Contains((int)p.X,(int)p.Y)) return; _start=p; _canvas.CaptureMouse(); };
             _canvas.MouseLeftButtonUp += (_,e) => {
@@ -160,12 +167,68 @@ namespace LumasharpChecker.view
         }
         private void Measure()
         {
-            if(_frame==null)throw new InvalidOperationException("請先定位目前圖片。"); ReadLimits(); var r=_settings.GetRoi(_frame.Bounds);
-            using var image=new Mat(); CvInvoke.Imdecode(File.ReadAllBytes(_frame.ImagePath),ImreadModes.Color,image);
-            if(r.Left<0||r.Top<0||r.Right>image.Width||r.Bottom>image.Height)throw new InvalidOperationException("ROI 超出定位後影像範圍。");
-            using var crop=new Mat(image,r); using var hsv=new Mat(); CvInvoke.CvtColor(crop,hsv,ColorConversion.Bgr2Hsv); double value=CvInvoke.Mean(hsv).V2;
+            if(_frame==null)throw new InvalidOperationException("請先定位目前圖片。"); ReadLimits();
+            double value=MeasureFrame(_frame);
             var limits = _settings.EffectiveLimits();
+            var r = _settings.GetRoi(_frame.Bounds);
+            _sampleBrightness.Text = $"本張亮度：{value:F2}";
             _status.Text=$"亮度 {(value>=limits.Min&&value<=limits.Max?"OK":"NG")}\n平均 {value:F2}\n範圍 {limits.Min:F2} ～ {limits.Max:F2}\nROI {r.X}, {r.Y}, {r.Width} × {r.Height}";
+        }
+
+        private double MeasureFrame(NativeLocationService.Frame frame)
+        {
+            var r = _settings.GetRoi(frame.Bounds);
+            using var image = new Mat();
+            CvInvoke.Imdecode(File.ReadAllBytes(frame.ImagePath), ImreadModes.Color, image);
+            if (r.X < 0 || r.Y < 0 || r.Right > image.Width || r.Bottom > image.Height)
+                throw new InvalidOperationException("光源 ROI 超出定位後影像範圍。");
+            using var crop = new Mat(image, r);
+            using var hsv = new Mat();
+            CvInvoke.CvtColor(crop, hsv, ColorConversion.Bgr2Hsv);
+            return CvInvoke.Mean(hsv).V2;
+        }
+
+        private async System.Threading.Tasks.Task ShowCurrentSampleAsync()
+        {
+            if (!_settings.HasRoi) { _sampleBrightness.Text = "本張亮度：尚未設定 ROI"; return; }
+            try
+            {
+                _frame = await _vm.LocateLightFrameAsync(_path);
+                SetImage(_frame.ImagePath);
+                Show(_located, _frame.Bounds);
+                Show(_roi, _settings.GetRoi(_frame.Bounds));
+                double value = MeasureFrame(_frame);
+                _sampleBrightness.Text = $"本張亮度：{value:F2}";
+            }
+            catch (Exception ex)
+            {
+                _sampleBrightness.Text = "本張亮度：無法量測";
+                _status.Text = "本張定位／量測失敗：" + ex.GetBaseException().Message;
+            }
+        }
+
+        private async System.Threading.Tasks.Task CalculateAllSamplesAsync()
+        {
+            if (!_settings.HasRoi) throw new InvalidOperationException("請先設定光源 ROI，才能計算樣本基準值。");
+            if (_images.Length == 0) throw new InvalidOperationException("尚未載入可計算的樣本圖片。");
+            int successes = 0, failures = 0;
+            double total = 0;
+            foreach (string file in _images)
+            {
+                try
+                {
+                    var frame = await _vm.LocateLightFrameAsync(file);
+                    total += MeasureFrame(frame);
+                    successes++;
+                }
+                catch { failures++; }
+                _sampleAverage.Text = $"計算中：{successes + failures} / {_images.Length}（失敗 {failures}）";
+            }
+            if (successes == 0) throw new InvalidOperationException("全部樣本定位或 ROI 量測失敗，未產生基準值。");
+            double mean = total / successes;
+            _base.Text = mean.ToString("F2", CultureInfo.CurrentCulture);
+            _sampleAverage.Text = $"全部樣本平均：{mean:F2}（有效 {successes}/{_images.Length}，失敗 {failures}）";
+            _status.Text = "基準亮度已帶入欄位，請確認偏差百分比後儲存。";
         }
     }
 }
