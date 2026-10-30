@@ -24,7 +24,8 @@
 
         <StackPanel Margin="0,0,0,16">
             <TextBlock Text="配方管理" Style="{DynamicResource HudSectionTitle}"/>
-            <TextBlock Text="管理配方" Foreground="{StaticResource Muted}" Margin="0,5,0,0"/>
+            <TextBlock Text="按「自動匯入」選取外觀機配方；其他來源請使用「其他匯入」。" Foreground="{StaticResource Muted}" Margin="0,5,0,0"/>
+            <TextBlock Text="各配方保存自己的站別參數；載入後從主畫面右側工具調整。" Foreground="{StaticResource Muted}" Margin="0,4,0,0"/>
         </StackPanel>
 
         <Grid Grid.Row="1">
@@ -62,18 +63,19 @@
                             </StackPanel>
                         </Button>
                         <Button Style="{StaticResource RecipeSidebarAction}"
+                                Command="{Binding ImportDefaultVendorRecipeSnapshotCommand}"
+                                ToolTip="從外觀機預設路徑匯入配方">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE896;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/>
+                                <TextBlock Text="自動匯入"/>
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource RecipeSidebarAction}"
                                 Command="{Binding ImportVendorRecipeSnapshotCommand}"
                                 ToolTip="選取原廠資料夾，批次比對並匯入或更新配方">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="&#xE8B5;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/>
-                                <TextBlock Text="匯入"/>
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource RecipeSidebarAction}" Click="OpenStationSettings_Click"
-                                IsEnabled="{Binding IsRecipeActive}" ToolTip="管理目前配方的站別設定">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="&#xE713;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/>
-                                <TextBlock Text="設定"/>
+                                <TextBlock Text="其他匯入"/>
                             </StackPanel>
                         </Button>
                         <Separator Margin="4,10"/>
@@ -121,8 +123,6 @@
         </Grid>
 
         <DockPanel Grid.Row="2" Margin="0,14,0,0">
-            <TextBlock Text="{Binding SaveSettingsMessage}" Foreground="{StaticResource Muted}"
-                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
             <Button DockPanel.Dock="Right" Content="完成" MinWidth="100"
                     Style="{DynamicResource HudPrimaryButton}" Click="Done_Click"/>
         </DockPanel>

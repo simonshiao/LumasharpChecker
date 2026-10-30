@@ -20,6 +20,7 @@ namespace LumasharpChecker.view
             {
                 "OK" => results.Where(result => result.IsOverallPass),
                 "NG" => results.Where(result => !result.IsOverallPass),
+                "Retest" => results.Where(result => result.IsRetest),
                 _ => results
             };
             Title = statusFilter == "ALL" ? "測試圖片結果" : $"{statusFilter} 檢測結果";
@@ -62,7 +63,7 @@ namespace LumasharpChecker.view
                     return string.Empty;
                 }
 
-                if (_thumbnailMode == BatchPreviewModes.NgOnly && Source.OverallResult != "NG")
+                if (_thumbnailMode == BatchPreviewModes.NgOnly && Source.IsOverallPass)
                 {
                     return string.Empty;
                 }
@@ -71,15 +72,9 @@ namespace LumasharpChecker.view
             }
         }
         public string FileName => Source.FileName;
-        public double Brightness => Source.Brightness;
-        public string BrightnessDeltaPercentText => Source.BrightnessDeltaPercentText;
-        public string SharpnessText => Source.IncludeSharpness ? Source.Sharpness.ToString("F2") : "N/A";
-        public string BrightnessResult => Source.BrightnessResult;
-        public string SharpnessResult => Source.SharpnessResult;
-        public string OverallResult => Source.OverallResult;
-        public string MatchResult => Source.MatchResult;
-        public string RoiDisplay => Source.RoiDisplay;
-        public string Message => Source.Message;
+        public string BrightnessDisplay => Source.BrightnessMeasured ? Source.Brightness.ToString("F2") : "—";
+        public string Result => Source.OverallResult;
+        public string Message => Source.IsRetest ? Source.Message : string.Empty;
     }
 
     public class DeferredThumbnailConverter : IValueConverter
@@ -119,12 +114,14 @@ namespace LumasharpChecker.view
     {
         private static readonly Brush OkBrush = new SolidColorBrush(Color.FromRgb(46, 125, 50));
         private static readonly Brush NgBrush = new SolidColorBrush(Color.FromRgb(198, 40, 40));
+        private static readonly Brush RetestBrush = new SolidColorBrush(Color.FromRgb(230, 126, 34));
         private static readonly Brush NeutralBrush = new SolidColorBrush(Color.FromRgb(96, 125, 139));
 
         static ResultStatusBrushConverter()
         {
             OkBrush.Freeze();
             NgBrush.Freeze();
+            RetestBrush.Freeze();
             NeutralBrush.Freeze();
         }
 
@@ -135,6 +132,7 @@ namespace LumasharpChecker.view
             {
                 "OK" => OkBrush,
                 "NG" => NgBrush,
+                "RETEST" => RetestBrush,
                 _ => NeutralBrush
             };
         }

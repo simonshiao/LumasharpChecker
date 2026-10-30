@@ -10,16 +10,20 @@ using LumasharpChecker.viewmodel;
 
 namespace LumasharpChecker.model
 {
+    public sealed record StationExcelReportData(
+        int StationNumber,
+        string RecipeName,
+        List<string[]> SpecRows,
+        List<TestImageResultRow> Results);
+
     public static class ExcelReportWriter
     {
         public static void WriteTestResults(
             string filePath,
             IEnumerable<string[]> specRows,
             IEnumerable<TestImageResultRow> results,
-            bool includeSharpness,
             double brightnessLowerLimit,
-            double brightnessUpperLimit,
-            double sharpnessLowerLimit)
+            double brightnessUpperLimit)
         {
             var resultRows = results.ToList();
             var sheets = new List<WorksheetData>
@@ -28,18 +32,111 @@ namespace LumasharpChecker.model
                 new("總表", BuildSummaryRows(resultRows).ToList(), new List<ChartData>()),
                 BuildMetricSheet(
                     "亮度",
-                    resultRows.Select((result, index) => new MetricPoint(index + 1, result.FileName, result.Brightness, result.BrightnessSafe, result.BrightnessDeltaPercent)).ToList(),
+                    resultRows.Select((result, index) => new { result, index })
+                        .Where(item => item.result.BrightnessMeasured)
+                        .Select(item => new MetricPoint(item.index + 1, item.result.FileName, item.result.Brightness, item.result.BrightnessSafe, item.result.BrightnessDeltaPercent)).ToList(),
                     brightnessLowerLimit,
-                    brightnessUpperLimit),
-                includeSharpness
-                    ? BuildMetricSheet(
-                        "銳利度",
-                        resultRows.Select((result, index) => new MetricPoint(index + 1, result.FileName, result.Sharpness, result.SharpnessSafe, null)).ToList(),
-                        sharpnessLowerLimit,
-                        null)
-                    : new("銳利度", new List<string[]> { new[] { "亮度模式未檢測銳利度" } }, new List<ChartData>())
+                    brightnessUpperLimit)
             };
 
+            WriteWorkbook(filePath, sheets);
+        }
+
+        public static void WriteMultiStationTestResults(string filePath, IEnumerable<StationExcelReportData> stations)
+        {
+            var stationRows = stations.Where(station => station.Results.Count > 0)
+                .OrderBy(station => station.StationNumber).ToList();
+            if (stationRows.Count == 0) throw new InvalidOperationException("沒有已完成的站別結果可匯出。");
+
+            var sheets = new List<WorksheetData>
+            {
+                new("多站總覽", BuildMultiStationOverviewRows(stationRows), new List<ChartData>())
+            };
+            foreach (var station in stationRows)
+            {
+                sheets.Add(BuildStationBrightnessSheet(station));
+            }
+
+            WriteWorkbook(filePath, sheets);
+        }
+
+        private static WorksheetData BuildStationBrightnessSheet(StationExcelReportData station)
+        {
+            var measured = station.Results.Where(result => result.BrightnessMeasured).ToList();
+            int total = station.Results.Count;
+            int ok = station.Results.Count(result => result.IsOverallPass);
+            int ng = total - ok;
+            double minimum = measured.Count == 0 ? 0 : measured.Min(result => result.BrightnessMin ?? 0);
+            double maximum = measured.Count == 0 ? 255 : measured.Max(result => result.BrightnessMax ?? 255);
+            string SpecValue(string key) => station.SpecRows.FirstOrDefault(row => row.Length > 1 && row[0] == key)?[1] ?? string.Empty;
+
+            var rows = new List<string[]>
+            {
+                new[] { "Recipe", station.RecipeName },
+                new[] { "站別", station.StationNumber.ToString(CultureInfo.InvariantCulture) },
+                new[] { "檢測計數", "張數" },
+                new[] { "總數", total.ToString(CultureInfo.InvariantCulture) },
+                new[] { "OK", ok.ToString(CultureInfo.InvariantCulture) },
+                new[] { "NG", ng.ToString(CultureInfo.InvariantCulture) },
+                new[] { "良率", total == 0 ? "0.00%" : $"{ok * 100.0 / total:F2}%" },
+                Array.Empty<string>(),
+                new[] { "亮度設定", "內容" },
+                new[] { "光源檢測 ROI", SpecValue("光源檢測 ROI") },
+                new[] { "判定方式", SpecValue("亮度判定方式") },
+                new[] { "基準亮度", SpecValue("亮度基準值") },
+                new[] { "下限", SpecValue("亮度有效下限") },
+                new[] { "上限", SpecValue("亮度有效上限") }
+            };
+
+            var points = measured.Select((result, index) => new MetricPoint(index + 1, result.FileName,
+                result.Brightness, result.BrightnessSafe, result.BrightnessDeltaPercent)).ToList();
+            var charts = points.Count == 0
+                ? new List<ChartData>()
+                : new List<ChartData>
+                {
+                    ChartData.Scatter($"站{station.StationNumber:00}亮度點檢結果圖", points, minimum, maximum, ChartAnchor.Compact)
+                };
+            return new WorksheetData($"站{station.StationNumber:00}亮度", rows, charts);
+        }
+
+        private static List<string[]> BuildMultiStationOverviewRows(IReadOnlyList<StationExcelReportData> stations)
+        {
+            var rows = new List<string[]>
+            {
+                new[] { "Recipe", stations[0].RecipeName },
+                new[] { "匯出時間", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) },
+                Array.Empty<string>(),
+                new[] { "站別", "圖片數", "判定 OK", "判定 NG", "良率" }
+            };
+            foreach (var station in stations)
+            {
+                int ok = station.Results.Count(result => result.IsOverallPass);
+                int ng = station.Results.Count - ok;
+                rows.Add(new[]
+                {
+                    station.StationNumber.ToString(CultureInfo.InvariantCulture),
+                    station.Results.Count.ToString(CultureInfo.InvariantCulture),
+                    ok.ToString(CultureInfo.InvariantCulture),
+                    ng.ToString(CultureInfo.InvariantCulture),
+                    station.Results.Count == 0 ? "0.00%" : $"{ok * 100.0 / station.Results.Count:F2}%"
+                });
+            }
+            int totalImages = stations.Sum(station => station.Results.Count);
+            int totalOk = stations.Sum(station => station.Results.Count(result => result.IsOverallPass));
+            int totalNg = totalImages - totalOk;
+            rows.Add(new[]
+            {
+                "全部已測站",
+                totalImages.ToString(CultureInfo.InvariantCulture),
+                totalOk.ToString(CultureInfo.InvariantCulture),
+                totalNg.ToString(CultureInfo.InvariantCulture),
+                totalImages == 0 ? "0.00%" : $"{totalOk * 100.0 / totalImages:F2}%"
+            });
+            return rows;
+        }
+
+        private static void WriteWorkbook(string filePath, IReadOnlyList<WorksheetData> sheets)
+        {
             using var archive = ZipFile.Open(filePath, ZipArchiveMode.Create);
             int drawingCount = sheets.Count(sheet => sheet.Charts.Count > 0);
             int chartCount = sheets.Sum(sheet => sheet.Charts.Count);
@@ -48,6 +145,7 @@ namespace LumasharpChecker.model
             AddText(archive, "_rels/.rels", BuildPackageRelationships());
             AddText(archive, "xl/workbook.xml", BuildWorkbook(sheets));
             AddText(archive, "xl/_rels/workbook.xml.rels", BuildWorkbookRelationships(sheets.Count));
+            AddText(archive, "xl/styles.xml", BuildStyles());
 
             int drawingIndex = 1;
             int chartIndex = 1;
@@ -78,49 +176,41 @@ namespace LumasharpChecker.model
 
         private static IEnumerable<string[]> BuildSummaryRows(IEnumerable<TestImageResultRow> results)
         {
-            yield return new[] { "檔名", "完整路徑", "亮度", "亮度差異(%)", "銳利度", "亮度合格", "銳利度合格", "總判定", "樣式匹配", "亮度ROI_X", "亮度ROI_Y", "亮度ROI_W", "亮度ROI_H", "銳利度ROI_X", "銳利度ROI_Y", "銳利度ROI_W", "銳利度ROI_H", "備註" };
+            yield return new[] { "檔名", "完整路徑", "流程影像路徑", "定位ROI_X", "定位ROI_Y", "定位ROI_W", "定位ROI_H", "亮度", "亮度差異(%)", "光源判定", "總判定", "亮度ROI_X", "亮度ROI_Y", "亮度ROI_W", "亮度ROI_H" };
             foreach (var result in results)
             {
                 yield return new[]
                 {
                     result.FileName,
                     result.FilePath,
+                    result.ProcessedImagePath,
+                    result.RoiX.ToString(CultureInfo.InvariantCulture),
+                    result.RoiY.ToString(CultureInfo.InvariantCulture),
+                    result.RoiW.ToString(CultureInfo.InvariantCulture),
+                    result.RoiH.ToString(CultureInfo.InvariantCulture),
                     FormatNumber(result.Brightness),
                     FormatPercent(result.BrightnessDeltaPercent),
-                    result.IncludeSharpness ? FormatNumber(result.Sharpness) : "N/A",
                     result.BrightnessResult,
-                    result.SharpnessResult,
                     result.OverallResult,
-                    result.MatchResult,
                     result.BrightnessRoiX.ToString(CultureInfo.InvariantCulture),
                     result.BrightnessRoiY.ToString(CultureInfo.InvariantCulture),
                     result.BrightnessRoiW.ToString(CultureInfo.InvariantCulture),
-                    result.BrightnessRoiH.ToString(CultureInfo.InvariantCulture),
-                    result.SharpnessRoiX.ToString(CultureInfo.InvariantCulture),
-                    result.SharpnessRoiY.ToString(CultureInfo.InvariantCulture),
-                    result.SharpnessRoiW.ToString(CultureInfo.InvariantCulture),
-                    result.SharpnessRoiH.ToString(CultureInfo.InvariantCulture),
-                    result.Message
+                    result.BrightnessRoiH.ToString(CultureInfo.InvariantCulture)
                 };
             }
         }
 
         private static WorksheetData BuildMetricSheet(string metricName, IReadOnlyList<MetricPoint> points, double lowerLimit, double? upperLimit)
         {
-            var values = points.Select(point => point.Value).ToList();
-            var histogram = BuildHistogram(values, 12);
             bool hasDeltaPercent = points.Any(point => point.DeltaPercent.HasValue);
             var rows = new List<string[]>
             {
                 new[] { $"{metricName}圖表" },
                 new[] { "規格下限", FormatNumber(lowerLimit) },
                 new[] { "規格上限", upperLimit.HasValue ? FormatNumber(upperLimit.Value) : "N/A" },
-                Array.Empty<string>(),
-                new[] { "分布區間", "張數" }
+                Array.Empty<string>()
             };
 
-            rows.AddRange(histogram.Select(bin => new[] { bin.Label, bin.Count.ToString(CultureInfo.InvariantCulture) }));
-            rows.Add(Array.Empty<string>());
             rows.Add(hasDeltaPercent
                 ? new[] { "圖片序號", "檔名", metricName, "亮度差異(%)", "判定", "規格下限", "規格上限" }
                 : new[] { "圖片序號", "檔名", metricName, "判定", "規格下限", "規格上限" });
@@ -155,44 +245,10 @@ namespace LumasharpChecker.model
 
             var charts = new List<ChartData>
             {
-                ChartData.Bar($"{metricName}分布圖", histogram.Select(bin => bin.Label).ToList(), histogram.Select(bin => bin.Count).ToList(), ChartAnchor.Top),
-                ChartData.Scatter($"{metricName}點檢結果圖", points, lowerLimit, upperLimit, ChartAnchor.Bottom)
+                ChartData.Scatter($"{metricName}點檢結果圖", points, lowerLimit, upperLimit, ChartAnchor.Compact)
             };
 
             return new WorksheetData(metricName, rows, charts);
-        }
-
-        private static List<HistogramBin> BuildHistogram(IReadOnlyList<double> values, int binCount)
-        {
-            if (values.Count == 0)
-            {
-                return new List<HistogramBin> { new("-", 0) };
-            }
-
-            double min = values.Min();
-            double max = values.Max();
-            if (Math.Abs(max - min) < double.Epsilon)
-            {
-                return new List<HistogramBin> { new($"{min:F2}", values.Count) };
-            }
-
-            double width = (max - min) / binCount;
-            var bins = Enumerable.Range(0, binCount)
-                .Select(index =>
-                {
-                    double lower = min + index * width;
-                    double upper = index == binCount - 1 ? max : lower + width;
-                    return new HistogramBin($"{lower:F2} ~ {upper:F2}", 0);
-                })
-                .ToList();
-
-            foreach (double value in values)
-            {
-                int index = Math.Min(binCount - 1, (int)((value - min) / width));
-                bins[index] = bins[index] with { Count = bins[index].Count + 1 };
-            }
-
-            return bins;
         }
 
         private static string BuildContentTypes(int sheetCount, int drawingCount, int chartCount)
@@ -215,6 +271,7 @@ namespace LumasharpChecker.model
             {
                 sb.Append($"""<Override PartName="/xl/charts/chart{i}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>""");
             }
+            sb.Append("""<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>""");
             sb.Append("</Types>");
             return sb.ToString();
         }
@@ -246,22 +303,61 @@ namespace LumasharpChecker.model
             {
                 sb.Append($"""<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet{i}.xml"/>""");
             }
+            sb.Append($"""<Relationship Id="rId{sheetCount + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>""");
             sb.Append("</Relationships>");
             return sb.ToString();
         }
 
+        private static string BuildStyles()
+        {
+            return """
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+  <fonts count="3">
+    <font><sz val="10"/><name val="Aptos"/><family val="2"/></font>
+    <font><b/><sz val="10"/><name val="Aptos"/><family val="2"/><color rgb="FF17365D"/></font>
+    <font><b/><sz val="13"/><name val="Aptos Display"/><family val="2"/><color rgb="FF17365D"/></font>
+  </fonts>
+  <fills count="4">
+    <fill><patternFill patternType="none"/></fill>
+    <fill><patternFill patternType="gray125"/></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFEAF2F8"/><bgColor indexed="64"/></patternFill></fill>
+    <fill><patternFill patternType="solid"><fgColor rgb="FFDDEBF7"/><bgColor indexed="64"/></patternFill></fill>
+  </fills>
+  <borders count="2">
+    <border><left/><right/><top/><bottom/><diagonal/></border>
+    <border><left style="thin"><color rgb="FFB7C9D6"/></left><right style="thin"><color rgb="FFB7C9D6"/></right><top style="thin"><color rgb="FFB7C9D6"/></top><bottom style="thin"><color rgb="FFB7C9D6"/></bottom><diagonal/></border>
+  </borders>
+  <cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+  <cellXfs count="4">
+    <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1"/>
+    <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="2" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+    <xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment vertical="center" wrapText="1"/></xf>
+  </cellXfs>
+  <cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>
+</styleSheet>
+""";
+        }
+
         private static string BuildWorksheet(IEnumerable<string[]> rows, bool hasCharts)
         {
+            var rowList = rows.ToList();
             var sb = new StringBuilder();
             sb.Append("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>""");
-            sb.Append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetData>""");
+            sb.Append("""<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheetViews><sheetView showGridLines="0" workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="20"/>""");
+            sb.Append(BuildColumnDefinitions(rowList));
+            sb.Append("<sheetData>");
             int rowIndex = 1;
-            foreach (var row in rows)
+            foreach (var row in rowList)
             {
-                sb.Append($"""<row r="{rowIndex}">""");
-                foreach (var cell in row)
+                int rowStyle = GetRowStyle(row);
+                sb.Append($"""<row r="{rowIndex}" ht="{(rowStyle == 2 ? "24" : "20")}" customHeight="1">""");
+                for (int columnIndex = 0; columnIndex < row.Length; columnIndex++)
                 {
-                    sb.Append($"""<c t="inlineStr"><is><t>{Escape(cell)}</t></is></c>""");
+                    string cell = row[columnIndex];
+                    int style = rowStyle == 0 ? 0 : rowStyle;
+                    sb.Append($"""<c r="{CellAddress(columnIndex + 1, rowIndex)}" s="{style}" t="inlineStr"><is><t>{Escape(cell)}</t></is></c>""");
                 }
                 sb.Append("</row>");
                 rowIndex++;
@@ -273,6 +369,42 @@ namespace LumasharpChecker.model
             }
             sb.Append("</worksheet>");
             return sb.ToString();
+        }
+
+        private static string BuildColumnDefinitions(IReadOnlyList<string[]> rows)
+        {
+            int maxColumns = rows.Count == 0 ? 0 : rows.Max(row => row.Length);
+            if (maxColumns == 0) return string.Empty;
+            var sb = new StringBuilder("<cols>");
+            for (int column = 0; column < maxColumns; column++)
+            {
+                int maxLength = rows.Where(row => row.Length > column)
+                    .Select(row => row[column]?.Length ?? 0).DefaultIfEmpty(0).Max();
+                double width = Math.Max(12, Math.Min(48, maxLength + 2));
+                sb.Append($"""<col min="{column + 1}" max="{column + 1}" width="{width.ToString("F1", CultureInfo.InvariantCulture)}" customWidth="1"/>""");
+            }
+            return sb.Append("</cols>").ToString();
+        }
+
+        private static int GetRowStyle(string[] row)
+        {
+            string first = row.FirstOrDefault() ?? string.Empty;
+            if (first == "全部已測站") return 3;
+            if (row.Length == 1 && !string.IsNullOrWhiteSpace(first)) return 2;
+            if (first is "項目" or "檔名" or "站別" or "分布區間" or "圖片序號") return 1;
+            return 0;
+        }
+
+        private static string CellAddress(int column, int row)
+        {
+            var name = new StringBuilder();
+            while (column > 0)
+            {
+                column--;
+                name.Insert(0, (char)('A' + column % 26));
+                column /= 26;
+            }
+            return name.Append(row.ToString(CultureInfo.InvariantCulture)).ToString();
         }
 
         private static string BuildWorksheetRelationship(int drawingIndex)
@@ -287,10 +419,12 @@ namespace LumasharpChecker.model
             for (int i = 0; i < charts.Count; i++)
             {
                 var anchor = charts[i].Anchor;
-                int fromRow = anchor == ChartAnchor.Top ? 1 : 24;
-                int toRow = anchor == ChartAnchor.Top ? 21 : 49;
+                int fromRow = anchor == ChartAnchor.Bottom ? 24 : 1;
+                int toRow = anchor == ChartAnchor.Top ? 21 : anchor == ChartAnchor.Bottom ? 49 : 16;
+                int fromColumn = anchor == ChartAnchor.Compact ? 2 : 3;
+                int toColumn = anchor == ChartAnchor.Compact ? 12 : 18;
                 int relId = i + 1;
-                sb.Append($"""<xdr:twoCellAnchor><xdr:from><xdr:col>3</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>18</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="{chartIndices[i] + 1}" name="Chart {chartIndices[i]}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId{relId}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>""");
+                sb.Append($"""<xdr:twoCellAnchor><xdr:from><xdr:col>{fromColumn}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{fromRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>{toColumn}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>{toRow}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="{chartIndices[i] + 1}" name="Chart {chartIndices[i]}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId{relId}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>""");
             }
             sb.Append("</xdr:wsDr>");
             return sb.ToString();
@@ -332,13 +466,13 @@ namespace LumasharpChecker.model
             string upperSeries = chart.UpperLineValue.HasValue
                 ? BuildSpecLineSeries(3, "規格上限", chart.AllXValues, chart.UpperLineValue.Value)
                 : string.Empty;
-            string yScaling = BuildAxisScaling(chart.YAxisMinimum, chart.YAxisMaximum);
+            string yScaling = BuildAutoAxisScaling();
             string xScaling = BuildAxisScaling(1, Math.Max(1, chart.AllXValues.Count));
             string xMajorUnitValue = chart.AllXValues.Count > 30
                 ? Math.Ceiling(chart.AllXValues.Count / 10.0).ToString("G", CultureInfo.InvariantCulture)
                 : "1";
 
-            return $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="1400"/><a:t>{Escape(chart.Title)}</a:t></a:r></a:p></c:rich></c:tx><c:layout/></c:title><c:plotArea><c:layout/><c:scatterChart><c:scatterStyle val="lineMarker"/>{okSeries}{ngSeries}{lowerSeries}{upperSeries}<c:axId val="{xAxisId}"/><c:axId val="{yAxisId}"/></c:scatterChart><c:valAx><c:axId val="{xAxisId}"/><c:delete val="0"/>{xScaling}<c:axPos val="b"/>{BuildAxisTitle("圖片序號")}<c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:ln></c:spPr><c:txPr>{BuildAxisTextProperties()}</c:txPr><c:crossAx val="{yAxisId}"/><c:crosses val="min"/><c:majorUnit val="{xMajorUnitValue}"/></c:valAx><c:valAx><c:axId val="{yAxisId}"/><c:delete val="0"/>{yScaling}<c:axPos val="l"/>{BuildMajorGridlines()}<c:numFmt formatCode="0.00" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:ln></c:spPr><c:txPr>{BuildAxisTextProperties()}</c:txPr><c:crossAx val="{xAxisId}"/><c:crosses val="min"/><c:majorUnit val="{chart.YAxisMajorUnit.ToString("G", CultureInfo.InvariantCulture)}"/></c:valAx></c:plotArea><c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/></c:chart></c:chartSpace>""";
+            return $"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:chart><c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="1400"/><a:t>{Escape(chart.Title)}</a:t></a:r></a:p></c:rich></c:tx><c:layout/></c:title><c:plotArea><c:layout/><c:scatterChart><c:scatterStyle val="lineMarker"/>{okSeries}{ngSeries}{lowerSeries}{upperSeries}<c:axId val="{xAxisId}"/><c:axId val="{yAxisId}"/></c:scatterChart><c:valAx><c:axId val="{xAxisId}"/><c:delete val="0"/>{xScaling}<c:axPos val="b"/>{BuildAxisTitle("圖片序號")}<c:numFmt formatCode="0" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:ln></c:spPr><c:txPr>{BuildAxisTextProperties()}</c:txPr><c:crossAx val="{yAxisId}"/><c:crosses val="min"/><c:majorUnit val="{xMajorUnitValue}"/></c:valAx><c:valAx><c:axId val="{yAxisId}"/><c:delete val="0"/>{yScaling}<c:axPos val="l"/>{BuildMajorGridlines()}<c:numFmt formatCode="0.00" sourceLinked="0"/><c:majorTickMark val="out"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln w="9525"><a:solidFill><a:srgbClr val="595959"/></a:solidFill></a:ln></c:spPr><c:txPr>{BuildAxisTextProperties()}</c:txPr><c:crossAx val="{xAxisId}"/><c:crosses val="min"/></c:valAx></c:plotArea><c:legend><c:legendPos val="r"/><c:layout/></c:legend><c:plotVisOnly val="1"/></c:chart></c:chartSpace>""";
         }
 
         private static string BuildPointSeries(int index, string name, IReadOnlyList<double> xValues, IReadOnlyList<double> yValues, string color, string marker, int markerSize, bool showValues)
@@ -367,6 +501,8 @@ namespace LumasharpChecker.model
             return $"""<c:scaling><c:orientation val="minMax"/><c:min val="{minimum.ToString("G", CultureInfo.InvariantCulture)}"/><c:max val="{maximum.ToString("G", CultureInfo.InvariantCulture)}"/></c:scaling>""";
         }
 
+        private static string BuildAutoAxisScaling() => """<c:scaling><c:orientation val="minMax"/></c:scaling>""";
+
         private static string BuildAxisTitle(string title)
         {
             return $"""<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr sz="900"/><a:t>{Escape(title)}</a:t></a:r></a:p></c:rich></c:tx><c:layout/></c:title>""";
@@ -380,47 +516,6 @@ namespace LumasharpChecker.model
         private static string BuildMajorGridlines()
         {
             return """<c:majorGridlines><c:spPr><a:ln w="6350"><a:solidFill><a:srgbClr val="D9D9D9"/></a:solidFill></a:ln></c:spPr></c:majorGridlines>""";
-        }
-
-        private static (double Minimum, double Maximum, double MajorUnit) CalculateYAxisRange(IReadOnlyList<double> values, double lowerLimit, double? upperLimit)
-        {
-            var rangeValues = values.Concat(new[] { lowerLimit }).ToList();
-            if (upperLimit.HasValue)
-            {
-                rangeValues.Add(upperLimit.Value);
-            }
-
-            if (rangeValues.Count == 0)
-            {
-                return (0, 1, 0.2);
-            }
-
-            double minimum = rangeValues.Min();
-            double maximum = rangeValues.Max();
-            double span = Math.Max(maximum - minimum, Math.Max(Math.Abs(maximum) * 0.02, 1));
-            double padding = span * 0.10;
-            double majorUnit = CalculateNiceStep(span / 5);
-            double axisMinimum = Math.Floor((minimum - padding) / majorUnit) * majorUnit;
-            double axisMaximum = Math.Ceiling((maximum + padding) / majorUnit) * majorUnit;
-            if (Math.Abs(axisMaximum - axisMinimum) < double.Epsilon)
-            {
-                axisMaximum = axisMinimum + majorUnit;
-            }
-
-            return (axisMinimum, axisMaximum, majorUnit);
-        }
-
-        private static double CalculateNiceStep(double rawStep)
-        {
-            if (rawStep <= 0 || double.IsNaN(rawStep) || double.IsInfinity(rawStep))
-            {
-                return 1;
-            }
-
-            double magnitude = Math.Pow(10, Math.Floor(Math.Log10(rawStep)));
-            double normalized = rawStep / magnitude;
-            double niceNormalized = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
-            return niceNormalized * magnitude;
         }
 
         private static string BuildStringLiteral(IReadOnlyList<string> values)
@@ -475,7 +570,6 @@ namespace LumasharpChecker.model
         }
 
         private sealed record WorksheetData(string Name, List<string[]> Rows, List<ChartData> Charts);
-        private sealed record HistogramBin(string Label, int Count);
         private sealed record MetricPoint(int Index, string FileName, double Value, bool IsPass, double? DeltaPercent);
 
         private enum ChartKind
@@ -487,7 +581,8 @@ namespace LumasharpChecker.model
         private enum ChartAnchor
         {
             Top,
-            Bottom
+            Bottom,
+            Compact
         }
 
         private sealed record ChartData(
@@ -502,10 +597,7 @@ namespace LumasharpChecker.model
             IReadOnlyList<double> NgXValues,
             IReadOnlyList<double> NgYValues,
             double LowerLineValue,
-            double? UpperLineValue,
-            double YAxisMinimum,
-            double YAxisMaximum,
-            double YAxisMajorUnit)
+            double? UpperLineValue)
         {
             public static ChartData Bar(string title, IReadOnlyList<string> categories, IReadOnlyList<int> counts, ChartAnchor anchor)
             {
@@ -521,10 +613,7 @@ namespace LumasharpChecker.model
                     Array.Empty<double>(),
                     Array.Empty<double>(),
                     0,
-                    null,
-                    0,
-                    1,
-                    0.2);
+                    null);
             }
 
             public static ChartData Scatter(string title, IReadOnlyList<MetricPoint> points, double lowerLineValue, double? upperLineValue, ChartAnchor anchor)
@@ -532,8 +621,6 @@ namespace LumasharpChecker.model
                 var okPoints = points.Where(point => point.IsPass).ToList();
                 var ngPoints = points.Where(point => !point.IsPass).ToList();
                 var allXValues = points.Select(point => (double)point.Index).ToList();
-                var (minimum, maximum, majorUnit) = CalculateYAxisRange(points.Select(point => point.Value).ToList(), lowerLineValue, upperLineValue);
-
                 return new ChartData(
                     ChartKind.Scatter,
                     title,
@@ -546,10 +633,7 @@ namespace LumasharpChecker.model
                     ngPoints.Select(point => (double)point.Index).ToList(),
                     ngPoints.Select(point => point.Value).ToList(),
                     lowerLineValue,
-                    upperLineValue,
-                    minimum,
-                    maximum,
-                    majorUnit);
+                    upperLineValue);
             }
         }
     }

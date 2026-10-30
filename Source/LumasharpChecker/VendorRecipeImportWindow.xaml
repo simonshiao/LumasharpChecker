@@ -71,10 +71,10 @@
                 <DockPanel>
                     <StackPanel DockPanel.Dock="Top" Margin="0,0,0,8">
                         <TextBlock Text="差異比對" FontWeight="SemiBold"/>
-                        <TextBlock Text="新增、修改與移除的檔案會列在這裡。"
+                        <TextBlock Text="開啟時自動比對；變更選取後會重新比對。"
                                    Foreground="{StaticResource Muted}" FontSize="11" Margin="0,3,0,0"/>
                     </StackPanel>
-                    <TextBox Text="{Binding PreviewText}" IsReadOnly="True" TextWrapping="NoWrap"
+                    <TextBox Text="{Binding PreviewText, Mode=OneWay}" IsReadOnly="True" TextWrapping="NoWrap"
                              AcceptsReturn="True" AcceptsTab="False" VerticalScrollBarVisibility="Auto"
                              HorizontalScrollBarVisibility="Auto" FontFamily="Consolas"
                              FontSize="11" Padding="8" BorderBrush="{StaticResource Line}"
@@ -87,7 +87,6 @@
             <TextBlock Text="{Binding StatusMessage}" Foreground="{StaticResource Muted}"
                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
             <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button Content="比對" MinWidth="90" Click="Compare_Click" Margin="0,0,8,0"/>
                 <Button Content="匯入／更新" MinWidth="110" IsEnabled="{Binding IsPreviewReady}"
                         Style="{DynamicResource HudPrimaryButton}" Click="Confirm_Click" Margin="0,0,8,0"/>
                 <Button Content="取消" MinWidth="80" Click="Cancel_Click"/>
@@ -95,3 +94,4 @@
         </DockPanel>
     </Grid>
 </Window>
+

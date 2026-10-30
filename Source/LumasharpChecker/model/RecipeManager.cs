@@ -50,6 +50,7 @@ public sealed class RecipeManager
         public string? TrainingImageRoot { get; set; }
         public string? TrainingProductCode { get; set; }
         public string? VendorRecipePath { get; set; }
+        public string? LocalNativeRecipeName { get; set; }
         public List<RecipeStation> Stations { get; set; } = CreateStations();
 
         private static List<RecipeStation> CreateStations() =>
@@ -61,8 +62,12 @@ public sealed class RecipeManager
         public int Number { get; set; }
         public bool IsConfigured { get; set; }
         public string? SourceProfileName { get; set; }
+        // Local workflow choices belong to this Recipe/station, not the shared UI defaults.
+        public string? FlowSelection { get; set; }
+        public bool LightInspectionEnabled { get; set; } = true;
         public string? OkDatabasePath { get; set; }
         public string? NgDatabasePath { get; set; }
+        public string? AllDatabasePath { get; set; }
         // 僅供原廠 AI 模型來源追溯，不表示 LumasharpChecker 可直接使用這些格式。
         public List<string> VendorAiModelFiles { get; set; } = new();
     }
@@ -110,6 +115,58 @@ public sealed class RecipeManager
         if (preferences.StationCount is not (8 or 10))
             throw new ArgumentOutOfRangeException(nameof(preferences), "站數只能是 8 或 10。");
         WriteJsonAtomically(PreferencesPath, preferences);
+    }
+
+    public string LoadFlowSelection(RecipeManifest recipe, int stationNumber)
+    {
+        ValidateStationNumber(stationNumber);
+        string? saved = recipe.Stations.FirstOrDefault(s => s.Number == stationNumber)?.FlowSelection;
+        if (saved != null && saved.Length == 3 && saved.All(c => c == '0' || c == '1')) return saved;
+        return ReadNativeFlowSelection(recipe, stationNumber);
+    }
+
+    public string ReadNativeFlowSelection(RecipeManifest recipe, int stationNumber)
+    {
+        ValidateStationNumber(stationNumber);
+        string file = Path.Combine(GetRecipeDirectory(recipe), "vendor-source", "station" + stationNumber + ".ini");
+        var enabled = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+        bool main = false;
+        if (File.Exists(file)) foreach (string line in File.ReadAllLines(file))
+        {
+            string text = line.Trim();
+            if (text.StartsWith("[")) { main = text.Equals("[Main]", StringComparison.OrdinalIgnoreCase); continue; }
+            if (!main) continue;
+            int equals = text.IndexOf('='); if (equals < 0) continue;
+            string key = text.Substring(0, equals).Trim(), value = text.Substring(equals + 1).Split(';', '#')[0].Trim();
+            enabled[key] = value.Equals("True", StringComparison.OrdinalIgnoreCase) || value == "1";
+        }
+        return string.Concat(new[] { "LocateToolON", "SelectWayON", "SelectFaceON" }.Select(k => enabled.TryGetValue(k, out bool on) && on ? "1" : "0"));
+    }
+
+    public void SaveFlowSelection(RecipeManifest recipe, int stationNumber, string selection)
+    {
+        ValidateStationNumber(stationNumber);
+        if (selection == null || selection.Length != 3 || selection.Any(c => c != '0' && c != '1'))
+            throw new ArgumentException("無效的工具啟用設定。", nameof(selection));
+        var station = recipe.Stations.FirstOrDefault(s => s.Number == stationNumber);
+        if (station == null) { station = new RecipeStation { Number = stationNumber }; recipe.Stations.Add(station); }
+        station.FlowSelection = selection;
+        SaveManifest(recipe);
+    }
+
+    public bool LoadLightInspectionEnabled(RecipeManifest recipe, int stationNumber)
+    {
+        ValidateStationNumber(stationNumber);
+        return recipe.Stations.FirstOrDefault(station => station.Number == stationNumber)?.LightInspectionEnabled ?? true;
+    }
+
+    public void SaveLightInspectionEnabled(RecipeManifest recipe, int stationNumber, bool enabled)
+    {
+        ValidateStationNumber(stationNumber);
+        var station = recipe.Stations.FirstOrDefault(item => item.Number == stationNumber);
+        if (station == null) { station = new RecipeStation { Number = stationNumber }; recipe.Stations.Add(station); }
+        station.LightInspectionEnabled = enabled;
+        SaveManifest(recipe);
     }
 
     public List<RecipeManifest> LoadAllRecipes()

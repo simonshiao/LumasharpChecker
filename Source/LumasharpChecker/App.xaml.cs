@@ -64,12 +64,19 @@ namespace LumasharpChecker
                 }
             }
             mainWindow.Show();
+            mainWindow.Dispatcher.BeginInvoke(new Action(viewModel.CheckDefaultVendorRecipeChanges));
             if (e.Args.Any(arg => string.Equals(arg, "--show-multi-appearance-preview", StringComparison.OrdinalIgnoreCase)))
             {
                 mainWindow.Dispatcher.BeginInvoke(new Action(() =>
                     viewModel.OpenMultiAppearanceCalibrationPreviewCommand.Execute(null)));
             }
         }
+        protected override void OnExit(ExitEventArgs e)
+        {
+            LumasharpChecker.model.NativeRecipeBridge.ShutdownWorker();
+            base.OnExit(e);
+        }
+
         private void ActivateExistingWindow()
         {
             // 查找当前进程的同名进程

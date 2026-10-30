@@ -12,8 +12,7 @@ public sealed class LightInspectionSettings
     public bool HasRoi { get; set; }
     public double Minimum { get; set; }
     public double Maximum { get; set; } = 255;
-    // 舊版 JSON 只有 Minimum/Maximum，預設沿用固定上下限，不破壞既有判定。
-    public string LimitMode { get; set; } = "固定上下限";
+    public string LimitMode { get; set; } = "百分比偏差";
     public double BaseValue { get; set; }
     public double PercentLower { get; set; } = 10;
     public double PercentUpper { get; set; } = 10;

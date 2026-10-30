@@ -42,6 +42,13 @@ public sealed class StationSlotViewModel : ObservableObject
         private set => SetProperty(ref _batchNgCount, value);
     }
 
+    private int _batchRetestCount;
+    public int BatchRetestCount
+    {
+        get => _batchRetestCount;
+        private set => SetProperty(ref _batchRetestCount, value);
+    }
+
     private string _batchStatus = "尚未測試";
     public string BatchStatus
     {
@@ -69,14 +76,16 @@ public sealed class StationSlotViewModel : ObservableObject
     }
     public string BatchOkText => BatchStatus == "完成" ? BatchOkCount.ToString("N0") : "—";
     public string BatchNgText => BatchStatus == "完成" ? BatchNgCount.ToString("N0") : "—";
+    public string BatchRetestText => BatchStatus == "完成" ? BatchRetestCount.ToString("N0") : "—";
     public double BatchYieldValue => BatchStatus == "完成" && BatchOkCount + BatchNgCount > 0
         ? BatchOkCount * 100.0 / (BatchOkCount + BatchNgCount) : 0;
     public string BatchDetails { get; private set; } = string.Empty;
 
-    public void ApplyBatchResult(int okCount, int ngCount, string status, string details = "")
+    public void ApplyBatchResult(int okCount, int ngCount, string status, string details = "", int retestCount = 0)
     {
         BatchOkCount = okCount;
         BatchNgCount = ngCount;
+        BatchRetestCount = retestCount;
         BatchStatus = status;
         BatchDetails = details;
         BatchYield = status == "完成" && okCount + ngCount > 0
@@ -84,6 +93,7 @@ public sealed class StationSlotViewModel : ObservableObject
             : "—";
         OnPropertyChanged(nameof(BatchOkText));
         OnPropertyChanged(nameof(BatchNgText));
+        OnPropertyChanged(nameof(BatchRetestText));
         OnPropertyChanged(nameof(BatchYieldValue));
         OnPropertyChanged(nameof(BatchDetails));
     }

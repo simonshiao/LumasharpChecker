@@ -25,6 +25,25 @@ public partial class DatabaseSetupWindow : Window
     private void ChooseNgFolder_Click(object sender, RoutedEventArgs e)
         => ChooseStationFolder(sender, false);
 
+    private void ChooseAllFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not StationDatabasePathViewModel row
+            || DataContext is not mainViewModel vm) return;
+        try
+        {
+            string? selected = ExplorerFolderPicker.PickFolder(this,
+                $"第 {row.Number:00} 站 · 選擇 ALL 圖庫資料夾",
+                string.IsNullOrWhiteSpace(row.AllPath) ? row.OkPath : row.AllPath);
+            if (selected == null) return;
+            vm.SetStationAllDatabaseFolder(row.Number, selected);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"第 {row.Number:00} 站 ALL 圖庫無法儲存：\n{ex.Message}",
+                "圖庫設定失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void ChooseStationFolder(object sender, bool isOk)
     {
         if (sender is not Button button || button.DataContext is not StationDatabasePathViewModel row

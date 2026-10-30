@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -7,6 +7,8 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -29,15 +31,21 @@ namespace LumasharpChecker.viewmodel
     {
         public string FileName { get; set; } = string.Empty;
         public string FilePath { get; set; } = string.Empty;
+        public string ProcessedImagePath { get; set; } = string.Empty;
+        public string InspectionPipeline { get; set; } = "Profile";
         public double Brightness { get; set; }
         public double? BrightnessMin { get; set; }
         public double? BrightnessMax { get; set; }
         public double BrightnessDeltaPercent { get; set; }
         public double Sharpness { get; set; }
         public bool BrightnessSafe { get; set; }
+        public bool BrightnessMeasured { get; set; } = true;
+        public bool LightInspectionSkipped { get; set; }
         public bool SharpnessSafe { get; set; }
         public bool IncludeSharpness { get; set; } = true;
         public bool IsMatched { get; set; }
+        /// <summary>Expected class from the source DB folder (OK/NG); this is not the detector output.</summary>
+        public string ReferenceClass { get; set; } = "未標記";
         public int RoiX { get; set; }
         public int RoiY { get; set; }
         public int RoiW { get; set; }
@@ -51,12 +59,22 @@ namespace LumasharpChecker.viewmodel
         public int SharpnessRoiW { get; set; }
         public int SharpnessRoiH { get; set; }
         public string Message { get; set; } = string.Empty;
-        public bool IsOverallPass => BrightnessSafe && (!IncludeSharpness || SharpnessSafe) && IsMatched;
-        public string BrightnessResult => BrightnessSafe ? "OK" : "NG";
+        public bool IsOverallPass => (LightInspectionSkipped || BrightnessSafe) && (!IncludeSharpness || SharpnessSafe) && IsMatched;
+        public bool IsRetest => InspectionPipeline == "新版流程" && !BrightnessMeasured && !LightInspectionSkipped;
+        public string BrightnessResult => !BrightnessMeasured ? "未執行" : BrightnessSafe ? "OK" : "NG";
         public string BrightnessDeltaPercentText => double.IsNaN(BrightnessDeltaPercent) ? "N/A" : $"{BrightnessDeltaPercent:+0.00;-0.00;0.00}%";
         public string SharpnessResult => IncludeSharpness ? (SharpnessSafe ? "OK" : "NG") : "N/A";
-        public string OverallResult => IsOverallPass ? "OK" : "NG";
-        public string MatchResult => IsMatched ? "OK" : "NG";
+        public string OverallResult => IsRetest ? "Retest" : IsOverallPass ? "OK" : "NG";
+        public string MatchResult => IsRetest ? "未完成" : IsMatched ? "OK" : "NG";
+        public string ClassificationCheck => ReferenceClass switch
+        {
+            _ when IsRetest => "待複判",
+            "OK" when IsOverallPass => "正確",
+            "OK" => "OK 誤判 NG",
+            "NG" when !IsOverallPass => "正確",
+            "NG" => "NG 誤判 OK",
+            _ => "未標記"
+        };
         public string RoiDisplay => IncludeSharpness
             ? $"亮度 X:{BrightnessRoiX} Y:{BrightnessRoiY} W:{BrightnessRoiW} H:{BrightnessRoiH} / 銳利度 X:{SharpnessRoiX} Y:{SharpnessRoiY} W:{SharpnessRoiW} H:{SharpnessRoiH}"
             : $"亮度 X:{BrightnessRoiX} Y:{BrightnessRoiY} W:{BrightnessRoiW} H:{BrightnessRoiH}";
@@ -75,16 +93,22 @@ namespace LumasharpChecker.viewmodel
         public int Number { get; init; }
         public string OkPath { get; init; } = string.Empty;
         public string NgPath { get; init; } = string.Empty;
+        public string AllPath { get; init; } = string.Empty;
         public bool OkDirectoryExists { get; init; }
         public bool NgDirectoryExists { get; init; }
+        public bool AllDirectoryExists { get; init; }
         public string OkStatus => string.IsNullOrWhiteSpace(OkPath) ? "未設定" : OkDirectoryExists ? "可用" : "不存在";
         public string NgStatus => string.IsNullOrWhiteSpace(NgPath) ? "未設定" : NgDirectoryExists ? "可用" : "不存在";
+        public string AllStatus => string.IsNullOrWhiteSpace(AllPath) ? "未設定" : AllDirectoryExists ? "可用" : "不存在";
         public string OkPathDisplay => string.IsNullOrWhiteSpace(OkPath) ? "—" : OkPath;
         public string NgPathDisplay => string.IsNullOrWhiteSpace(NgPath) ? "—" : NgPath;
+        public string AllPathDisplay => string.IsNullOrWhiteSpace(AllPath) ? "—" : AllPath;
         public Brush OkStatusBrush => string.IsNullOrWhiteSpace(OkPath) ? Brushes.LightGray :
             OkDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
         public Brush NgStatusBrush => string.IsNullOrWhiteSpace(NgPath) ? Brushes.LightGray :
             NgDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
+        public Brush AllStatusBrush => string.IsNullOrWhiteSpace(AllPath) ? Brushes.LightGray :
+            AllDirectoryExists ? Brushes.MediumSeaGreen : Brushes.IndianRed;
     }
 
     public static class BatchPreviewModes
@@ -108,6 +132,7 @@ namespace LumasharpChecker.viewmodel
         private string? _activeStationDatabase;
         private readonly Dictionary<string, int> _testImageResultIndexes = new(StringComparer.OrdinalIgnoreCase);
         private int _brightnessOkResultCount;
+        private int _brightnessNgResultCount;
         private int _sharpnessOkResultCount;
         private int _overallOkResultCount;
 
@@ -318,14 +343,10 @@ namespace LumasharpChecker.viewmodel
 
         private void UpdateDisplayImage()
         {
-            // 如果有測試圖片，顯示測試圖片；否則顯示 Profile 範本圖片
+            // Main preview uses loaded inspection images; legacy profile templates are not display sources.
             if (CurrentTestImageBitmap != null)
             {
                 DisplayImage = CurrentTestImageBitmap;
-            }
-            else if (CurrentProfile?.Bitmap != null)
-            {
-                DisplayImage = CurrentProfile.Bitmap;
             }
             else
             {
@@ -398,23 +419,6 @@ namespace LumasharpChecker.viewmodel
         public double StrokeThickness2 => 4;// / ScaleFactor;
         public double StrokeThickness3 => 4;
 
-        // ── ROI 顯示模式：設定框（設計期座標）/ 結果框（模板匹配偏移後座標） ──
-        public enum RoiDisplayStyle { Design, Result }
-
-        [ObservableProperty]
-        private RoiDisplayStyle _roiDisplayMode = RoiDisplayStyle.Design;
-
-        [RelayCommand]
-        private void ToggleRoiDisplayMode() => RoiDisplayMode = RoiDisplayMode == RoiDisplayStyle.Design
-            ? RoiDisplayStyle.Result : RoiDisplayStyle.Design;
-
-        public string RoiDisplayLabelText => RoiDisplayMode == RoiDisplayStyle.Result ? "結果框" : "設定框";
-
-        partial void OnRoiDisplayModeChanged(RoiDisplayStyle value)
-        {
-            UpdateDisplayRoiProperties();
-        }
-
         private void UpdateDisplayRoiProperties()
         {
             OnPropertyChanged(nameof(DisplayRectX));
@@ -430,36 +434,24 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(DisplayRectWidth3));
             OnPropertyChanged(nameof(DisplayRectHeight3));
             OnPropertyChanged(nameof(IsGreenBoxVisible));
+            OnPropertyChanged(nameof(IsBrightnessBoxVisible));
         }
 
-        // 綠框（定位框）：Result 模式下走 TestImageROI（空時退回設計座標）
-        public double DisplayRectX => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalX : (TestImageROI.IsEmpty ? OriginalX : TestImageROI.X);
-        public double DisplayRectY => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalY : (TestImageROI.IsEmpty ? OriginalY : TestImageROI.Y);
-        public double DisplayRectWidth => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalWidth : (TestImageROI.IsEmpty ? OriginalWidth : TestImageROI.Width);
-        public double DisplayRectHeight => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalHeight : (TestImageROI.IsEmpty ? OriginalHeight : TestImageROI.Height);
-
-        // 藍框（亮度 ROI）：Result 模式下走 TestImageBrightnessROI（空時退回設計座標）
-        public double DisplayRectX2 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalX2 : (TestImageBrightnessROI.IsEmpty ? OriginalX2 : TestImageBrightnessROI.X);
-        public double DisplayRectY2 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalY2 : (TestImageBrightnessROI.IsEmpty ? OriginalY2 : TestImageBrightnessROI.Y);
-        public double DisplayRectWidth2 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalWidth2 : (TestImageBrightnessROI.IsEmpty ? OriginalWidth2 : TestImageBrightnessROI.Width);
-        public double DisplayRectHeight2 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalHeight2 : (TestImageBrightnessROI.IsEmpty ? OriginalHeight2 : TestImageBrightnessROI.Height);
-
-        // 紅框（銳利度 ROI）：Result 模式下走 TestImageSharpnessROI（空時退回設計座標）
-        public double DisplayRectX3 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalX3 : (TestImageSharpnessROI.IsEmpty ? OriginalX3 : TestImageSharpnessROI.X);
-        public double DisplayRectY3 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalY3 : (TestImageSharpnessROI.IsEmpty ? OriginalY3 : TestImageSharpnessROI.Y);
-        public double DisplayRectWidth3 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalWidth3 : (TestImageSharpnessROI.IsEmpty ? OriginalWidth3 : TestImageSharpnessROI.Width);
-        public double DisplayRectHeight3 => RoiDisplayMode == RoiDisplayStyle.Design ? OriginalHeight3 : (TestImageSharpnessROI.IsEmpty ? OriginalHeight3 : TestImageSharpnessROI.Height);
-
-        // 綠框 visibility：設定模式時永遠顯示；結果模式下有定位結果才顯示
-        public bool IsGreenBoxVisible
-        {
-            get
-            {
-                if (RoiDisplayMode == RoiDisplayStyle.Design) return true;
-                // Result 模式：有定位結果才顯示
-                return TestImageROI.Width > 0 && TestImageROI.Height > 0;
-            }
-        }
+        // Main preview displays actual inspection results only. Missing results never fall back to legacy templates.
+        public double DisplayRectX => TestImageROI.X;
+        public double DisplayRectY => TestImageROI.Y;
+        public double DisplayRectWidth => TestImageROI.Width;
+        public double DisplayRectHeight => TestImageROI.Height;
+        public double DisplayRectX2 => TestImageBrightnessROI.X;
+        public double DisplayRectY2 => TestImageBrightnessROI.Y;
+        public double DisplayRectWidth2 => TestImageBrightnessROI.Width;
+        public double DisplayRectHeight2 => TestImageBrightnessROI.Height;
+        public double DisplayRectX3 => TestImageSharpnessROI.X;
+        public double DisplayRectY3 => TestImageSharpnessROI.Y;
+        public double DisplayRectWidth3 => TestImageSharpnessROI.Width;
+        public double DisplayRectHeight3 => TestImageSharpnessROI.Height;
+        public bool IsGreenBoxVisible => TestImageROI.Width > 0 && TestImageROI.Height > 0;
+        public bool IsBrightnessBoxVisible => TestImageBrightnessROI.Width > 0 && TestImageBrightnessROI.Height > 0;
 
         private Debouncer _refreshDebouncer = new Debouncer(50);
         Size oldsize;
@@ -548,18 +540,83 @@ namespace LumasharpChecker.viewmodel
             if (SelectedRecipe != null) LoadSelectedRecipe();
         }
 
+        private const string DefaultVendorRecipeRoot = @"C:\DIAChip8Side\Recipe";
+
+        private static bool IsSameVendorSource(RecipeManager.RecipeManifest recipe, string sourcePath)
+        {
+            return !string.IsNullOrWhiteSpace(recipe.VendorRecipePath) &&
+                string.Equals(Path.GetFullPath(recipe.VendorRecipePath).TrimEnd('\\', '/'),
+                    Path.GetFullPath(sourcePath).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Called after the main window is shown; comparison does not modify recipes.
+        public void CheckDefaultVendorRecipeChanges()
+        {
+            if (!Directory.Exists(DefaultVendorRecipeRoot)) return;
+            try
+            {
+                var folders = recipeManager.DiscoverVendorRecipeFolders(DefaultVendorRecipeRoot);
+                var matched = folders.Select(folder => new
+                {
+                    Folder = folder,
+                    Existing = Recipes.FirstOrDefault(recipe =>
+                        string.Equals(recipe.Name, folder.Name, StringComparison.OrdinalIgnoreCase))
+                }).ToList();
+                // First import is explicitly initiated with the button.
+                if (!matched.Any(item => item.Existing != null && IsSameVendorSource(item.Existing, item.Folder.SourcePath))) return;
+                var changes = matched.Where(item => item.Existing == null ||
+                    (IsSameVendorSource(item.Existing, item.Folder.SourcePath) &&
+                     recipeManager.CompareVendorSnapshot(item.Folder.SourcePath, item.Existing).HasChanges))
+                    .Select(item => item.Folder).ToList();
+                if (changes.Count == 0) return;
+                string names = string.Join("\n", changes.Take(10).Select(folder => "・" + folder.Name));
+                if (changes.Count > 10) names += $"\n……另有 {changes.Count - 10} 個";
+                if (MessageBox.Show(Application.Current.MainWindow,
+                    $"外觀機配方有新增或變更（{changes.Count} 個）：\n{names}\n\n要更新本機副本嗎？站別設定與原廠資料會保留。",
+                    "發現原廠配方變動", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes)
+                    ImportVendorFolders(changes, Application.Current.MainWindow);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(Application.Current.MainWindow, "無法檢查原廠配方變動：" + ex.Message +
+                    "\n可在配方管理使用「自動匯入」或「其他匯入」。", "配方檢查", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        [RelayCommand]
+        private void ImportDefaultVendorRecipeSnapshot()
+        {
+            if (!Directory.Exists(DefaultVendorRecipeRoot))
+            {
+                MessageBox.Show("找不到外觀機配方資料夾：\n" + DefaultVendorRecipeRoot +
+                    "\n請確認路徑，或使用「其他匯入」。", "自動匯入", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            OpenVendorImport(DefaultVendorRecipeRoot);
+        }
+
         [RelayCommand]
         private void CreateRecipe()
         {
-            string name = Interaction.InputBox("輸入配方名稱，此配方會建立完整的站別。", "建立配方", "新配方").Trim();
+            string name = Interaction.InputBox("輸入配方名稱。將建立原生 8 站預設參數；站別仍須設定後才能檢測。", "建立配方", "新配方").Trim();
             if (string.IsNullOrWhiteSpace(name)) return;
             try
             {
                 var recipe = recipeManager.CreateRecipe(name, StationCount);
+                try
+                {
+                    NativeRecipeBridge.InitializeLocalRecipe(recipe, AppDomain.CurrentDomain.BaseDirectory);
+                    recipeManager.SaveManifest(recipe);
+                }
+                catch
+                {
+                    recipeManager.DeleteRecipe(recipe);
+                    throw;
+                }
                 Recipes.Add(recipe);
                 SelectedRecipe = recipe;
                 LoadSelectedRecipe();
-                SaveSettingsMessage = $"已建立配方：{name}";
+                SaveSettingsMessage = $"已建立配方：{name}（原生 8 站預設參數；各站尚未設定）";
             }
             catch (Exception ex)
             {
@@ -570,54 +627,53 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void ImportVendorRecipeSnapshot()
         {
+            Window owner = Application.Current.Windows.OfType<RecipeManagerWindow>()
+                .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
+            string? folder = ExplorerFolderPicker.PickFolder(owner, "選擇原廠配方資料庫資料夾", Environment.CurrentDirectory);
+            if (folder != null) OpenVendorImport(folder);
+        }
+
+        private void OpenVendorImport(string folder)
+        {
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
             {
                 MessageBox.Show("檢測進行中，請先完成或停止。", "匯入原廠資料", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            Window owner = Application.Current.Windows.OfType<RecipeManagerWindow>()
+                .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
             try
             {
-                Window owner = Application.Current.Windows.OfType<RecipeManagerWindow>()
-                    .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
-                string? folder = ExplorerFolderPicker.PickFolder(owner, "選擇原廠配方資料庫資料夾", Environment.CurrentDirectory);
-                if (folder == null) return;
                 var importWindow = new VendorRecipeImportWindow(owner, recipeManager, Recipes.ToList(), folder);
-                if (importWindow.ShowDialog() != true) return;
-
-                int created = 0, updated = 0;
-                var failures = new List<string>();
-                foreach (var source in importWindow.SelectedFolders)
-                {
-                    try
-                    {
-                        var existing = Recipes.FirstOrDefault(recipe =>
-                            string.Equals(recipe.Name, source.Name, StringComparison.OrdinalIgnoreCase));
-                        var imported = recipeManager.ImportOrUpdateVendorSnapshot(source.SourcePath, existing);
-                        if (existing == null)
-                        {
-                            Recipes.Add(imported);
-                            created++;
-                        }
-                        else
-                        {
-                            updated++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        failures.Add($"{source.Name}：{ex.Message}");
-                    }
-                }
-                SaveSettingsMessage = $"原廠配方匯入完成：新建 {created} 個、更新 {updated} 個，失敗 {failures.Count} 個。";
-                string result = SaveSettingsMessage + "\n站別檢測設定已保留；原廠參數仍是獨立副本。";
-                if (failures.Count > 0) result += "\n\n" + string.Join("\n", failures.Take(8));
-                MessageBox.Show(owner, result, failures.Count == 0 ? "匯入完成" : "匯入部分完成",
-                    MessageBoxButton.OK, failures.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
+                if (importWindow.ShowDialog() == true) ImportVendorFolders(importWindow.SelectedFolders, owner);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "原廠配方匯入失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(owner, ex.Message, "原廠配方匯入失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private void ImportVendorFolders(IEnumerable<RecipeManager.VendorRecipeFolder> folders, Window owner)
+        {
+            int created = 0, updated = 0;
+            var failures = new List<string>();
+            foreach (var source in folders)
+            {
+                try
+                {
+                    var existing = Recipes.FirstOrDefault(recipe =>
+                        string.Equals(recipe.Name, source.Name, StringComparison.OrdinalIgnoreCase));
+                    var imported = recipeManager.ImportOrUpdateVendorSnapshot(source.SourcePath, existing);
+                    if (existing == null) { Recipes.Add(imported); created++; }
+                    else updated++;
+                }
+                catch (Exception ex) { failures.Add($"{source.Name}：{ex.Message}"); }
+            }
+            SaveSettingsMessage = $"原廠配方匯入完成：新建 {created} 個、更新 {updated} 個，失敗 {failures.Count} 個。";
+            string result = SaveSettingsMessage + "\n站別檢測設定已保留；原廠參數仍是獨立副本。已載入的配方請重新載入。";
+            if (failures.Count > 0) result += "\n\n" + string.Join("\n", failures.Take(8));
+            MessageBox.Show(owner, result, failures.Count == 0 ? "匯入完成" : "匯入部分完成",
+                MessageBoxButton.OK, failures.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
         }
 
         [RelayCommand]
@@ -719,7 +775,6 @@ namespace LumasharpChecker.viewmodel
             LoadSelectedRecipe();
             RefreshStationDatabasePaths();
             DatabaseDayFolderDisplay = recipe.TrainingImageRoot ?? string.Empty;
-            if (LoadStationDatabase("OK")) _activeStationDatabase = "OK";
             int available = recipe.Stations.Count(station =>
                 station.Number <= 8 && (!string.IsNullOrEmpty(station.OkDatabasePath)
                     || !string.IsNullOrEmpty(station.NgDatabasePath)));
@@ -746,6 +801,7 @@ namespace LumasharpChecker.viewmodel
             ResetTestImageState();
             LoadRecipeStation();
             RefreshStationDatabasePaths();
+            EnsureAoiAllDatabase();
             DatabaseDayFolderDisplay = CurrentRecipe.TrainingImageRoot
                 ?? CurrentRecipe.DatabaseDayFolder ?? string.Empty;
             _preferences.LastRecipeId = CurrentRecipe.Id;
@@ -760,8 +816,8 @@ namespace LumasharpChecker.viewmodel
             _activeStationDatabase = null;
             ResetTestImageState();
             CurrentRecipe = null;
-            _preferences.LastRecipeId = null;
-            recipeManager.SavePreferences(_preferences);
+            // Closing the active recipe is not the same as forgetting the last
+            // recipe. Keep its ID so startup can reopen it next time.
             CurrentStationNumber = 1;
             RefreshStationSlots();
             LoadCurrentProfile(SelectedItem, isLibraryProfile: true);
@@ -811,8 +867,9 @@ namespace LumasharpChecker.viewmodel
             CurrentStationNumber = stationNumber;
             ResetTestImageState();
             LoadRecipeStation();
-            if (_activeStationDatabase != null)
-                LoadStationDatabase(_activeStationDatabase);
+            _activeStationDatabase = null;
+            EnsureAoiAllDatabase();
+            RestoreMultiStationResultsForCurrentStation();
         }
 
         [RelayCommand]
@@ -899,10 +956,12 @@ namespace LumasharpChecker.viewmodel
                 {
                     slot.IncludeInBatch = previous.IncludeInBatch;
                     if (_multiStationResults.TryGetValue((CurrentRecipe?.Id ?? "", number), out var snapshot))
-                        slot.ApplyBatchResult(snapshot.Ok, snapshot.Ng, snapshot.Status, snapshot.Details);
+                        slot.ApplyBatchResult(snapshot.Ok, snapshot.Ng, snapshot.Status, snapshot.Details,
+                            snapshot.Results.Count(result => result.IsRetest));
                 }
                 else if (_multiStationResults.TryGetValue((CurrentRecipe?.Id ?? "", number), out var saved))
-                    slot.ApplyBatchResult(saved.Ok, saved.Ng, saved.Status, saved.Details);
+                    slot.ApplyBatchResult(saved.Ok, saved.Ng, saved.Status, saved.Details,
+                        saved.Results.Count(result => result.IsRetest));
                 slots.Add(slot);
             }
             StationSlots = slots;
@@ -981,6 +1040,7 @@ namespace LumasharpChecker.viewmodel
                 string stationFolder = Path.Combine(dayFolder, station.Number.ToString());
                 station.OkDatabasePath = Path.Combine(stationFolder, "OK");
                 station.NgDatabasePath = Path.Combine(stationFolder, "NG");
+                station.AllDatabasePath = null;
                 if (Directory.Exists(stationFolder)) availableStations++;
                 if (HasDirectDatabaseFolders(stationFolder)) classifiedStations++;
             }
@@ -1054,10 +1114,13 @@ namespace LumasharpChecker.viewmodel
                         Number = station.Number,
                         OkPath = recipeManager.ResolveDatabasePath(station.OkDatabasePath),
                         NgPath = recipeManager.ResolveDatabasePath(station.NgDatabasePath),
+                        AllPath = recipeManager.ResolveDatabasePath(station.AllDatabasePath),
                         OkDirectoryExists = !string.IsNullOrWhiteSpace(station.OkDatabasePath)
                             && Directory.Exists(recipeManager.ResolveDatabasePath(station.OkDatabasePath)),
                         NgDirectoryExists = !string.IsNullOrWhiteSpace(station.NgDatabasePath)
-                            && Directory.Exists(recipeManager.ResolveDatabasePath(station.NgDatabasePath))
+                            && Directory.Exists(recipeManager.ResolveDatabasePath(station.NgDatabasePath)),
+                        AllDirectoryExists = !string.IsNullOrWhiteSpace(station.AllDatabasePath)
+                            && Directory.Exists(recipeManager.ResolveDatabasePath(station.AllDatabasePath))
                     }));
         }
 
@@ -1074,6 +1137,7 @@ namespace LumasharpChecker.viewmodel
                 throw new DirectoryNotFoundException("資料夾不存在：" + fullPath);
             var station = recipe.Stations.Single(s => s.Number == stationNumber);
             string? previousPath = isOk ? station.OkDatabasePath : station.NgDatabasePath;
+            string? previousAllPath = station.AllDatabasePath;
             string? oppositePath = isOk ? station.NgDatabasePath : station.OkDatabasePath;
             if (!string.IsNullOrWhiteSpace(oppositePath)
                 && string.Equals(recipeManager.ResolveDatabasePath(oppositePath), fullPath,
@@ -1084,29 +1148,91 @@ namespace LumasharpChecker.viewmodel
             string savedPath = fullPath.StartsWith(appRoot, StringComparison.OrdinalIgnoreCase)
                 ? fullPath.Substring(appRoot.Length) : fullPath;
             if (string.Equals(recipeManager.ResolveDatabasePath(previousPath), fullPath,
-                StringComparison.OrdinalIgnoreCase))
+                StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(previousAllPath))
             {
                 DatabaseSaveMessage = $"第 {stationNumber:00} 站 {(isOk ? "OK" : "NG")} 路徑未變更。";
                 return;
             }
             if (isOk) station.OkDatabasePath = savedPath;
             else station.NgDatabasePath = savedPath;
+            station.AllDatabasePath = null;
             try { recipeManager.SaveManifest(recipe); }
             catch
             {
                 if (isOk) station.OkDatabasePath = previousPath;
                 else station.NgDatabasePath = previousPath;
+                station.AllDatabasePath = previousAllPath;
                 throw;
             }
             RefreshStationDatabasePaths();
             RefreshStationSlots();
             if (stationNumber == CurrentStationNumber && _activeStationDatabase != null &&
-                string.Equals(_activeStationDatabase, isOk ? "OK" : "NG", StringComparison.OrdinalIgnoreCase))
+                (_activeStationDatabase == "ALL" ||
+                 string.Equals(_activeStationDatabase, isOk ? "OK" : "NG", StringComparison.OrdinalIgnoreCase)))
             {
                 ResetTestImageState();
                 LoadStationDatabase(_activeStationDatabase);
             }
             DatabaseSaveMessage = $"已儲存第 {stationNumber:00} 站 {(isOk ? "OK" : "NG")} 圖庫；其餘站別及路徑保持不變。";
+        }
+
+        public void SetStationAllDatabaseFolder(int stationNumber, string selectedFolder)
+        {
+            var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入配方。");
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                throw new InvalidOperationException("檢測進行中，請完成或停止後再調整圖庫路徑。");
+            if (stationNumber < 1 || stationNumber > recipe.StationCount)
+                throw new ArgumentOutOfRangeException(nameof(stationNumber), "站別不在目前 Recipe 範圍內。");
+
+            string root = Path.GetFullPath(selectedFolder);
+            if (!Directory.Exists(root)) throw new DirectoryNotFoundException("資料夾不存在：" + root);
+            string leaf = Path.GetFileName(root.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (leaf.Equals("OK", StringComparison.OrdinalIgnoreCase) || leaf.Equals("NG", StringComparison.OrdinalIgnoreCase))
+            {
+                string? parent = Directory.GetParent(root)?.FullName;
+                string siblingCategory = leaf.Equals("OK", StringComparison.OrdinalIgnoreCase) ? "NG" : "OK";
+                if (parent != null && Directory.Exists(Path.Combine(parent, siblingCategory)))
+                    root = parent;
+            }
+
+            string? FindChild(string name)
+            {
+                if (!Directory.Exists(root)) return null;
+                return Directory.EnumerateDirectories(root)
+                    .FirstOrDefault(path => Path.GetFileName(path).Equals(name, StringComparison.OrdinalIgnoreCase));
+            }
+
+            string appRoot = Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string SavePath(string path) => path.StartsWith(appRoot, StringComparison.OrdinalIgnoreCase)
+                ? path.Substring(appRoot.Length) : path;
+            var station = recipe.Stations.Single(s => s.Number == stationNumber);
+            string? previousAll = station.AllDatabasePath;
+            string? previousOk = station.OkDatabasePath;
+            string? previousNg = station.NgDatabasePath;
+            station.AllDatabasePath = SavePath(root);
+            station.OkDatabasePath = FindChild("OK") is { } ok ? SavePath(ok) : null;
+            station.NgDatabasePath = FindChild("NG") is { } ng ? SavePath(ng) : null;
+            try { recipeManager.SaveManifest(recipe); }
+            catch
+            {
+                station.AllDatabasePath = previousAll;
+                station.OkDatabasePath = previousOk;
+                station.NgDatabasePath = previousNg;
+                throw;
+            }
+
+            RefreshStationDatabasePaths();
+            RefreshStationSlots();
+            if (stationNumber == CurrentStationNumber && _activeStationDatabase == "ALL")
+            {
+                ResetTestImageState();
+                LoadStationDatabase("ALL");
+            }
+            string categories = station.OkDatabasePath != null && station.NgDatabasePath != null ? "OK／NG"
+                : station.OkDatabasePath != null ? "OK"
+                : station.NgDatabasePath != null ? "NG" : "無 OK／NG 子資料夾";
+            DatabaseSaveMessage = $"已儲存第 {stationNumber:00} 站 ALL 圖庫：{root}；{categories}。";
         }
 
         private string GetProcessingProfileName() => CurrentRecipe == null
@@ -1135,16 +1261,55 @@ namespace LumasharpChecker.viewmodel
         internal Task<NativeLocationService.Frame> LocateLightFrameAsync(string imageFile)
         {
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting) throw new InvalidOperationException("請等待目前檢測完成。");
-            return NativeLocationService.LocateFrameAsync(GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("請先將原廠參數匯入目前配方。"), CurrentStationNumber, imageFile);
+            return PrepareLightFrameAsync(imageFile);
         }
 
-        private string LightSettingsPath() => CurrentRecipe == null ? throw new InvalidOperationException("請先載入配方。") :
-            Path.Combine(recipeManager.GetProfileBasePath(CurrentRecipe), RecipeManager.GetStationDirectoryName(CurrentStationNumber), "light-inspection.json");
+        private string LightSettingsPath() => CurrentRecipe == null ? throw new InvalidOperationException("請先載入配方。")
+            : LightSettingsPath(CurrentRecipe, CurrentStationNumber);
+
+        private string LightSettingsPath(RecipeManager.RecipeManifest recipe, int stationNumber) =>
+            Path.Combine(recipeManager.GetProfileBasePath(recipe), RecipeManager.GetStationDirectoryName(stationNumber), "light-inspection.json");
 
         public LightInspectionSettings LoadLightSettings()
+            => CurrentRecipe == null ? throw new InvalidOperationException("請先載入配方。")
+                : LoadLightSettings(CurrentRecipe, CurrentStationNumber);
+
+        internal LightInspectionSettings LoadLightSettings(RecipeManager.RecipeManifest recipe, int stationNumber)
         {
-            string path = LightSettingsPath();
-            var settings = File.Exists(path) ? System.Text.Json.JsonSerializer.Deserialize<LightInspectionSettings>(File.ReadAllText(path)) ?? throw new InvalidDataException("光源設定無法讀取。") : new LightInspectionSettings();
+            string path = LightSettingsPath(recipe, stationNumber);
+            bool hasFile = File.Exists(path);
+            string? json = hasFile ? File.ReadAllText(path) : null;
+            var settings = hasFile ? System.Text.Json.JsonSerializer.Deserialize<LightInspectionSettings>(json!) ?? throw new InvalidDataException("光源設定無法讀取。") : new LightInspectionSettings();
+            bool hasSavedLimitMode = false;
+            if (json != null)
+            {
+                using var document = System.Text.Json.JsonDocument.Parse(json);
+                hasSavedLimitMode = document.RootElement.TryGetProperty("LimitMode", out _);
+            }
+
+            if (hasFile && !hasSavedLimitMode)
+            {
+                // Older light settings stored only absolute limits. The new default is percentage-based;
+                // recover its baseline and percentages from this station's recipe profile.
+                var profile = CurrentRecipe?.Id == recipe.Id && CurrentStationNumber == stationNumber
+                    ? CurrentProfile
+                    : recipeManager.LoadStation(recipe, stationNumber);
+                settings.LimitMode = "百分比偏差";
+                if (settings.BaseValue <= 0 && profile != null)
+                    settings.BaseValue = profile.BrightnessBaseValue ?? profile.BrightnessMean ?? GetMiddleValue(profile.BrightnessMin, profile.BrightnessMax);
+                if (profile != null)
+                {
+                    settings.PercentLower = profile.BrightnessPercentLower == 0 ? 10 : profile.BrightnessPercentLower;
+                    settings.PercentUpper = profile.BrightnessPercentUpper == 0 ? 10 : profile.BrightnessPercentUpper;
+                }
+            }
+            if (!File.Exists(path) && CurrentRecipe?.Id == recipe.Id && CurrentStationNumber == stationNumber && CurrentProfile != null)
+            {
+                settings.BaseValue = BrightnessBaseValue;
+                settings.LimitMode = "百分比偏差";
+                settings.Minimum = Math.Max(0, BrightnessFixedMin); settings.Maximum = Math.Min(255, BrightnessFixedMax);
+                settings.PercentLower = BrightnessPercentLower; settings.PercentUpper = BrightnessPercentUpper;
+            }
             settings.Validate(); return settings;
         }
 
@@ -1175,6 +1340,7 @@ namespace LumasharpChecker.viewmodel
 
         // 測試圖片資料夾相關屬性
         private readonly List<string> _allLoadedTestImageFiles = new();
+        private readonly Dictionary<string, string> _imageReferenceClasses = new(StringComparer.OrdinalIgnoreCase);
         private string _resultListFilter = "ALL";
         [ObservableProperty]
         private ObservableCollection<string> testImageFiles = new();
@@ -1213,6 +1379,8 @@ namespace LumasharpChecker.viewmodel
         [ObservableProperty]
         private int overallNgCount;
         [ObservableProperty]
+        private int overallRetestCount;
+        [ObservableProperty]
         private string overallOkRateText = "0.00%";
         [ObservableProperty]
         private string overallNgRateText = "0.00%";
@@ -1245,8 +1413,6 @@ namespace LumasharpChecker.viewmodel
         private string sharpnessLimitMode = ProfileManager.LimitMode.Percent;
         [ObservableProperty]
         private string detectionMode = ProfileManager.InspectionMode.Brightness;
-        [ObservableProperty]
-        private bool isSettingsPanelOpen = false;
         [ObservableProperty]
         private bool showRoiPanel = false;
         [ObservableProperty]
@@ -1456,7 +1622,7 @@ namespace LumasharpChecker.viewmodel
         partial void OnCurrentRecipeChanged(RecipeManager.RecipeManifest? value)
         {
             MultiStationProgress = "尚未執行檢測";
-            MultiStationTotal = "OK —   NG —   良率 —";
+            MultiStationTotal = "判定 OK —   NG —   Retest —   良率 —";
             DatabaseSaveMessage = "選取後自動儲存";
             OnPropertyChanged(nameof(IsRecipeActive));
             OnPropertyChanged(nameof(GlobalStatusBrush));
@@ -2073,6 +2239,7 @@ namespace LumasharpChecker.viewmodel
             CurrentTestImageBitmap = null;
             TestImageFiles.Clear();
             _allLoadedTestImageFiles.Clear();
+            _imageReferenceClasses.Clear();
             _resultListFilter = "ALL";
             TestImageTree.Clear();
             CurrentTestImageIndex = -1;
@@ -2101,44 +2268,87 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void ExportTestImages()
         {
-            if (CurrentProfile == null)
+            DateTime exportDate = DateTime.Now;
+            string programName = CurrentRecipe?.Name ?? CurrentProfile?.Name ?? "未命名程式";
+            string safeProgramName = MakeSafeFileNamePart(programName);
+            string outputDirectory = Path.Combine(@"D:\光源點檢", exportDate.ToString("yyyy"));
+            string outputPath = Path.Combine(outputDirectory, $"{exportDate:yyyyMMdd}_{safeProgramName}.xlsx");
+            try
             {
-                SaveSettingsMessage = "請先選擇 Profile";
+                Directory.CreateDirectory(outputDirectory);
+            }
+            catch (Exception ex)
+            {
+                ShowExportNotice($"無法建立匯出資料夾：{outputDirectory}\n{ex.Message}", MessageBoxImage.Error);
                 return;
             }
 
-            if (_allLoadedTestImageFiles.Count == 0)
+            var completedStations = CurrentRecipe == null
+                ? new List<KeyValuePair<(string RecipeId, int Station), StationRunSummary>>()
+                : _multiStationResults
+                    .Where(item => item.Key.RecipeId == CurrentRecipe.Id && item.Value.Status == "完成" && item.Value.Results.Count > 0)
+                    .OrderBy(item => item.Key.Station)
+                    .ToList();
+            bool hasStationResults = completedStations.Count > 0;
+            bool isFlowResult = TestImageResults.Count > 0 &&
+                TestImageResults.All(result => result.InspectionPipeline == "新版流程");
+            bool isLegacyResult = !hasStationResults && !isFlowResult;
+            if (!hasStationResults && TestImageResults.Count == 0)
             {
-                SaveSettingsMessage = "請先載入測試圖片";
+                ShowExportNotice("請先完成單站或多站連續檢測，再匯出報表。");
                 return;
             }
 
-            SaveCurrentInspectionSettings(reanalyzeTestImages: false);
-            if (!IsTestImageAnalysisComplete)
+            if ((hasStationResults || isFlowResult) && CurrentRecipe == null)
+            {
+                ShowExportNotice("請先載入 Recipe。");
+                return;
+            }
+
+            if (isLegacyResult && CurrentProfile == null)
+            {
+                ShowExportNotice("請先選擇 Profile。");
+                return;
+            }
+
+            if (!hasStationResults && _allLoadedTestImageFiles.Count == 0)
+            {
+                ShowExportNotice("請先載入測試圖片。");
+                return;
+            }
+
+            if (isLegacyResult) SaveCurrentInspectionSettings(reanalyzeTestImages: false);
+            if (!hasStationResults && !IsTestImageAnalysisComplete)
             {
                 if (IsAnalyzingTestImages)
                 {
-                    SaveSettingsMessage = "圖片仍在檢測中，請稍候再匯出";
+                    ShowExportNotice("圖片仍在檢測中，請稍候再匯出。");
                     return;
                 }
 
-                SaveSettingsMessage = "請先完成測試圖片檢測";
+                ShowExportNotice("請先完成測試圖片檢測。");
                 return;
             }
 
-            var dialog = new Microsoft.Win32.SaveFileDialog
+            try
             {
-                Filter = "Excel 活頁簿|*.xlsx",
-                FileName = $"{CurrentInspectionName.Replace('/', '_')}_檢測結果.xlsx",
-                InitialDirectory = Path.GetDirectoryName(CurrentTestImagePath)
-            };
+                if (hasStationResults)
+                {
+                    var stationReports = completedStations.Select(item => new StationExcelReportData(
+                        item.Key.Station,
+                        CurrentRecipe!.Name,
+                        BuildFlowExportSpecRows(CurrentRecipe!, item.Key.Station),
+                        item.Value.Results.ToList())).ToList();
+                    PrepareExportTarget(outputPath);
+                    ExcelReportWriter.WriteMultiStationTestResults(outputPath, stationReports);
+                    SaveSettingsMessage = $"已匯出 {stationReports.Count} 站，共 {stationReports.Sum(station => station.Results.Count)} 筆：{outputPath}";
+                    OpenExportFolder(outputDirectory);
+                    return;
+                }
 
-            if (dialog.ShowDialog() != true)
-            {
-                return;
-            }
-
-            var specRows = new List<string[]>
+                var specRows = isFlowResult
+                    ? BuildFlowExportSpecRows(CurrentRecipe!, CurrentStationNumber)
+                    : new List<string[]>
             {
                 new[] { "項目", "值" },
                 new[] { "Profile", CurrentInspectionName },
@@ -2151,35 +2361,125 @@ namespace LumasharpChecker.viewmodel
                 new[] { "亮度固定上限", BrightnessFixedMax.ToString("F2", CultureInfo.InvariantCulture) },
                 new[] { "亮度有效下限", EffectiveBrightnessMin.ToString("F2", CultureInfo.InvariantCulture) },
                 new[] { "亮度有效上限", EffectiveBrightnessMax.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "銳利度判定方式", GetLimitModeDisplay(SharpnessLimitMode) },
-                new[] { "銳利度基準值", SharpnessBaseValue.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "銳利度下限偏差%", SharpnessPercentLower.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "銳利度固定下限", SharpnessFixedMin.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "銳利度有效下限", EffectiveSharpnessMin.ToString("F2", CultureInfo.InvariantCulture) },
                 new[] { "匯出時間", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") }
             };
-
-            try
-            {
-                if (File.Exists(dialog.FileName))
-                {
-                    File.Delete(dialog.FileName);
-                }
+                PrepareExportTarget(outputPath);
 
                 ExcelReportWriter.WriteTestResults(
-                    dialog.FileName,
+                    outputPath,
                     specRows,
                     TestImageResults,
-                    IsSharpnessEnabled,
-                    EffectiveBrightnessMin,
-                    EffectiveBrightnessMax,
-                    EffectiveSharpnessMin);
-                SaveSettingsMessage = $"已匯出 {TestImageResults.Count} 筆檢測結果";
+                    isFlowResult ? TestImageResults.Min(result => result.BrightnessMin ?? 0) : EffectiveBrightnessMin,
+                    isFlowResult ? TestImageResults.Max(result => result.BrightnessMax ?? 255) : EffectiveBrightnessMax);
+                SaveSettingsMessage = $"已匯出 {TestImageResults.Count} 筆檢測結果：{outputPath}";
+                OpenExportFolder(outputDirectory);
             }
             catch (Exception ex)
             {
-                SaveSettingsMessage = $"匯出失敗: {ex.Message}";
+                ShowExportNotice($"匯出失敗：{ex.Message}", MessageBoxImage.Error);
             }
+        }
+
+        private void ShowExportNotice(string message, MessageBoxImage icon = MessageBoxImage.Information)
+        {
+            SaveSettingsMessage = message;
+            MessageBox.Show(message, "匯出報表", MessageBoxButton.OK, icon);
+        }
+
+        private static void PrepareExportTarget(string outputPath)
+        {
+            CloseOpenExcelWorkbook(outputPath);
+            if (File.Exists(outputPath)) File.Delete(outputPath);
+        }
+
+        private static void CloseOpenExcelWorkbook(string outputPath)
+        {
+            object? excel = null;
+            object? workbooks = null;
+            try
+            {
+                try { excel = Marshal.GetActiveObject("Excel.Application"); }
+                catch (COMException) { return; }
+
+                workbooks = excel.GetType().InvokeMember("Workbooks", BindingFlags.GetProperty, null, excel, null);
+                int count = Convert.ToInt32(workbooks!.GetType().InvokeMember("Count", BindingFlags.GetProperty, null, workbooks, null));
+                string target = Path.GetFullPath(outputPath);
+                for (int index = count; index >= 1; index--)
+                {
+                    object? workbook = null;
+                    try
+                    {
+                        workbook = workbooks.GetType().InvokeMember("Item", BindingFlags.GetProperty, null, workbooks, new object[] { index });
+                        string fullName = Convert.ToString(workbook!.GetType().InvokeMember("FullName", BindingFlags.GetProperty, null, workbook, null)) ?? string.Empty;
+                        if (string.Equals(Path.GetFullPath(fullName), target, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Save Excel edits before replacing the workbook with the new report.
+                            workbook.GetType().InvokeMember("Close", BindingFlags.InvokeMethod, null, workbook, new object[] { true });
+                            return;
+                        }
+                    }
+                    finally
+                    {
+                        if (workbook != null && Marshal.IsComObject(workbook)) Marshal.ReleaseComObject(workbook);
+                    }
+                }
+            }
+            catch (COMException)
+            {
+                // If Excel is busy or the file is open outside the active Excel instance,
+                // the normal file operation below will report the remaining lock clearly.
+            }
+            finally
+            {
+                if (workbooks != null && Marshal.IsComObject(workbooks)) Marshal.ReleaseComObject(workbooks);
+                if (excel != null && Marshal.IsComObject(excel)) Marshal.ReleaseComObject(excel);
+            }
+        }
+
+        private static string MakeSafeFileNamePart(string value)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            string safe = new string(value.Select(character => invalid.Contains(character) ? '_' : character).ToArray()).Trim().TrimEnd('.');
+            return string.IsNullOrWhiteSpace(safe) ? "未命名程式" : safe;
+        }
+
+        private void OpenExportFolder(string folder)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{folder}\"",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                SaveSettingsMessage += $"；資料夾開啟失敗：{ex.Message}";
+            }
+        }
+
+        private List<string[]> BuildFlowExportSpecRows(RecipeManager.RecipeManifest recipe, int stationNumber)
+        {
+            var settings = LoadLightSettings(recipe, stationNumber);
+            var limits = settings.EffectiveLimits();
+            return new List<string[]>
+            {
+                new[] { "項目", "值" },
+                new[] { "Recipe", recipe.Name },
+                new[] { "Recipe ID", recipe.Id },
+                new[] { "站別", stationNumber.ToString(CultureInfo.InvariantCulture) },
+                new[] { "流程工具選取", recipeManager.LoadFlowSelection(recipe, stationNumber) },
+                new[] { "光源檢測 ROI", settings.HasRoi ? $"Left={settings.Left}, Top={settings.Top}, Right={settings.Right}, Bottom={settings.Bottom}" : "未設定" },
+                new[] { "亮度判定方式", settings.LimitMode },
+                new[] { "亮度基準值", settings.BaseValue.ToString("F2", CultureInfo.InvariantCulture) },
+                new[] { "亮度有效下限", limits.Min.ToString("F2", CultureInfo.InvariantCulture) },
+                new[] { "亮度有效上限", limits.Max.ToString("F2", CultureInfo.InvariantCulture) },
+                new[] { "亮度下限偏差%", settings.PercentLower.ToString("F2", CultureInfo.InvariantCulture) },
+                new[] { "亮度上限偏差%", settings.PercentUpper.ToString("F2", CultureInfo.InvariantCulture) },
+                new[] { "匯出時間", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) }
+            };
         }
 
         private static string Csv(string? value)
@@ -2228,24 +2528,67 @@ namespace LumasharpChecker.viewmodel
         }
 
         /// <summary>
-        /// AOI 入口優先使用目前站別的 OK DB；已是同站 OK 圖庫時不清除既有圖片／結果。
+        /// 進入站別時預設載入 ALL DB；已選擇本站圖庫時保留目前清單。
         /// 找不到圖庫僅更新狀態，需提示時由操作者明確觸發。
         /// </summary>
-        public bool EnsureAoiOkDatabase(bool showError = false)
+        public bool EnsureAoiAllDatabase(bool showError = false)
         {
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
                 return false;
-            if (_activeStationDatabase == "OK" && TestImageFiles.Count > 0 &&
+            if (_activeStationDatabase == "ALL" && TestImageFiles.Count > 0 &&
                 !string.IsNullOrWhiteSpace(CurrentTestImagePath) && File.Exists(CurrentTestImagePath))
                 return true;
-            if (!LoadStationDatabase("OK", showError)) return false;
-            _activeStationDatabase = "OK";
+            if (!LoadStationDatabase("ALL", showError)) return false;
+            _activeStationDatabase = "ALL";
             return TestImageFiles.Count > 0;
         }
 
         private bool LoadStationDatabase(string kind, bool showError = false)
         {
             var station = CurrentRecipe?.Stations.FirstOrDefault(item => item.Number == CurrentStationNumber);
+            if (kind == "ALL")
+            {
+                if (station == null) return false;
+                string allFolder = recipeManager.ResolveDatabasePath(station.AllDatabasePath);
+                string okFolder = recipeManager.ResolveDatabasePath(station.OkDatabasePath);
+                string ngFolder = recipeManager.ResolveDatabasePath(station.NgDatabasePath);
+                List<string> okFiles = EnumerateDatabaseImages(okFolder);
+                List<string> ngFiles = EnumerateDatabaseImages(ngFolder);
+                List<string> allFiles = EnumerateDatabaseImages(allFolder, recursive: true);
+                string[] files = (Directory.Exists(allFolder)
+                        ? allFiles
+                        : okFiles.Concat(ngFiles))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                if (files.Length == 0)
+                {
+                    SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站 OK／NG DB 都沒有可用圖片。";
+                    if (showError)
+                        MessageBox.Show(SaveSettingsMessage, "ALL DB 無圖片", MessageBoxButton.OK, MessageBoxImage.Information);
+                    return false;
+                }
+
+                ResetTestImageState();
+                foreach (string file in files)
+                {
+                    TestImageFiles.Add(file);
+                    _allLoadedTestImageFiles.Add(file);
+                    if (okFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        _imageReferenceClasses[file] = "OK";
+                    else if (ngFiles.Contains(file, StringComparer.OrdinalIgnoreCase))
+                        _imageReferenceClasses[file] = "NG";
+                }
+                TestImageTree = BuildTestImageTree(TestImageFiles);
+                _resultListFilter = "ALL";
+                CurrentTestImageIndex = 0;
+                ProcessCurrentTestImage();
+                SaveSettingsMessage = Directory.Exists(allFolder)
+                    ? $"第 {CurrentStationNumber:00} 站 ALL DB：已載入資料夾內 {files.Length} 張圖片；結果顯示流程判定。"
+                    : $"第 {CurrentStationNumber:00} 站 ALL DB：來源 OK {okFiles.Count} 張、NG {ngFiles.Count} 張，共 {files.Length} 張；結果顯示流程判定。";
+                return true;
+            }
+
             string? folder = kind switch
             {
                 "OK" => station?.OkDatabasePath,
@@ -2258,18 +2601,39 @@ namespace LumasharpChecker.viewmodel
             string label = kind == "Station" ? "本站圖片" : kind + " DB";
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
             {
-                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站的 {label} 資料夾尚未設定或不存在。";
                 if (showError)
+                {
+                    SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站的 {label} 資料夾尚未設定或不存在。";
                     MessageBox.Show(SaveSettingsMessage + (string.IsNullOrWhiteSpace(folder) ? "\n請先使用圖庫設定選擇日期資料夾。" : $"\n{folder}"),
                         "無法載入圖庫", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
                 return false;
             }
 
             ResetTestImageState();
-            if (!LoadTestImageFolder(folder)) return false;
+            if (!LoadTestImageFolder(folder, quietEmpty: !showError)) return false;
+            string? referenceClass = kind switch { "OK" => "OK", "NG" => "NG", _ => null };
+            if (referenceClass != null)
+                foreach (string file in _allLoadedTestImageFiles) _imageReferenceClasses[file] = referenceClass;
             if (TestImageFiles.Count > 0)
-                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站 {label}：已載入 {TestImageFiles.Count} 張；按連續測試開始檢測。";
+                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站 {label}：已載入 {TestImageFiles.Count} 張；按連續測試開始檢測，結果清單會區分圖庫標記與流程判定。";
             return true;
+        }
+
+        private static List<string> EnumerateDatabaseImages(string folder, bool recursive = false) =>
+            Directory.Exists(folder)
+                ? Directory.EnumerateFiles(folder, "*", recursive ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly)
+                    .Where(path => BaselineImageExtensions.Contains(Path.GetExtension(path)))
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                : new List<string>();
+
+        internal string GetReferenceClassForImage(string imagePath)
+        {
+            if (_imageReferenceClasses.TryGetValue(imagePath, out string? savedClass)) return savedClass;
+            string parent = Path.GetFileName(Path.GetDirectoryName(imagePath)?.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return parent.Equals("OK", StringComparison.OrdinalIgnoreCase) ? "OK"
+                : parent.Equals("NG", StringComparison.OrdinalIgnoreCase) ? "NG" : "未標記";
         }
 
         [RelayCommand]
@@ -2310,6 +2674,7 @@ namespace LumasharpChecker.viewmodel
             _continuousTestNextIndex = 0;
             TestImageFiles.Clear();
             _allLoadedTestImageFiles.Clear();
+            _imageReferenceClasses.Clear();
             _resultListFilter = "ALL";
             TestImageTree.Clear();
             CurrentTestImageIndex = -1;
@@ -2348,7 +2713,7 @@ namespace LumasharpChecker.viewmodel
             SaveSettingsMessage = "定位樣板已更新，請重新執行測試以取得新的判定結果。";
         }
 
-        private bool LoadTestImageFolder(string folderPath)
+        private bool LoadTestImageFolder(string folderPath, bool quietEmpty = false)
         {
             try
             {
@@ -2361,6 +2726,7 @@ namespace LumasharpChecker.viewmodel
 
                 TestImageFiles.Clear();
                 _allLoadedTestImageFiles.Clear();
+                _imageReferenceClasses.Clear();
                 foreach (var file in files)
                 {
                     TestImageFiles.Add(file);
@@ -2371,7 +2737,7 @@ namespace LumasharpChecker.viewmodel
                 TestImageTree = BuildTestImageTree(TestImageFiles);
                 if (files.Length == 0)
                 {
-                    SaveSettingsMessage = "資料夾內沒有支援的圖片";
+                    if (!quietEmpty) SaveSettingsMessage = "資料夾內沒有支援的圖片";
                     return true;
                 }
 
@@ -2577,6 +2943,7 @@ namespace LumasharpChecker.viewmodel
 
         public void SelectTestImage(string filePath)
         {
+            if (IsContinuousTestRunning) return;
             int index = TestImageFiles.IndexOf(filePath);
             if (index < 0) return;
             CurrentTestImageIndex = index;
@@ -2697,6 +3064,7 @@ namespace LumasharpChecker.viewmodel
                     SharpnessSafe = result.SharpnessSafe,
                     IncludeSharpness = includeSharpness,
                     IsMatched = result.IsMatched,
+                    ReferenceClass = GetReferenceClassForImage(imageFile),
                     RoiX = result.RoiCoords.X,
                     RoiY = result.RoiCoords.Y,
                     RoiW = result.RoiCoords.Width,
@@ -2723,6 +3091,7 @@ namespace LumasharpChecker.viewmodel
                     SharpnessSafe = !includeSharpness,
                     IncludeSharpness = includeSharpness,
                     IsMatched = false,
+                    ReferenceClass = GetReferenceClassForImage(imageFile),
                     Message = $"處理失敗: {ex.Message}"
                 };
             }
@@ -2732,6 +3101,7 @@ namespace LumasharpChecker.viewmodel
         {
             _testImageResultIndexes.Clear();
             _brightnessOkResultCount = 0;
+            _brightnessNgResultCount = 0;
             _sharpnessOkResultCount = 0;
             _overallOkResultCount = 0;
             TotalTestImageCount = 0;
@@ -2741,6 +3111,7 @@ namespace LumasharpChecker.viewmodel
             SharpnessNgCount = 0;
             OverallOkCount = 0;
             OverallNgCount = 0;
+            OverallRetestCount = 0;
             OverallOkRateText = "0.00%";
             OverallNgRateText = "0.00%";
         }
@@ -2749,6 +3120,7 @@ namespace LumasharpChecker.viewmodel
         {
             _testImageResultIndexes.Clear();
             _brightnessOkResultCount = 0;
+            _brightnessNgResultCount = 0;
             _sharpnessOkResultCount = 0;
             _overallOkResultCount = 0;
 
@@ -2783,7 +3155,11 @@ namespace LumasharpChecker.viewmodel
 
         private void AdjustTestImageResultCounts(TestImageResultRow result, int direction)
         {
-            if (result.BrightnessSafe) _brightnessOkResultCount += direction;
+            if (result.BrightnessMeasured)
+            {
+                if (result.BrightnessSafe) _brightnessOkResultCount += direction;
+                else _brightnessNgResultCount += direction;
+            }
             if (result.SharpnessSafe) _sharpnessOkResultCount += direction;
             if (result.IsOverallPass) _overallOkResultCount += direction;
         }
@@ -2792,11 +3168,12 @@ namespace LumasharpChecker.viewmodel
         {
             TotalTestImageCount = TestImageResults.Count;
             BrightnessOkCount = _brightnessOkResultCount;
-            BrightnessNgCount = TotalTestImageCount - BrightnessOkCount;
+            BrightnessNgCount = _brightnessNgResultCount;
             SharpnessOkCount = IsSharpnessEnabled ? _sharpnessOkResultCount : 0;
             SharpnessNgCount = IsSharpnessEnabled ? TotalTestImageCount - SharpnessOkCount : 0;
             OverallOkCount = _overallOkResultCount;
             OverallNgCount = TotalTestImageCount - OverallOkCount;
+            OverallRetestCount = TestImageResults.Count(result => result.IsRetest);
             OverallOkRateText = TotalTestImageCount == 0
                 ? "0.00%"
                 : $"{OverallOkCount * 100.0 / TotalTestImageCount:F2}%";
@@ -2818,10 +3195,12 @@ namespace LumasharpChecker.viewmodel
             return _allLoadedTestImageFiles.Count > 0 && _testImageResultIndexes.Count >= _allLoadedTestImageFiles.Count;
         }
 
-        private void ProcessCurrentTestImage()
+        private void ProcessCurrentTestImage(bool showSourcePreview = true)
         {
             if (CurrentTestImageIndex < 0 || CurrentTestImageIndex >= TestImageFiles.Count)
                 return;
+
+            LastFlowPreviewPath = null;
 
             CurrentTestImagePath = TestImageFiles[CurrentTestImageIndex];
             TestImageInfo = $"{_resultListFilter} {CurrentTestImageIndex + 1} / {TestImageFiles.Count}";
@@ -2851,8 +3230,11 @@ namespace LumasharpChecker.viewmodel
                 BrightnessColor = Brushes.Black;
                 SharpnessColor = Brushes.Black;
                 TestImageMatchFailed = string.Empty;
-                CurrentTestImageBitmap = LoadBitmapFromPath(CurrentTestImagePath);
-                UpdateDisplayImage();
+                if (showSourcePreview)
+                {
+                    CurrentTestImageBitmap = LoadBitmapFromPath(CurrentTestImagePath);
+                    UpdateDisplayImage();
+                }
                 UpdateDisplayRoiProperties();
             }
             catch (Exception ex)
@@ -2879,16 +3261,16 @@ namespace LumasharpChecker.viewmodel
             TestImageROI = new System.Drawing.Rectangle(result.RoiX, result.RoiY, result.RoiW, result.RoiH);
             TestImageBrightnessROI = new System.Drawing.Rectangle(result.BrightnessRoiX, result.BrightnessRoiY, result.BrightnessRoiW, result.BrightnessRoiH);
             TestImageSharpnessROI = new System.Drawing.Rectangle(result.SharpnessRoiX, result.SharpnessRoiY, result.SharpnessRoiW, result.SharpnessRoiH);
-            BrightnessColor = result.BrightnessSafe ? Brushes.Green : Brushes.Red;
+            BrightnessColor = !result.BrightnessMeasured ? Brushes.Gray : result.BrightnessSafe ? Brushes.Green : Brushes.Red;
             SharpnessColor = !result.IncludeSharpness || result.SharpnessSafe ? Brushes.Green : Brushes.Red;
-            TestImageMatchFailed = result.IsMatched ? string.Empty : "圖片匹配失敗 - 無法找到範本";
+            TestImageMatchFailed = result.IsMatched ? string.Empty : result.Message;
         }
 
         private void LoadCurrentPreviewIfNeeded(TestImageResultRow result)
         {
             try
             {
-                CurrentTestImageBitmap = LoadBitmapFromPath(CurrentTestImagePath);
+                CurrentTestImageBitmap = LoadBitmapFromPath(string.IsNullOrEmpty(result.ProcessedImagePath) ? CurrentTestImagePath : result.ProcessedImagePath);
                 UpdateDisplayImage();
             }
             catch (Exception ex)
@@ -2897,6 +3279,32 @@ namespace LumasharpChecker.viewmodel
                 CurrentTestImageBitmap = null;
                 UpdateDisplayImage();
             }
+        }
+
+        internal string? LastFlowPreviewPath { get; set; }
+
+        private bool CanDeferFlowSourcePreview()
+        {
+            if (CurrentRecipe == null || InspectCurrentFlow == null) return false;
+            try
+            {
+                var settings = LoadLightSettings();
+                if (!settings.HasRoi) return false;
+                settings.EffectiveLimits();
+                return true;
+            }
+            catch { return false; }
+        }
+
+        private void ShowCurrentSourcePreview()
+        {
+            if (string.IsNullOrWhiteSpace(CurrentTestImagePath) || !File.Exists(CurrentTestImagePath)) return;
+            CurrentTestImageBitmap = LoadBitmapFromPath(CurrentTestImagePath);
+            TestImageROI = System.Drawing.Rectangle.Empty;
+            TestImageBrightnessROI = System.Drawing.Rectangle.Empty;
+            TestImageSharpnessROI = System.Drawing.Rectangle.Empty;
+            UpdateDisplayImage();
+            UpdateDisplayRoiProperties();
         }
 
         [RelayCommand]
@@ -2962,13 +3370,21 @@ namespace LumasharpChecker.viewmodel
 
         private void ShowTestImageResults(string statusFilter)
         {
-            if (TestImageResults.Count == 0)
+            var singleResults = CurrentRecipe == null
+                ? Enumerable.Empty<TestImageResultRow>()
+                : _singleFlowDetails
+                    .Where(pair => pair.Key.RecipeId == CurrentRecipe.Id && pair.Key.Station == CurrentStationNumber)
+                    .Select(pair => pair.Value);
+            var results = TestImageResults.Concat(singleResults)
+                .GroupBy(result => result.FilePath, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.Last()).ToArray();
+            if (results.Length == 0)
             {
                 SaveSettingsMessage = "目前還沒有可檢視的檢測結果";
                 return;
             }
 
-            var window = new TestImageResultsWindow(TestImageResults, ResultsThumbnailMode, statusFilter);
+            var window = new TestImageResultsWindow(results, ResultsThumbnailMode, statusFilter);
             window.Owner = Application.Current.MainWindow;
             window.Show();
         }
@@ -2987,7 +3403,7 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private async Task PreviousTestImage()
         {
-            if (IsAnalyzingTestImages)
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting || IsNativeOperationBusy?.Invoke() == true)
             {
                 SaveSettingsMessage = "圖片仍在檢測中，請稍候";
                 return;
@@ -2995,16 +3411,24 @@ namespace LumasharpChecker.viewmodel
 
             if (CanNavigatePrevious && CurrentTestImageIndex > 0)
             {
+                string nextImage = TestImageFiles[CurrentTestImageIndex - 1];
+                bool deferSourcePreview = CanDeferFlowSourcePreview() && FindTestImageResult(nextImage) == null;
                 CurrentTestImageIndex--;
-                ProcessCurrentTestImage();
-                await AnalyzeCurrentTestImageAsync();
+                ProcessCurrentTestImage(showSourcePreview: !deferSourcePreview);
+                if (CurrentRecipe != null && InspectCurrentFlow != null)
+                {
+                    await InspectCurrentFlow();
+                    if (deferSourcePreview && !string.Equals(LastFlowPreviewPath, CurrentTestImagePath, StringComparison.OrdinalIgnoreCase))
+                        ShowCurrentSourcePreview();
+                }
+                else await AnalyzeCurrentTestImageAsync();
             }
         }
 
         [RelayCommand]
         private async Task NextTestImage()
         {
-            if (IsAnalyzingTestImages)
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting || IsNativeOperationBusy?.Invoke() == true)
             {
                 SaveSettingsMessage = "圖片仍在檢測中，請稍候";
                 return;
@@ -3012,9 +3436,17 @@ namespace LumasharpChecker.viewmodel
 
             if (CanNavigateNext && CurrentTestImageIndex < TestImageFiles.Count - 1)
             {
+                string nextImage = TestImageFiles[CurrentTestImageIndex + 1];
+                bool deferSourcePreview = CanDeferFlowSourcePreview() && FindTestImageResult(nextImage) == null;
                 CurrentTestImageIndex++;
-                ProcessCurrentTestImage();
-                await AnalyzeCurrentTestImageAsync();
+                ProcessCurrentTestImage(showSourcePreview: !deferSourcePreview);
+                if (CurrentRecipe != null && InspectCurrentFlow != null)
+                {
+                    await InspectCurrentFlow();
+                    if (deferSourcePreview && !string.Equals(LastFlowPreviewPath, CurrentTestImagePath, StringComparison.OrdinalIgnoreCase))
+                        ShowCurrentSourcePreview();
+                }
+                else await AnalyzeCurrentTestImageAsync();
             }
         }
 
@@ -3026,12 +3458,6 @@ namespace LumasharpChecker.viewmodel
             }
 
             string imagePath = CurrentTestImagePath;
-            if (FindTestImageResult(imagePath) != null)
-            {
-                IsTestImageAnalysisComplete = AreAllTestImagesAnalyzed();
-                return;
-            }
-
             string profileName = GetProcessingProfileName();
             string profileBasePath = GetProcessingProfileBasePath();
             bool includeSharpness = IsSharpnessEnabled;
@@ -3050,11 +3476,11 @@ namespace LumasharpChecker.viewmodel
                     return AnalyzeSingleTestImage(processor, imagePath, profileName, includeSharpness, brightnessBaseValue);
                 });
 
-                UpsertTestImageResult(result);
-                IsTestImageAnalysisComplete = AreAllTestImagesAnalyzed();
                 AnalysisProgressValue = 1;
                 AnalysisProgressText = $"已完成 {Path.GetFileName(imagePath)}";
-                ProcessCurrentTestImage();
+                ApplyTestImageResult(result);
+                LoadCurrentPreviewIfNeeded(result);
+                UpdateDisplayRoiProperties();
             }
             catch (Exception ex)
             {

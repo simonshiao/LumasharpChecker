@@ -10,6 +10,8 @@ internal static class NativeLocationService
     {
         public System.Drawing.Rectangle Bounds { get; set; }
         public string ImagePath { get; set; } = "";
+        public int OriginX { get; set; }
+        public int OriginY { get; set; }
     }
     internal static async Task<System.Drawing.Rectangle> LocateAsync(string snapshot, int station, string image) => (await LocateFrameAsync(snapshot, station, image)).Bounds;
     internal static async Task<Frame> LocateFrameAsync(string snapshot, int station, string image)

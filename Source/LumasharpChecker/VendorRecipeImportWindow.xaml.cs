@@ -13,7 +13,7 @@ public partial class VendorRecipeImportWindow : Window, INotifyPropertyChanged
     private readonly RecipeManager _recipeManager;
     private readonly IReadOnlyList<RecipeManager.RecipeManifest> _existingRecipes;
     private bool _isPreviewReady;
-    private string _previewText = "按「比對」查看將新增或更新的檔案。";
+    private string _previewText = "正在比對原廠配方資料…";
     private string _statusMessage = string.Empty;
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -58,7 +58,8 @@ public partial class VendorRecipeImportWindow : Window, INotifyPropertyChanged
         }
         StatusMessage = Candidates.Count == 0
             ? "找不到含原廠設定檔的配方資料夾。"
-            : $"找到 {Candidates.Count} 個配方資料夾，預設全選。";
+            : $"找到 {Candidates.Count} 個配方資料夾，正在自動比對。";
+        CompareSelectedCandidates();
     }
 
     private RecipeManager.RecipeManifest? FindExisting(string name) =>
@@ -67,10 +68,8 @@ public partial class VendorRecipeImportWindow : Window, INotifyPropertyChanged
 
     private void Candidate_PropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(VendorRecipeImportCandidate.IsSelected) || !IsPreviewReady) return;
-        IsPreviewReady = false;
-        PreviewText = "選取項目已變更，請重新比對。";
-        foreach (var candidate in Candidates) candidate.ClearPreview();
+        if (e.PropertyName == nameof(VendorRecipeImportCandidate.IsSelected))
+            CompareSelectedCandidates();
     }
 
     private void SelectAll_Click(object sender, RoutedEventArgs e)
@@ -83,7 +82,7 @@ public partial class VendorRecipeImportWindow : Window, INotifyPropertyChanged
         foreach (var candidate in Candidates) candidate.IsSelected = false;
     }
 
-    private void Compare_Click(object sender, RoutedEventArgs e)
+    private void CompareSelectedCandidates()
     {
         var selected = Candidates.Where(candidate => candidate.IsSelected).ToList();
         if (selected.Count == 0)
@@ -221,3 +220,4 @@ public sealed class VendorRecipeImportCandidate : INotifyPropertyChanged
     private void OnPropertyChanged([CallerMemberName] string? propertyName = null) =>
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
+

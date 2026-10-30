@@ -18,12 +18,6 @@ public partial class RecipeManagerWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void OpenStationSettings_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new RecipeStationSettingsWindow(this);
-        window.ShowDialog();
-    }
-
     private void RecipeItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is ListBoxItem { DataContext: RecipeManager.RecipeManifest recipe }

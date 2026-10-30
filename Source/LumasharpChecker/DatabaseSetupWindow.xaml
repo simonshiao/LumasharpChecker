@@ -63,12 +63,14 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="46"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="14"/>
+                        <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="站" Foreground="{DynamicResource Muted}"
                                FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="1" Text="OK" FontWeight="SemiBold"
+                    <TextBlock Grid.Column="1" Text="ALL" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Blue}" HorizontalAlignment="Center"/>
+                    <TextBlock Grid.Column="2" Text="OK" FontWeight="SemiBold"
                                Foreground="#078F5A"/>
                     <TextBlock Grid.Column="3" Text="NG" FontWeight="SemiBold"
                                Foreground="#D74758"/>
@@ -84,7 +86,7 @@
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="46"/>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="14"/>
+                                            <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="{Binding Number}"
@@ -92,6 +94,25 @@
                                                    Foreground="{DynamicResource Blue}"
                                                    VerticalAlignment="Center"/>
                                         <Grid Grid.Column="1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Ellipse Width="7" Height="7" Fill="{Binding AllStatusBrush}"
+                                                     VerticalAlignment="Center" Margin="0,0,8,0"
+                                                     ToolTip="{Binding AllStatus}"/>
+                                            <TextBox Grid.Column="1" Text="{Binding AllPathDisplay, Mode=OneWay}"
+                                                     IsReadOnly="True" VerticalContentAlignment="Center"
+                                                     ToolTip="{Binding AllPath}" FontSize="11"
+                                                     Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 ALL 路徑}"/>
+                                            <Button Grid.Column="2" Content="選擇" Click="ChooseAllFolder_Click"
+                                                    Style="{DynamicResource HudSecondaryButton}"
+                                                    Margin="6,0,1,0" MinHeight="30" Padding="10,4"
+                                                    ToolTip="載入所選資料夾內全部圖片；若包含 OK／NG 子資料夾，會自動填入對應路徑。"
+                                                    AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 ALL 圖庫}"/>
+                                        </Grid>
+                                        <Grid Grid.Column="2">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
