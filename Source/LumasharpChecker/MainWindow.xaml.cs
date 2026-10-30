@@ -68,7 +68,7 @@ namespace LumasharpChecker
             AoiWorkflow.CollapseRequested += (_, _) => SetAoiPanelExpanded(false);
 
             Version? version = Assembly.GetEntryAssembly().GetName().Version;
-            this.Title += $" {version?.ToString()} [NET472 Slim]";
+            this.Title += $" {version?.ToString()}";
             // 首頁預設為 Chao8Side 風格的極簡看板，設定工具收在左側導覽。
             ToggleSidebar_Click(this, new RoutedEventArgs());
             ShowMainPage(true);
@@ -162,7 +162,7 @@ namespace LumasharpChecker
             if (_nativeFlowBusy) return;
             if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
             {
-                MessageBox.Show("請先載入 Recipe。", label, MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("請先載入配方。", label, MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
@@ -193,7 +193,7 @@ namespace LumasharpChecker
             if (_nativeFlowBusy) return;
             if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
             {
-                MessageBox.Show("請先載入 Recipe。", label, MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("請先載入配方。", label, MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
@@ -221,13 +221,13 @@ namespace LumasharpChecker
                     recipe, station, imagePath, AppDomain.CurrentDomain.BaseDirectory, step);
                 if (vm.CurrentRecipe?.Id != recipe.Id ||
                     vm.CurrentStationNumber != station || vm.CurrentTestImagePath != imagePath)
-                    throw new InvalidOperationException("站別、Recipe 或圖片已變更，本次結果作廢。");
+                    throw new InvalidOperationException("站別、配方或圖片已變更，本次結果作廢。");
                 AoiWorkflow.SetPipelineStatus(native.Summary);
                 string state = step == "way" ? native.SelectWay
                     : step == "face" ? native.SelectFace : native.Locate;
                 if (state == "SKIPPED_RECIPE_OFF")
                 {
-                    MessageBox.Show("第 " + station + " 站原廠 Recipe 未啟用「" + label +
+                    MessageBox.Show("第 " + station + " 站原廠配方未啟用「" + label +
                         "」，已依原廠設定略過，未執行也未變更參數。\n" + native.Summary,
                         label, MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -246,7 +246,7 @@ namespace LumasharpChecker
             if (_nativeFlowBusy) return;
             if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
             {
-                MessageBox.Show("請先載入 Recipe。", "光源檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("請先載入配方。", "光源檢測", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
@@ -392,7 +392,7 @@ namespace LumasharpChecker
             if (station?.IsConfigured != true ||
                 !Guid.TryParseExact(vm.CurrentRecipe.Id, "N", out _))
             {
-                MessageBox.Show("請先將本站檢測參數儲存至 Recipe，再加入樣板。", "定位樣板",
+                MessageBox.Show("請先將本站檢測參數儲存至配方，再加入樣板。", "定位樣板",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -404,7 +404,7 @@ namespace LumasharpChecker
                 if (string.IsNullOrWhiteSpace(vm.CurrentProfile.ImagePath) ||
                     !string.Equals(System.IO.Path.GetFullPath(vm.CurrentProfile.ImagePath), primary,
                         StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("目前使用的不是本站 Recipe 設定，請先重新載入本站。");
+                    throw new InvalidOperationException("目前使用的不是本站配方設定，請先重新載入本站。");
                 var roi = new System.Drawing.Rectangle(
                     vm.CurrentProfile.PatternMatchRoiX.GetValueOrDefault(),
                     vm.CurrentProfile.PatternMatchRoiY.GetValueOrDefault(),

@@ -16,6 +16,20 @@ namespace LumasharpChecker.view
             Content = "啟用定位", IsChecked = true, FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center
         };
+        private readonly CheckBox _selectWayToggle = new CheckBox
+        {
+            Content = "使用", IsChecked = true, FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "勾選：本次流程使用選向；取消勾選：略過選向"
+        };
+        private readonly CheckBox _selectFaceToggle = new CheckBox
+        {
+            Content = "使用", IsChecked = true, FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "勾選：本次流程使用選面；取消勾選：略過選面"
+        };
         public event Action<string>? PipelineStatusChanged;
         public void SetPipelineStatus(string message) => PipelineStatusChanged?.Invoke(message);
 
@@ -23,6 +37,8 @@ namespace LumasharpChecker.view
         public event EventHandler? SelectWayRequested;
         public event EventHandler? SelectFaceRequested;
         public event EventHandler? LocatorEnabledChanged;
+        public event EventHandler? SelectWayEnabledChanged;
+        public event EventHandler? SelectFaceEnabledChanged;
         public event EventHandler? CollapseRequested;
         public event EventHandler? LightRequested;
         public event EventHandler? RetestRequested;
@@ -30,12 +46,18 @@ namespace LumasharpChecker.view
         public event EventHandler? ResultsRequested;
         public event EventHandler? SizeStatisticsRequested;
         public bool IsLocatorEnabled => _locateToggle.IsChecked == true;
+        public bool IsSelectWayEnabled => _selectWayToggle.IsChecked == true;
+        public bool IsSelectFaceEnabled => _selectFaceToggle.IsChecked == true;
 
         public AoiWorkflowPanel()
         {
             AutomationProperties.SetName(_locateToggle, "啟用定位測試");
             _locateToggle.Checked += (_, _) => LocatorEnabledChanged?.Invoke(this, EventArgs.Empty);
             _locateToggle.Unchecked += (_, _) => LocatorEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectWayToggle.Checked += (_, _) => SelectWayEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectWayToggle.Unchecked += (_, _) => SelectWayEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectFaceToggle.Checked += (_, _) => SelectFaceEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectFaceToggle.Unchecked += (_, _) => SelectFaceEnabledChanged?.Invoke(this, EventArgs.Empty);
             Content = BuildContent();
         }
 
@@ -154,10 +176,12 @@ namespace LumasharpChecker.view
             else if (name != "光源檢測" && name != "結果")
             {
                 var nativeToggle = name == "選向" || name == "選面";
-                var toggle = new CheckBox { IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Center,
-                    ToolTip = nativeToggle ? "原廠 Recipe 控制此工具是否啟用；此處不修改原廠參數" : "工具尚未接入" };
-                AutomationProperties.SetName(toggle, nativeToggle ? name + "依原廠 Recipe 設定" : name + "尚未開放");
-                ToolTipService.SetShowOnDisabled(toggle, true);
+                var toggle = name == "選向" ? _selectWayToggle :
+                    name == "選面" ? _selectFaceToggle :
+                    new CheckBox { IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Center,
+                        ToolTip = "工具尚未接入" };
+                AutomationProperties.SetName(toggle, nativeToggle ? "本次使用" + name : name + "尚未開放");
+                if (!nativeToggle) ToolTipService.SetShowOnDisabled(toggle, true);
                 Grid.SetRow(toggle, 0);
                 cell.Children.Add(toggle);
             }

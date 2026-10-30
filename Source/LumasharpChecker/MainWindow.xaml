@@ -427,8 +427,6 @@
                     </Button>
                 </StackPanel>
                 <StackPanel x:Name="SidebarFooter" DockPanel.Dock="Bottom" Margin="8,12,4,4">
-                    <TextBlock Text=".NET Framework 4.7.2" Foreground="{StaticResource Muted}"
-                               FontSize="10" TextWrapping="Wrap"/>
                     <TextBlock Text="獨立精簡版" Foreground="{StaticResource Muted}" FontSize="10" Margin="0,4,0,0"/>
                 </StackPanel>
             </DockPanel>
@@ -451,7 +449,7 @@
                     <Button Style="{StaticResource TopIconButton}"
                             Click="OpenRecipeManager_Click" Content="&#xE8B7;"
                             AutomationProperties.Name="上方選擇配方"
-                            ToolTip="選擇／管理 Recipe"/>
+                            ToolTip="選擇／管理配方"/>
                     <Border Width="1" Height="30" Background="{StaticResource HudBorder}"
                             Margin="6,0"/>
                     <Button Style="{StaticResource TopIconButton}"
@@ -480,9 +478,9 @@
                         BorderBrush="{StaticResource Line}" BorderThickness="1"
                         Padding="12,5" Margin="0,0,12,0">
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock Text="目前 Recipe" FontSize="10"
+                        <TextBlock Text="目前配方" FontSize="10"
                                    Foreground="{StaticResource HudTextSoft}"/>
-                        <TextBlock Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未載入 Recipe}"
+                        <TextBlock Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未載入配方}"
                                    FontWeight="SemiBold" FontSize="14" Margin="0,2,0,0"
                                    Foreground="{StaticResource HudText}" TextTrimming="CharacterEllipsis"
                                    ToolTip="{Binding CurrentRecipe.Name}"/>
@@ -622,7 +620,7 @@
                         </StackPanel.Style>
                         <TextBlock Text="&#xEB9F;" FontFamily="Segoe MDL2 Assets" FontSize="36" Foreground="#8D9BAD" HorizontalAlignment="Center"/>
                         <TextBlock Text="使用目前站別 OK DB" Foreground="#E4E9F1" FontSize="17" Margin="0,18,0,8" HorizontalAlignment="Center"/>
-                        <TextBlock Text="先選 Recipe 與站別，再載入樣本" Foreground="#A7B1C1" FontSize="12" HorizontalAlignment="Center"/>
+                        <TextBlock Text="先選配方與站別，再載入樣本" Foreground="#A7B1C1" FontSize="12" HorizontalAlignment="Center"/>
                         <Button Content="載入 OK DB" Command="{Binding OpenStationDatabaseCommand}"
                                 CommandParameter="OK" IsEnabled="{Binding IsRecipeActive}"
                                 AutomationProperties.Name="影像區載入 OK DB"
@@ -690,7 +688,7 @@
                                         IsEnabled="{Binding IsRecipeActive}"
                                         Content="多外觀試作"
                                         AutomationProperties.Name="開啟多外觀參數試作"
-                                        ToolTip="預覽多外觀分組、獨立 ROI 和各組統計流程；試作不會修改 Recipe。"
+                                        ToolTip="預覽多外觀分組、獨立 ROI 和各組統計流程；試作不會修改配方。"
                                         Margin="0,0,6,0" Padding="10,4"/>
                                 <Button Command="{Binding ResetCurrentParametersCommand}"
                                         IsEnabled="{Binding CanEditRoi}"

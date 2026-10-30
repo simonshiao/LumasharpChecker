@@ -103,7 +103,7 @@ namespace LumasharpChecker.model
                     throw new InvalidOperationException("原生流程異常執行了 AI，禁止光源檢測。");
                 if (!string.Equals(report.Recipe, native.Name, StringComparison.OrdinalIgnoreCase) ||
                     report.Station != station || report.Exit != process.ExitCode)
-                    throw new InvalidDataException("原生回傳站別／Recipe／退出碼不一致。");
+                    throw new InvalidDataException("原生回傳的站別／配方／退出碼不一致。");
                 if (process.ExitCode != 0)
                     throw new InvalidOperationException("原生定位流程未通過：" +
                         report.Summary + (string.IsNullOrWhiteSpace(report.Error)
@@ -118,16 +118,16 @@ namespace LumasharpChecker.model
         {
             if (recipe == null) throw new ArgumentNullException(nameof(recipe));
             if (!Guid.TryParseExact(recipe.Id, "N", out _))
-                throw new InvalidDataException("Recipe ID 無效。");
+                throw new InvalidDataException("配方識別碼無效。");
             if (string.IsNullOrWhiteSpace(recipe.VendorRecipePath))
-                throw new InvalidOperationException("目前 Recipe 尚未匯入原廠參數。請先按「匯入原廠資料」。");
+                throw new InvalidOperationException("目前配方尚未匯入原廠參數。請先按「匯入」。");
 
             string vendorName = Path.GetFileName(recipe.VendorRecipePath.TrimEnd(
                 Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             if (string.IsNullOrWhiteSpace(vendorName) || vendorName == "." || vendorName == ".." ||
                 vendorName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0 ||
                 vendorName.IndexOfAny(new[] {'/', '\\', ':'}) >= 0)
-                throw new InvalidDataException("原廠 Recipe 名稱不安全，無法載入。");
+                throw new InvalidDataException("原廠配方名稱不安全，無法載入。");
 
             string source = Path.Combine(Path.GetFullPath(appBase), "recipes", recipe.Id, "vendor-source");
             string nativeRoot = Path.Combine(Path.GetFullPath(appBase), "NativeR3");
@@ -217,7 +217,7 @@ namespace LumasharpChecker.model
                 throw new DirectoryNotFoundException("Luma 的原廠 Recipe 副本不存在或包含連結。");
             if (!File.Exists(Path.Combine(source, "Setting.ini")) ||
                 !Enumerable.Range(1, 8).All(i => File.Exists(Path.Combine(source, "station" + i + ".ini"))))
-                throw new InvalidDataException("原廠 Recipe 副本不完整：需 Setting.ini 與 station1～8.ini。");
+                throw new InvalidDataException("原廠配方副本不完整：需 Setting.ini 與 station1～8.ini。");
             var relative = new List<string>();
             Visit(source, source, relative);
             return relative.OrderBy(f => f, StringComparer.OrdinalIgnoreCase).ToList();
@@ -225,10 +225,10 @@ namespace LumasharpChecker.model
 
         private static void Visit(string root, string dir, List<string> files)
         {
-            if (IsLink(dir)) throw new InvalidDataException("原廠 Recipe 內有資料夾連結：" + dir);
+            if (IsLink(dir)) throw new InvalidDataException("原廠配方內有資料夾連結：" + dir);
             foreach (string file in Directory.EnumerateFiles(dir))
             {
-                if (IsLink(file)) throw new InvalidDataException("原廠 Recipe 內有檔案連結：" + file);
+                if (IsLink(file)) throw new InvalidDataException("原廠配方內有檔案連結：" + file);
                 files.Add(file.Substring(root.Length + 1));
             }
             foreach (string child in Directory.EnumerateDirectories(dir)) Visit(root, child, files);
@@ -240,13 +240,13 @@ namespace LumasharpChecker.model
         private static void CompareExactFiles(string source, string destination, IReadOnlyList<string> files)
         {
             if (!Directory.Exists(destination) || IsLink(destination))
-                throw new InvalidDataException("原生 Recipe 不是正常資料夾。");
+                throw new InvalidDataException("原生配方不是正常資料夾。");
             var found = new List<string>();
             Visit(destination, destination, found);
             if (found.Count != files.Count ||
                 !found.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
                      .SequenceEqual(files, StringComparer.OrdinalIgnoreCase))
-                throw new InvalidDataException("原生 Recipe 已存在但檔案清單不同，禁止覆蓋。");
+                throw new InvalidDataException("原生配方已存在但檔案清單不同，禁止覆蓋。");
             using var sha = SHA256.Create();
             foreach (string file in files)
             {
@@ -255,7 +255,7 @@ namespace LumasharpChecker.model
                 using var b = File.OpenRead(Path.Combine(destination, file));
                 byte[] second = sha.ComputeHash(b);
                 if (!first.SequenceEqual(second))
-                    throw new InvalidDataException("原生 Recipe 與 Luma 快照不一致：" + file + "，禁止覆蓋。");
+                    throw new InvalidDataException("原生配方與 Luma 快照不一致：" + file + "，禁止覆蓋。");
             }
         }
 
@@ -283,7 +283,7 @@ namespace LumasharpChecker.model
             // not reject a successful validation based on the printed path.
             // CompareExactFiles() already verified each file and its SHA-256.
             if (process.ExitCode != 0)
-                throw new InvalidDataException("原生 InspTools R3 無法接受此 Recipe：" +
+                throw new InvalidDataException("原生 InspTools R3 無法接受此配方：" +
                     (string.IsNullOrWhiteSpace(error) ? output : error));
         }
     }

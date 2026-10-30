@@ -73,6 +73,24 @@ public sealed class RecipeManager
         public string? LastRecipeId { get; set; }
     }
 
+    public sealed class VendorRecipeFolder
+    {
+        public string Name { get; set; } = string.Empty;
+        public string SourcePath { get; set; } = string.Empty;
+        public int StationCount { get; set; }
+    }
+
+    public sealed class VendorSnapshotDiff
+    {
+        public List<string> AddedFolders { get; } = new();
+        public List<string> RemovedFolders { get; } = new();
+        public List<string> Added { get; } = new();
+        public List<string> Modified { get; } = new();
+        public List<string> Removed { get; } = new();
+        public bool HasChanges => AddedFolders.Count > 0 || RemovedFolders.Count > 0
+            || Added.Count > 0 || Modified.Count > 0 || Removed.Count > 0;
+    }
+
     public AppPreferences LoadPreferences()
     {
         if (!File.Exists(PreferencesPath)) return new AppPreferences();
@@ -123,10 +141,10 @@ public sealed class RecipeManager
     public RecipeManifest CreateRecipe(string name, int stationCount)
     {
         name = name.Trim();
-        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Recipe 名稱不可空白。", nameof(name));
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("配方名稱不可空白。", nameof(name));
         if (stationCount is not (8 or 10)) throw new ArgumentOutOfRangeException(nameof(stationCount));
         if (LoadAllRecipes().Any(recipe => string.Equals(recipe.Name, name, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException($"已經有同名 Recipe：{name}");
+            throw new InvalidOperationException($"已經有同名配方：{name}");
 
         var recipe = new RecipeManifest { Name = name, StationCount = stationCount };
         Directory.CreateDirectory(GetRecipeDirectory(recipe));
@@ -147,26 +165,191 @@ public sealed class RecipeManager
         WriteJsonAtomically(Path.Combine(GetRecipeDirectory(recipe), "recipe.json"), recipe);
     }
 
+    public List<VendorRecipeFolder> DiscoverVendorRecipeFolders(string selectedRoot)
+    {
+        string root = Path.GetFullPath(selectedRoot).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        if (!Directory.Exists(root)) throw new DirectoryNotFoundException("找不到原廠資料夾。");
+        var rootInfo = new DirectoryInfo(root);
+        var folders = new List<DirectoryInfo>();
+        if (IsVendorRecipeFolder(root)) folders.Add(rootInfo);
+        else folders.AddRange(rootInfo.EnumerateDirectories().Where(directory => IsVendorRecipeFolder(directory.FullName)));
+
+        return folders.OrderBy(folder => folder.Name, StringComparer.CurrentCultureIgnoreCase)
+            .Select(folder => new VendorRecipeFolder
+            {
+                Name = folder.Name,
+                SourcePath = folder.FullName,
+                StationCount = Enumerable.Range(1, 10).Count(number => File.Exists(Path.Combine(folder.FullName, $"station{number}.ini")))
+            }).ToList();
+    }
+
+    public VendorSnapshotDiff CompareVendorSnapshot(string sourcePath, RecipeManifest? existingRecipe)
+    {
+        ValidateVendorRecipeFolder(sourcePath);
+        string source = Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string baseFull = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string sourcePrefix = source + Path.DirectorySeparatorChar;
+        if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) ||
+            baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("原廠來源與本機配方目錄不可互相包含。");
+
+        var sourceFiles = GetVendorFileHashes(source);
+        string snapshotPath = existingRecipe == null ? string.Empty : Path.Combine(GetRecipeDirectory(existingRecipe), "vendor-source");
+        var snapshotFiles = Directory.Exists(snapshotPath) ? GetVendorFileHashes(snapshotPath) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var sourceFolders = GetVendorFolders(source);
+        var snapshotFolders = Directory.Exists(snapshotPath) ? GetVendorFolders(snapshotPath) : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var diff = new VendorSnapshotDiff();
+        diff.AddedFolders.AddRange(sourceFolders.Where(path => !snapshotFolders.Contains(path)));
+        diff.RemovedFolders.AddRange(snapshotFolders.Where(path => !sourceFolders.Contains(path)));
+        foreach (var pair in sourceFiles)
+        {
+            if (!snapshotFiles.TryGetValue(pair.Key, out string? existingHash)) diff.Added.Add(pair.Key);
+            else if (!string.Equals(pair.Value, existingHash, StringComparison.OrdinalIgnoreCase)) diff.Modified.Add(pair.Key);
+        }
+        foreach (string path in snapshotFiles.Keys)
+            if (!sourceFiles.ContainsKey(path)) diff.Removed.Add(path);
+        diff.AddedFolders.Sort(StringComparer.CurrentCultureIgnoreCase);
+        diff.RemovedFolders.Sort(StringComparer.CurrentCultureIgnoreCase);
+        diff.Added.Sort(StringComparer.CurrentCultureIgnoreCase);
+        diff.Modified.Sort(StringComparer.CurrentCultureIgnoreCase);
+        diff.Removed.Sort(StringComparer.CurrentCultureIgnoreCase);
+        return diff;
+    }
+
+    public RecipeManifest ImportOrUpdateVendorSnapshot(string sourcePath, RecipeManifest? existingRecipe)
+    {
+        string name = Path.GetFileName(Path.GetFullPath(sourcePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        if (existingRecipe == null) return ImportVendorSnapshot(sourcePath, name);
+        UpdateVendorSnapshot(existingRecipe, sourcePath);
+        return existingRecipe;
+    }
+
+    public void UpdateVendorSnapshot(RecipeManifest recipe, string selectedPath)
+    {
+        if (recipe == null) throw new ArgumentNullException(nameof(recipe));
+        ValidateVendorRecipeFolder(selectedPath);
+        string recipeDir = GetRecipeDirectory(recipe);
+        if (!File.Exists(Path.Combine(recipeDir, "recipe.json")))
+            throw new InvalidOperationException("本機配方不存在，無法更新。");
+
+        string source = Path.GetFullPath(selectedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        string baseFull = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        string sourcePrefix = source + Path.DirectorySeparatorChar;
+        if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) ||
+            baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("原廠來源與本機配方目錄不可互相包含。");
+
+        string nonce = Guid.NewGuid().ToString("N");
+        string stage = Path.Combine(recipeDir, ".vendor-stage-" + nonce);
+        string target = Path.Combine(recipeDir, "vendor-source");
+        string backup = Path.Combine(recipeDir, ".vendor-backup-" + nonce);
+        string? previousPath = recipe.VendorRecipePath;
+        string previousUpdatedAt = recipe.UpdatedAt;
+        bool movedOld = false, movedNew = false;
+        try
+        {
+            CopyVendorDirectory(source, stage);
+            if (Directory.Exists(target)) { Directory.Move(target, backup); movedOld = true; }
+            Directory.Move(stage, target); movedNew = true;
+            recipe.VendorRecipePath = source;
+            SaveManifest(recipe);
+            // Preserve the previous snapshot so a completed update remains recoverable.
+        }
+        catch
+        {
+            recipe.VendorRecipePath = previousPath;
+            recipe.UpdatedAt = previousUpdatedAt;
+            if (movedNew && Directory.Exists(target)) Directory.Move(target, stage);
+            if (movedOld && Directory.Exists(backup) && !Directory.Exists(target)) Directory.Move(backup, target);
+            if (Directory.Exists(stage))
+            {
+                try { Directory.Delete(stage, true); }
+                catch { /* A leftover hidden staging folder does not affect the active recipe. */ }
+            }
+            throw;
+        }
+    }
+
+    private static bool IsVendorRecipeFolder(string path) =>
+        Directory.Exists(path) && File.Exists(Path.Combine(path, "Setting.ini")) &&
+        Enumerable.Range(1, 8).Any(number => File.Exists(Path.Combine(path, $"station{number}.ini")));
+
+    private static void ValidateVendorRecipeFolder(string path)
+    {
+        if (!Directory.Exists(path)) throw new DirectoryNotFoundException("找不到原廠配方資料夾。");
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("原廠配方不能是連結資料夾。");
+        if (!IsVendorRecipeFolder(path))
+            throw new InvalidDataException("資料夾須包含 Setting.ini 與至少一個 station1.ini～station8.ini。");
+    }
+
+    private static Dictionary<string, string> GetVendorFileHashes(string root)
+    {
+        string rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var files = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        AddVendorFileHashes(rootFull, rootFull, files);
+        return files;
+    }
+
+    private static HashSet<string> GetVendorFolders(string root)
+    {
+        string rootFull = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddVendorFolders(rootFull, rootFull, folders);
+        return folders;
+    }
+
+    private static void AddVendorFolders(string root, string directory, HashSet<string> folders)
+    {
+        if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("原廠配方含連結資料夾，無法比對：" + directory);
+        foreach (string child in Directory.EnumerateDirectories(directory))
+        {
+            if ((File.GetAttributes(child) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("原廠配方含連結資料夾，無法比對：" + child);
+            string relative = child.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            folders.Add(relative);
+            AddVendorFolders(root, child, folders);
+        }
+    }
+
+    private static void AddVendorFileHashes(string root, string directory, Dictionary<string, string> files)
+    {
+        if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("原廠配方含連結資料夾，無法比對：" + directory);
+        foreach (string file in Directory.EnumerateFiles(directory))
+        {
+            if ((File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("原廠配方含連結檔案，無法比對：" + file);
+            string relative = file.Substring(root.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            using var sha = SHA256.Create();
+            using var stream = File.OpenRead(file);
+            files[relative] = BitConverter.ToString(sha.ComputeHash(stream)).Replace("-", string.Empty);
+        }
+        foreach (string child in Directory.EnumerateDirectories(directory))
+            AddVendorFileHashes(root, child, files);
+    }
+
     /// <summary>Creates an unconfigured Luma recipe containing a verified vendor source snapshot.
     /// This preserves vendor data; it does not translate inspection parameters.</summary>
     public RecipeManifest ImportVendorSnapshot(string selectedPath, string name)
     {
         string source = Path.GetFullPath(selectedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (!Directory.Exists(source)) throw new DirectoryNotFoundException("找不到原廠 Recipe 資料夾。");
+        if (!Directory.Exists(source)) throw new DirectoryNotFoundException("找不到原廠配方資料夾。");
         if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
-            throw new InvalidOperationException("原廠 Recipe 不能是連結資料夾。");
+            throw new InvalidOperationException("原廠配方不能是連結資料夾。");
         name = name.Trim();
-        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("Recipe 名稱不可空白。");
+        if (string.IsNullOrWhiteSpace(name)) throw new ArgumentException("配方名稱不可空白。");
         if (LoadAllRecipes().Any(item => string.Equals(item.Name, name, StringComparison.OrdinalIgnoreCase)))
-            throw new InvalidOperationException("已有同名 Recipe，請使用不同名稱。");
+            throw new InvalidOperationException("已有同名配方，請使用不同名稱。");
         var stations = Enumerable.Range(1, 8).Where(n => File.Exists(Path.Combine(source, $"station{n}.ini"))).ToArray();
         if (stations.Length == 0 || !File.Exists(Path.Combine(source, "Setting.ini")))
-            throw new InvalidDataException("請選擇含 Setting.ini 與 station1.ini 等站別檔案的原廠 Recipe 資料夾。");
+            throw new InvalidDataException("請選擇含 Setting.ini 與 station1.ini 等站別檔案的原廠配方資料夾。");
         string baseFull = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         string sourcePrefix = source + Path.DirectorySeparatorChar;
         if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) ||
             baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("原廠來源與 Luma Recipe 目錄不可互相包含。");
+            throw new InvalidOperationException("原廠來源與本機配方目錄不可互相包含。");
 
         var recipe = new RecipeManifest { Name = name, StationCount = 8, VendorRecipePath = source };
         string staging = Path.Combine(BasePath, ".vendor-import-" + recipe.Id);
@@ -195,18 +378,18 @@ public sealed class RecipeManager
         if (recipe == null) throw new ArgumentNullException(nameof(recipe));
         string recipeDir = GetRecipeDirectory(recipe);
         if (!File.Exists(Path.Combine(recipeDir, "recipe.json")))
-            throw new InvalidOperationException("目前 Recipe 不存在，無法匯入。");
+            throw new InvalidOperationException("目前配方不存在，無法匯入。");
         string source = Path.GetFullPath(selectedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        if (!Directory.Exists(source)) throw new DirectoryNotFoundException("找不到原廠 Recipe 資料夾。");
+        if (!Directory.Exists(source)) throw new DirectoryNotFoundException("找不到原廠配方資料夾。");
         if ((File.GetAttributes(source) & FileAttributes.ReparsePoint) != 0)
-            throw new InvalidOperationException("原廠 Recipe 不能是連結資料夾。");
+            throw new InvalidOperationException("原廠配方不能是連結資料夾。");
         if (!File.Exists(Path.Combine(source, "Setting.ini")) ||
             !Enumerable.Range(1, 8).Any(n => File.Exists(Path.Combine(source, $"station{n}.ini"))))
-            throw new InvalidDataException("請選擇含 Setting.ini 與 station1.ini 等站別檔案的原廠 Recipe 資料夾。");
+            throw new InvalidDataException("請選擇含 Setting.ini 與 station1.ini 等站別檔案的原廠配方資料夾。");
         string baseFull = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         string sourcePrefix = source + Path.DirectorySeparatorChar;
         if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) || baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("原廠來源與 Luma Recipe 目錄不可互相包含。");
+            throw new InvalidOperationException("原廠來源與本機配方目錄不可互相包含。");
         string nonce = Guid.NewGuid().ToString("N");
         string stage = Path.Combine(recipeDir, ".vendor-stage-" + nonce);
         string target = Path.Combine(recipeDir, "vendor-source");
@@ -311,7 +494,7 @@ public sealed class RecipeManager
             recipe = CreateRecipe(name, 8);
         else if (!string.IsNullOrWhiteSpace(recipe.TrainingImageRoot)
                  && !string.Equals(recipe.TrainingImageRoot, trainingRoot, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("同名 TrainingImage Recipe 已使用其他來源，請先核對。");
+            throw new InvalidOperationException("同名訓練圖庫配方已使用其他來源，請先核對。");
 
         recipe.StationCount = 8;
         recipe.TrainingImageRoot = trainingRoot;
@@ -442,7 +625,7 @@ public sealed class RecipeManager
         string baseDirectory = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
         string recipeDirectory = Path.GetFullPath(GetRecipeDirectory(recipe));
         if (!recipeDirectory.StartsWith(baseDirectory, StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Recipe 路徑不在 Recipe 資料夾內。");
+            throw new InvalidOperationException("配方路徑不在配方資料夾內。");
         if (Directory.Exists(recipeDirectory)) Directory.Delete(recipeDirectory, true);
     }
 
@@ -457,7 +640,7 @@ public sealed class RecipeManager
     private string GetRecipeDirectory(RecipeManifest recipe)
     {
         if (!Guid.TryParseExact(recipe.Id, "N", out _))
-            throw new InvalidOperationException("Recipe ID 格式無效。");
+            throw new InvalidOperationException("配方識別碼格式無效。");
         return Path.Combine(BasePath, recipe.Id);
     }
 

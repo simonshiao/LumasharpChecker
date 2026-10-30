@@ -236,7 +236,7 @@ namespace LumasharpChecker.viewmodel
         private int _currentStationNumber = 1;
 
         [ObservableProperty]
-        private string _stationStatusMessage = "請先開啟 Recipe 與設定，選擇或新增 Recipe。";
+        private string _stationStatusMessage = "請先開啟配方與設定，選擇或新增配方。";
 
         [ObservableProperty]
         private ObservableCollection<string> _limitModeItems = new(new[] { ProfileManager.LimitMode.Percent, ProfileManager.LimitMode.Fixed });
@@ -252,6 +252,11 @@ namespace LumasharpChecker.viewmodel
 
         [ObservableProperty]
         private ProfileData? _selectedItem;
+
+        // Recipe station profiles are independent copies. This separate field
+        // selects only a shared library template to copy into the active station.
+        [ObservableProperty]
+        private ProfileData? _selectedRecipeTemplate;
 
         [ObservableProperty]
         private ProfileData? _currentProfile;
@@ -546,7 +551,7 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void CreateRecipe()
         {
-            string name = Interaction.InputBox("輸入 Recipe 名稱。此 Recipe 會建立完整的站別骨架。", "建立 Recipe", "新 Recipe").Trim();
+            string name = Interaction.InputBox("輸入配方名稱，此配方會建立完整的站別。", "建立配方", "新配方").Trim();
             if (string.IsNullOrWhiteSpace(name)) return;
             try
             {
@@ -554,68 +559,64 @@ namespace LumasharpChecker.viewmodel
                 Recipes.Add(recipe);
                 SelectedRecipe = recipe;
                 LoadSelectedRecipe();
-                SaveSettingsMessage = $"已建立 Recipe：{name}";
+                SaveSettingsMessage = $"已建立配方：{name}";
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, "建立 Recipe 失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(ex.Message, "建立配方失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
         [RelayCommand]
         private void ImportVendorRecipeSnapshot()
         {
-            if (CurrentRecipe == null)
-            {
-                MessageBox.Show("請先載入要匯入的現有 Recipe。", "匯入原廠 Recipe", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
             {
-                MessageBox.Show("檢測進行中，請先完成或停止。", "匯入原廠 Recipe", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("檢測進行中，請先完成或停止。", "匯入原廠資料", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             try
             {
                 Window owner = Application.Current.Windows.OfType<RecipeManagerWindow>()
                     .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
-                string? folder = ExplorerFolderPicker.PickFolder(owner, "選擇原廠 Recipe 資料夾", Environment.CurrentDirectory);
+                string? folder = ExplorerFolderPicker.PickFolder(owner, "選擇原廠配方資料庫資料夾", Environment.CurrentDirectory);
                 if (folder == null) return;
-                recipeManager.AttachVendorSnapshot(CurrentRecipe, folder);
-                SaveSettingsMessage = $"已匯入 {CurrentRecipe.Name} 的原廠資料副本；站別參數尚未轉換。";
-                MessageBox.Show(owner, "已將原廠資料副本加入目前 Recipe，並校驗檔案。\n原本 Luma 設定保留；原廠定位尚未轉為正式檢測參數。", "匯入完成", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(ex.Message, "原廠 Recipe 匯入失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
+                var importWindow = new VendorRecipeImportWindow(owner, recipeManager, Recipes.ToList(), folder);
+                if (importWindow.ShowDialog() != true) return;
 
-        [RelayCommand]
-        private void OpenNativeRecipe()
-        {
-            if (CurrentRecipe == null)
-            {
-                MessageBox.Show("請先載入 Recipe。", "原生 Recipe", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
-            {
-                MessageBox.Show("請先停止檢測，再開啟原生 Recipe。", "原生 Recipe",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            try
-            {
-                var ready = NativeRecipeBridge.Prepare(CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
-                NativeRecipeBridge.OpenSandbox(ready, CurrentStationNumber);
-                SaveSettingsMessage = $"InspTools R3 已驗證 {ready.Name}（{ready.FileCount} 個檔案），於隔離副本開啟第 {CurrentStationNumber} 站。";
+                int created = 0, updated = 0;
+                var failures = new List<string>();
+                foreach (var source in importWindow.SelectedFolders)
+                {
+                    try
+                    {
+                        var existing = Recipes.FirstOrDefault(recipe =>
+                            string.Equals(recipe.Name, source.Name, StringComparison.OrdinalIgnoreCase));
+                        var imported = recipeManager.ImportOrUpdateVendorSnapshot(source.SourcePath, existing);
+                        if (existing == null)
+                        {
+                            Recipes.Add(imported);
+                            created++;
+                        }
+                        else
+                        {
+                            updated++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add($"{source.Name}：{ex.Message}");
+                    }
+                }
+                SaveSettingsMessage = $"原廠配方匯入完成：新建 {created} 個、更新 {updated} 個，失敗 {failures.Count} 個。";
+                string result = SaveSettingsMessage + "\n站別檢測設定已保留；原廠參數仍是獨立副本。";
+                if (failures.Count > 0) result += "\n\n" + string.Join("\n", failures.Take(8));
+                MessageBox.Show(owner, result, failures.Count == 0 ? "匯入完成" : "匯入部分完成",
+                    MessageBoxButton.OK, failures.Count == 0 ? MessageBoxImage.Information : MessageBoxImage.Warning);
             }
             catch (Exception ex)
             {
-                SaveSettingsMessage = "原生 Recipe 載入失敗：" + ex.Message;
-                MessageBox.Show(ex.GetBaseException().Message, "原生 Recipe",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show(ex.Message, "原廠配方匯入失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
         }
 
@@ -642,7 +643,7 @@ namespace LumasharpChecker.viewmodel
                 var selected = dialog.SelectedCandidates;
                 string summary = string.Join("\n", selected.Select(item =>
                     $"第 {item.Station:00} 站：{item.FolderName}（OK {item.OkCount}／NG {item.NgCount}）"));
-                if (MessageBox.Show(owner, $"將下列圖庫路徑套用到目前 Recipe「{CurrentRecipe.Name}」：\n\n{summary}\n\n所選站別原有 OK／NG 路徑會被替換；沒有圖片的分類會清空。其他站別及檢測參數不變。\n\n是否套用？",
+                if (MessageBox.Show(owner, $"將下列圖庫路徑套用到目前配方「{CurrentRecipe.Name}」：\n\n{summary}\n\n所選站別原有 OK／NG 路徑會被替換；沒有圖片的分類會清空。其他站別及檢測參數不變。\n\n是否套用？",
                     "確認訓練圖庫", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
                 var recipe = CurrentRecipe;
                 var oldPaths = selected.Select(item => { var station = recipe.Stations.Single(s => s.Number == item.Station); return (station, station.OkDatabasePath, station.NgDatabasePath); }).ToList();
@@ -709,7 +710,7 @@ namespace LumasharpChecker.viewmodel
         // 供主畫面與明確 --import-trainingimage 命令列共同使用；不會改原廠母本。
         public void ImportTrainingImageRecipeFromPath(string sourceFolder)
         {
-            if (IsAnalyzingTestImages) throw new InvalidOperationException("檢測進行中，不可匯入 Recipe。");
+            if (IsAnalyzingTestImages) throw new InvalidOperationException("檢測進行中，不可匯入配方。");
             var recipe = recipeManager.ImportTrainingImageRecipe(sourceFolder, cacheSamples: true);
             var previous = Recipes.FirstOrDefault(item => item.Id == recipe.Id);
             if (previous != null) Recipes[Recipes.IndexOf(previous)] = recipe;
@@ -722,7 +723,7 @@ namespace LumasharpChecker.viewmodel
             int available = recipe.Stations.Count(station =>
                 station.Number <= 8 && (!string.IsNullOrEmpty(station.OkDatabasePath)
                     || !string.IsNullOrEmpty(station.NgDatabasePath)));
-            SaveSettingsMessage = $"已建立 {recipe.Name}：{available}/8 站有離線快取；檢測參數須另外校準。";
+                SaveSettingsMessage = $"已建立配方 {recipe.Name}：{available}/8 站有離線快取；檢測參數須另外校準。";
         }
 
         [RelayCommand]
@@ -731,7 +732,7 @@ namespace LumasharpChecker.viewmodel
             if (SelectedRecipe == null) return;
             if (IsAnalyzingTestImages || IsMultiStationTesting)
             {
-                SaveSettingsMessage = "圖片仍在檢測中，請完成後再切換 Recipe";
+                SaveSettingsMessage = "圖片仍在檢測中，請完成後再切換配方";
                 return;
             }
 
@@ -764,7 +765,7 @@ namespace LumasharpChecker.viewmodel
             CurrentStationNumber = 1;
             RefreshStationSlots();
             LoadCurrentProfile(SelectedItem, isLibraryProfile: true);
-            StationStatusMessage = "Recipe 已關閉；請開啟 Recipe 與設定。";
+            StationStatusMessage = "配方已關閉；請開啟配方與設定。";
         }
 
         [RelayCommand]
@@ -772,10 +773,10 @@ namespace LumasharpChecker.viewmodel
         {
             if (SelectedRecipe == null)
             {
-                SaveSettingsMessage = "請先選擇 Recipe";
+                SaveSettingsMessage = "請先選擇配方";
                 return;
             }
-            var result = MessageBox.Show($"確定要刪除 Recipe「{SelectedRecipe.Name}」及其站別資料？\n設定檔庫不會受到影響。", "刪除 Recipe", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            var result = MessageBox.Show($"確定要刪除配方「{SelectedRecipe.Name}」及其站別資料？\n設定檔庫不會受到影響。", "刪除配方", MessageBoxButton.YesNo, MessageBoxImage.Warning);
             if (result != MessageBoxResult.Yes) return;
 
             try
@@ -789,11 +790,11 @@ namespace LumasharpChecker.viewmodel
                 }
                 Recipes.Remove(SelectedRecipe);
                 SelectedRecipe = null;
-                SaveSettingsMessage = "Recipe 已刪除";
+                SaveSettingsMessage = "配方已刪除";
             }
             catch (Exception ex)
             {
-                SaveSettingsMessage = $"刪除 Recipe 失敗：{ex.Message}";
+                SaveSettingsMessage = $"刪除配方失敗：{ex.Message}";
             }
         }
 
@@ -817,20 +818,21 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void ApplyLibraryProfileToStation()
         {
-            if (CurrentRecipe == null || SelectedItem == null) return;
+            if (CurrentRecipe == null || SelectedRecipeTemplate == null) return;
+            var template = SelectedRecipeTemplate;
             bool alreadyConfigured = CurrentRecipe.Stations.Single(station => station.Number == CurrentStationNumber).IsConfigured;
             if (alreadyConfigured && MessageBox.Show(
-                    $"要以「{SelectedItem.Name}」取代目前第 {CurrentStationNumber:00} 站的 Recipe 設定嗎？",
+                    $"要以「{template.Name}」取代「{CurrentRecipe.Name}」第 {CurrentStationNumber:00} 站的專屬設定嗎？",
                     "取代站別設定", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes)
                 return;
 
             try
             {
-                CurrentProfile = recipeManager.AssignProfile(CurrentRecipe, CurrentStationNumber, SelectedItem);
+                CurrentProfile = recipeManager.AssignProfile(CurrentRecipe, CurrentStationNumber, template);
                 LoadCurrentProfile(CurrentProfile, isLibraryProfile: false);
                 RefreshStationSlots();
-                StationStatusMessage = $"第 {CurrentStationNumber:00} 站已套用「{SelectedItem.Name}」的獨立副本。";
-                SaveSettingsMessage = "站別設定已加入 Recipe";
+                StationStatusMessage = $"「{CurrentRecipe.Name}」第 {CurrentStationNumber:00} 站已建立「{template.Name}」的專屬副本。";
+                SaveSettingsMessage = "站別設定已加入配方";
                 OnPropertyChanged(nameof(CurrentInspectionName));
             }
             catch (Exception ex)
@@ -842,15 +844,24 @@ namespace LumasharpChecker.viewmodel
         private void LoadRecipeStation()
         {
             if (CurrentRecipe == null) return;
+            // A shared template is only an input for applying a profile; it is
+            // not the active Recipe station profile. Clear it on every switch.
+            SelectedRecipeTemplate = null;
             try
             {
                 var profile = recipeManager.LoadStation(CurrentRecipe, CurrentStationNumber);
                 LoadCurrentProfile(profile, isLibraryProfile: false);
+                string? sourceName = CurrentRecipe.Stations
+                    .FirstOrDefault(station => station.Number == CurrentStationNumber)?.SourceProfileName;
+                SelectedRecipeTemplate = string.IsNullOrWhiteSpace(sourceName)
+                    ? null
+                    : Items.FirstOrDefault(item => string.Equals(
+                        item.Name, sourceName, StringComparison.OrdinalIgnoreCase));
                 RefreshStationSlots();
                 StationStatusMessage = profile == null
                     ? $"第 {CurrentStationNumber:00} 站尚未設定；按「新增參數」可直接用本站 OK 樣本建立，或從設定檔庫套用。"
                     : $"正在編輯 {CurrentRecipe.Name} 的第 {CurrentStationNumber:00} 站。"
-                        + (CurrentRecipe.Stations.Single(station => station.Number == CurrentStationNumber).SourceProfileName is string sourceName
+                        + (!string.IsNullOrWhiteSpace(sourceName)
                             ? $" 來源：{sourceName}。"
                             : string.Empty);
                 OnPropertyChanged(nameof(CurrentInspectionName));
@@ -904,7 +915,7 @@ namespace LumasharpChecker.viewmodel
         {
             if (CurrentRecipe == null)
             {
-                SaveSettingsMessage = "請先載入 Recipe，再設定各站 OK／NG 圖庫路徑。";
+                SaveSettingsMessage = "請先載入配方，再設定各站 OK／NG 圖庫路徑。";
                 return;
             }
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
@@ -1053,7 +1064,7 @@ namespace LumasharpChecker.viewmodel
         // 各站 OK／NG 可個別指定；只改對應站別與分類，不搬移或修改來源圖片。
         public void SetStationDatabaseFolder(int stationNumber, bool isOk, string selectedFolder)
         {
-            var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入 Recipe。");
+            var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入配方。");
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
                 throw new InvalidOperationException("檢測進行中，請完成或停止後再調整圖庫路徑。");
             if (stationNumber < 1 || stationNumber > recipe.StationCount)
@@ -1117,17 +1128,17 @@ namespace LumasharpChecker.viewmodel
         {
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
                 throw new InvalidOperationException("請等待目前檢測完成。");
-            string snapshot = GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("目前 Recipe 沒有原廠定位參數。");
+            string snapshot = GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("目前配方沒有原廠定位參數。");
             return NativeLocationService.LocateAsync(snapshot, CurrentStationNumber, imageFile);
         }
 
         internal Task<NativeLocationService.Frame> LocateLightFrameAsync(string imageFile)
         {
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting) throw new InvalidOperationException("請等待目前檢測完成。");
-            return NativeLocationService.LocateFrameAsync(GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("請先將原廠參數匯入目前 Recipe。"), CurrentStationNumber, imageFile);
+            return NativeLocationService.LocateFrameAsync(GetVendorRecipeSnapshotPath() ?? throw new InvalidOperationException("請先將原廠參數匯入目前配方。"), CurrentStationNumber, imageFile);
         }
 
-        private string LightSettingsPath() => CurrentRecipe == null ? throw new InvalidOperationException("請先載入 Recipe。") :
+        private string LightSettingsPath() => CurrentRecipe == null ? throw new InvalidOperationException("請先載入配方。") :
             Path.Combine(recipeManager.GetProfileBasePath(CurrentRecipe), RecipeManager.GetStationDirectoryName(CurrentStationNumber), "light-inspection.json");
 
         public LightInspectionSettings LoadLightSettings()
@@ -1382,14 +1393,25 @@ namespace LumasharpChecker.viewmodel
         public bool HasCurrentProfile => CurrentProfile != null;
         public bool HasSelectedRecipe => SelectedRecipe != null;
         public bool HasSelectedProfile => SelectedItem != null;
-        public bool CanApplyLibraryProfileToStation => CurrentRecipe != null && SelectedItem != null;
+        public bool HasSelectedRecipeTemplate => SelectedRecipeTemplate != null;
+        public bool CanApplyLibraryProfileToStation => CurrentRecipe != null && SelectedRecipeTemplate != null;
         public bool CanEditRoi => CurrentProfile != null && DisplayImage != null;
         public string CurrentInspectionName => CurrentRecipe == null
             ? CurrentProfile?.Name ?? "未選擇設定檔"
             : $"{CurrentRecipe.Name} / 第 {CurrentStationNumber:00} 站";
-        public string CurrentStationSettingsLabel => CurrentRecipe?.Stations.FirstOrDefault(station => station.Number == CurrentStationNumber)?.SourceProfileName
-            ?? CurrentProfile?.Name
-            ?? "尚未套用設定檔";
+        public string CurrentStationSettingsLabel
+        {
+            get
+            {
+                if (CurrentRecipe == null) return "請先載入 Recipe";
+                var station = CurrentRecipe.Stations.FirstOrDefault(item => item.Number == CurrentStationNumber);
+                if (station?.IsConfigured != true) return "尚未設定";
+                if (CurrentProfile == null) return "設定檔無法讀取";
+                return string.IsNullOrWhiteSpace(station.SourceProfileName)
+                    ? "Recipe 專屬設定"
+                    : station.SourceProfileName;
+            }
+        }
         public bool IsBrightnessOnlyMode => !IsSharpnessEnabled;
         public bool IsRoiPanelVisible => ShowRoiPanel;
         public string ResultsThumbnailMode => BatchPreviewMode == BatchPreviewModes.None
@@ -1415,6 +1437,11 @@ namespace LumasharpChecker.viewmodel
         partial void OnSelectedItemChanged(ProfileData? value)
         {
             OnPropertyChanged(nameof(HasSelectedProfile));
+        }
+
+        partial void OnSelectedRecipeTemplateChanged(ProfileData? value)
+        {
+            OnPropertyChanged(nameof(HasSelectedRecipeTemplate));
             OnPropertyChanged(nameof(CanApplyLibraryProfileToStation));
         }
 
@@ -1436,7 +1463,6 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(GlobalRunStatusText));
             OnPropertyChanged(nameof(CurrentInspectionName));
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
-            OnPropertyChanged(nameof(CanApplyLibraryProfileToStation));
             RefreshStationSlots();
             RefreshStationDatabasePaths();
             DatabaseDayFolderDisplay = value?.DatabaseDayFolder ?? string.Empty;
@@ -1610,7 +1636,7 @@ namespace LumasharpChecker.viewmodel
             }
             if (CurrentRecipe == null)
             {
-                StationStatusMessage = "請先載入 Recipe，再選擇站別新增參數。";
+                StationStatusMessage = "請先載入配方，再選擇站別新增參數。";
                 return;
             }
             if (IsAnalyzingTestImages)
@@ -1671,7 +1697,7 @@ namespace LumasharpChecker.viewmodel
         {
             if (CurrentRecipe == null || CurrentRecipe.Id != expectedRecipeId
                 || CurrentStationNumber != expectedStation)
-                throw new InvalidOperationException("目前 Recipe 或站別已變更，取消儲存新增參數。");
+                throw new InvalidOperationException("目前配方或站別已變更，取消儲存新增參數。");
             var station = CurrentRecipe.Stations.Single(item => item.Number == expectedStation);
             var stationFolder = Path.Combine(recipeManager.GetProfileBasePath(CurrentRecipe),
                 RecipeManager.GetStationDirectoryName(expectedStation));
@@ -1691,7 +1717,7 @@ namespace LumasharpChecker.viewmodel
                 ?? throw new InvalidOperationException("參數已寫入但無法重新讀取，請檢查本站檔案。");
             LoadCurrentProfile(saved, isLibraryProfile: false);
             RefreshStationSlots();
-            StationStatusMessage = $"第 {expectedStation:00} 站已新增參數並保存到 Recipe。";
+            StationStatusMessage = $"第 {expectedStation:00} 站已新增參數並保存到配方。";
             SaveSettingsMessage = $"已使用 {SelectedFiles.Count} 張 OK 樣本建立第 {expectedStation:00} 站檢測設定。";
             // 計算完成並保存後返回單站主頁；取消或計算失敗不會觸發此段。
             Application.Current.Windows.OfType<LumasharpChecker.view.ProfileAddWindows>()
@@ -2006,6 +2032,36 @@ namespace LumasharpChecker.viewmodel
             catch (Exception ex)
             {
                 SaveSettingsMessage = $"刪除失敗: {ex.Message}";
+            }
+        }
+
+        [RelayCommand]
+        private void DeleteSelectedRecipeTemplate()
+        {
+            var template = SelectedRecipeTemplate;
+            if (template == null || string.IsNullOrWhiteSpace(template.Name))
+            {
+                SaveSettingsMessage = "請先選擇共用設定檔範本";
+                return;
+            }
+
+            var result = MessageBox.Show(
+                $"確定要刪除共用設定檔範本「{template.Name}」？\n已套用到各 Recipe 的專屬副本不會受影響。",
+                "刪除設定檔範本",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning);
+            if (result != MessageBoxResult.Yes) return;
+
+            try
+            {
+                profileManager.DeleteProfile(template.Name);
+                SelectedRecipeTemplate = null;
+                RefreshProfiles();
+                SaveSettingsMessage = $"已刪除共用範本：{template.Name}；配方站別副本保留。";
+            }
+            catch (Exception ex)
+            {
+                SaveSettingsMessage = $"刪除設定檔範本失敗：{ex.Message}";
             }
         }
 
@@ -2609,7 +2665,7 @@ namespace LumasharpChecker.viewmodel
         public Task<TestImageResultRow> TestLightImageAsync(string imageFile)
         {
             if (CurrentProfile == null || CurrentRecipe == null)
-                throw new InvalidOperationException("請先載入已校準的 Recipe 與站別。");
+                throw new InvalidOperationException("請先載入已校準的配方與站別。");
             if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
                 throw new InvalidOperationException("目前正在檢測，請完成或停止後再測試光源。");
             if (string.IsNullOrWhiteSpace(imageFile) || !File.Exists(imageFile))

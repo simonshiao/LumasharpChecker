@@ -1,6 +1,6 @@
 # LumasharpCheckerV2
 
-以 1.0.0.69 為基底的非 AI 開發版本，使用 WPF、.NET Framework 4.7.2 與 Windows x64。
+以 1.0.0.69 為基底的非 AI 開發版本，目前版本 2.0.0.1，使用 WPF、.NET Framework 4.7.2 與 Windows x64。
 
 - 保留非 AI 定位、光源與銳利度檢測的開發程式碼。
 - 定位與原廠 R3 工具共用 App/NativeR3，避免重複發布原生 DLL。
