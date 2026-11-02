@@ -80,6 +80,9 @@ public sealed class RecipeManager
         public string? LastRecipeId { get; set; }
         // Shared picker start folder for the work-image report library.
         public string? DatabaseDayFolder { get; set; }
+        // Keep the original JSON name so settings from the previous build remain compatible.
+        [JsonPropertyName("autoSelectLatestSharedReportDay")]
+        public bool AutoUpdateLatestSharedReportDay { get; set; } = true;
     }
 
     public sealed class VendorRecipeFolder

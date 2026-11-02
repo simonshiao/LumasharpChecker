@@ -25,6 +25,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualBasic;
 using static ProfileManager;
 using System.Windows.Media;
+using System.Windows.Threading;
 namespace LumasharpChecker.viewmodel
 {
     public class TestImageResultRow
@@ -127,6 +128,11 @@ namespace LumasharpChecker.viewmodel
         private ProfileManager profileManager = new("profile");
         private readonly RecipeManager recipeManager;
         private readonly RecipeManager.AppPreferences _preferences;
+        private readonly DispatcherTimer _sharedReportDateMonitor;
+        private readonly DispatcherTimer _sharedReportDateDebounce;
+        private FileSystemWatcher? _sharedReportDateWatcher;
+        private string? _sharedReportWatchedRoot;
+        private int _sharedReportDateCheckRunning;
         private bool _isInitializing;
         private bool _isLoadingRecipe;
         private bool _continuousTestLoopActive;
@@ -247,6 +253,42 @@ namespace LumasharpChecker.viewmodel
 
         [ObservableProperty]
         private string _databaseDayFolderDisplay = string.Empty;
+
+        public bool AutoUpdateLatestSharedReportDay
+        {
+            get => _preferences.AutoUpdateLatestSharedReportDay;
+            set
+            {
+                if (_preferences.AutoUpdateLatestSharedReportDay == value) return;
+                bool previousValue = _preferences.AutoUpdateLatestSharedReportDay;
+                _preferences.AutoUpdateLatestSharedReportDay = value;
+                try
+                {
+                    recipeManager.SavePreferences(_preferences);
+                    OnPropertyChanged();
+                    DatabaseSaveMessage = value
+                        ? "已儲存：自動偵測並更新最新日期。"
+                        : "已儲存：自動日期更新已關閉。";
+                    if (value)
+                    {
+                        ConfigureSharedReportDateWatcher(_preferences.DatabaseDayFolder
+                            ?? CurrentRecipe?.DatabaseDayFolder ?? DefaultSharedReportRoot);
+                        _ = CheckLatestSharedReportDateAsync();
+                    }
+                    else
+                    {
+                        _sharedReportDateDebounce.Stop();
+                        ConfigureSharedReportDateWatcher(null);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _preferences.AutoUpdateLatestSharedReportDay = previousValue;
+                    OnPropertyChanged();
+                    DatabaseSaveMessage = "自動日期更新設定無法儲存：" + ex.Message;
+                }
+            }
+        }
 
         [ObservableProperty]
         private string _inspectionImageOutputFolderDisplay = string.Empty;
@@ -530,6 +572,10 @@ namespace LumasharpChecker.viewmodel
 
             recipeManager = new RecipeManager(Environment.CurrentDirectory, profileManager.BasePath);
             _preferences = recipeManager.LoadPreferences();
+            _sharedReportDateMonitor = new DispatcherTimer { Interval = TimeSpan.FromMinutes(5) };
+            _sharedReportDateMonitor.Tick += SharedReportDateMonitor_Tick;
+            _sharedReportDateDebounce = new DispatcherTimer { Interval = TimeSpan.FromSeconds(8) };
+            _sharedReportDateDebounce.Tick += SharedReportDateDebounce_Tick;
             _isInitializing = true;
             StationCount = _preferences.StationCount;
             _isInitializing = false;
@@ -544,9 +590,16 @@ namespace LumasharpChecker.viewmodel
             SelectedRecipe = Recipes.FirstOrDefault(recipe =>
                 string.Equals(recipe.Id, _preferences.LastRecipeId, StringComparison.OrdinalIgnoreCase));
             if (SelectedRecipe != null) LoadSelectedRecipe();
+            if (_preferences.AutoUpdateLatestSharedReportDay)
+                ConfigureSharedReportDateWatcher(_preferences.DatabaseDayFolder
+                    ?? CurrentRecipe?.DatabaseDayFolder ?? DefaultSharedReportRoot);
+            _sharedReportDateMonitor.Start();
+            if (CurrentRecipe != null && _preferences.AutoUpdateLatestSharedReportDay)
+                _ = CheckLatestSharedReportDateAsync();
         }
 
         private const string DefaultVendorRecipeRoot = @"C:\DIAChip8Side\Recipe";
+        private const string DefaultSharedReportRoot = @"D:\外觀通共用報告\蕪湖\welding";
 
         private static bool IsSameVendorSource(RecipeManager.RecipeManifest recipe, string sourcePath)
         {
@@ -805,8 +858,17 @@ namespace LumasharpChecker.viewmodel
                     return;
                 }
 
-                RecipeManager.SharedReportDayInfo targetDay = discovered[0].Days[0];
-                if (discovered.Count > 1 || discovered[0].Days.Count > 1)
+                _preferences.DatabaseDayFolder = ResolveSharedReportRootFolder(discovered, folder);
+                recipeManager.SavePreferences(_preferences);
+                ConfigureSharedReportDateWatcher(_preferences.DatabaseDayFolder);
+
+                var availableDays = discovered.SelectMany(item => item.Days).ToList();
+                RecipeManager.SharedReportDayInfo targetDay;
+                if (_preferences.AutoUpdateLatestSharedReportDay)
+                {
+                    targetDay = SelectLatestSharedReportDay(availableDays);
+                }
+                else if (availableDays.Count > 1)
                 {
                     // 多日期 → 彈選擇對話窗
                     var dayLists = discovered.Select(d => d.MonthFolder).Distinct().ToList();
@@ -817,73 +879,264 @@ namespace LumasharpChecker.viewmodel
                     if (!dialog.ShowDialog()!.Value || dialog.SelectedDay == null) return;
                     targetDay = dialog.SelectedDay;
                 }
-
-                // 確認覆蓋
-                int stationCount = targetDay.Stations.Count(s => s.Number <= CurrentRecipe.StationCount);
-                int withOkNg = targetDay.Stations.Count(s => s.HasOkSubfolder || s.HasNgSubfolder);
-                bool confirm = MessageBox.Show(
-                    owner,
-                    $"將匯入 {targetDay.DayFolder}\n" +
-                    $"各站 ALL/OK/NG 圖庫路徑，共 {stationCount} 站（{withOkNg} 站有 OK/NG 分類）。\n" +
-                    $"是否繼續？",
-                    "確認匯入作業圖庫", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
-                if (!confirm) return;
-
-                // 逐站套用（只處理 CurrentRecipe.StationCount 以內的站）
-                int okStations = 0, importedStations = 0, clearedStations = 0;
-                var skipList = new List<string>();
-                for (int i = 0; i < CurrentRecipe.Stations.Count && CurrentRecipe.Stations[i].Number <= CurrentRecipe.StationCount; i++)
+                else
                 {
-                    var station = CurrentRecipe.Stations[i];
-                    var info = targetDay.Stations.FirstOrDefault(s => s.Number == station.Number);
-                    if (info == null)
-                    {
-                        if (ClearStationDatabasePaths(station)) clearedStations++;
-                        skipList.Add($"第 {station.Number} 站（當日無資料，已清除舊路徑）");
-                        continue;
-                    }
-                    if (!info.HasImages)
-                    {
-                        if (ClearStationDatabasePaths(station)) clearedStations++;
-                        skipList.Add($"第 {station.Number} 站（當日無圖片，已清除舊路徑）");
-                        continue;
-                    }
-                    try
-                    {
-                        SetStationAllDatabaseFolder(station.Number, info.StationFolder);
-                        importedStations++;
-                        if (info.HasOkSubfolder || info.HasNgSubfolder) okStations++;
-                    }
-                    catch
-                    {
-                        if (ClearStationDatabasePaths(station)) clearedStations++;
-                        skipList.Add($"第 {station.Number} 站（匯入失敗，已清除舊路徑）");
-                    }
+                    targetDay = availableDays[0];
                 }
 
-                // Recipe stores the selected input day; app preferences remember the shared source picker path.
-                CurrentRecipe.DatabaseDayFolder = targetDay.DayFolder;
-                DatabaseDayFolderDisplay = targetDay.DayFolder;
-                recipeManager.SaveManifest(CurrentRecipe);
-
-                RefreshStationDatabasePaths();
-                RefreshStationSlots();
-                string? activeDatabase = _activeStationDatabase;
-                ResetTestImageState();
-                if (activeDatabase != null && !LoadStationDatabase(activeDatabase))
-                    _activeStationDatabase = null;
-
-                SaveSettingsMessage = $"已匯入作業圖庫：{importedStations}/{CurrentRecipe.StationCount} 站；{okStations} 站有 OK/NG 分類；已清除 {clearedStations} 站的舊路徑。";
-                if (okStations == 0)
-                    SaveSettingsMessage += " 本次圖片未分 OK/NG，請在有圖站別使用 ALL DB 載入。";
-                if (skipList.Count > 0)
-                    SaveSettingsMessage += $" 跳過：{string.Join(", ", skipList.Take(8))}";
+                ApplySharedReportDay(targetDay, owner, requireConfirmation: true, automatic: false);
             }
             catch (Exception ex)
             {
                 SaveSettingsMessage = "作業圖庫匯入失敗：" + ex.Message;
                 MessageBox.Show(SaveSettingsMessage, "匯入作業圖庫失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        private async void SharedReportDateMonitor_Tick(object? sender, EventArgs e)
+            => await CheckLatestSharedReportDateAsync();
+
+        private void SharedReportDateWatcher_Changed(object sender, FileSystemEventArgs e)
+            => ScheduleSharedReportDateCheck();
+
+        private void SharedReportDateWatcher_Renamed(object sender, RenamedEventArgs e)
+            => ScheduleSharedReportDateCheck();
+
+        private void SharedReportDateWatcher_Error(object sender, ErrorEventArgs e)
+            => ScheduleSharedReportDateCheck();
+
+        private void ScheduleSharedReportDateCheck()
+        {
+            Application.Current?.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (!_preferences.AutoUpdateLatestSharedReportDay || CurrentRecipe == null) return;
+                _sharedReportDateDebounce.Stop();
+                _sharedReportDateDebounce.Start();
+            }));
+        }
+
+        private void SharedReportDateDebounce_Tick(object? sender, EventArgs e)
+        {
+            _sharedReportDateDebounce.Stop();
+            _ = CheckLatestSharedReportDateAsync();
+        }
+
+        private void ConfigureSharedReportDateWatcher(string? root)
+        {
+            if (!_preferences.AutoUpdateLatestSharedReportDay || string.IsNullOrWhiteSpace(root))
+                root = null;
+            else
+            {
+                try { root = Path.GetFullPath(root); }
+                catch { root = null; }
+            }
+
+            if (AreSameDirectory(_sharedReportWatchedRoot, root)) return;
+            _sharedReportDateWatcher?.Dispose();
+            _sharedReportDateWatcher = null;
+            _sharedReportWatchedRoot = null;
+            if (root == null || !Directory.Exists(root)) return;
+
+            try
+            {
+                var watcher = new FileSystemWatcher(root)
+                {
+                    IncludeSubdirectories = true,
+                    InternalBufferSize = 32 * 1024,
+                    NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName
+                        | NotifyFilters.LastWrite | NotifyFilters.CreationTime
+                };
+                watcher.Created += SharedReportDateWatcher_Changed;
+                watcher.Changed += SharedReportDateWatcher_Changed;
+                watcher.Deleted += SharedReportDateWatcher_Changed;
+                watcher.Renamed += SharedReportDateWatcher_Renamed;
+                watcher.Error += SharedReportDateWatcher_Error;
+                _sharedReportDateWatcher = watcher;
+                _sharedReportWatchedRoot = root;
+                watcher.EnableRaisingEvents = true;
+            }
+            catch
+            {
+                _sharedReportDateWatcher?.Dispose();
+                _sharedReportDateWatcher = null;
+                _sharedReportWatchedRoot = null;
+            }
+        }
+
+        private async Task CheckLatestSharedReportDateAsync()
+        {
+            if (!_preferences.AutoUpdateLatestSharedReportDay || CurrentRecipe == null
+                || IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                return;
+            if (Interlocked.CompareExchange(ref _sharedReportDateCheckRunning, 1, 0) != 0)
+                return;
+
+            string recipeId = CurrentRecipe.Id;
+            string startingFolder = _preferences.DatabaseDayFolder
+                ?? CurrentRecipe.DatabaseDayFolder
+                ?? @"D:\外觀通共用報告\蕪湖\welding";
+            try
+            {
+                var scan = await Task.Run(() =>
+                {
+                    var firstScan = recipeManager.DiscoverSharedReportDays(startingFolder);
+                    string sharedRoot = ResolveSharedReportRootFolder(firstScan, startingFolder);
+                    var discovered = AreSameDirectory(sharedRoot, startingFolder)
+                        ? firstScan
+                        : recipeManager.DiscoverSharedReportDays(sharedRoot);
+                    var days = discovered.SelectMany(item => item.Days).ToList();
+                    return (Root: sharedRoot, Day: SelectLatestSharedReportDay(days));
+                });
+
+                if (!_preferences.AutoUpdateLatestSharedReportDay
+                    || CurrentRecipe?.Id != recipeId
+                    || IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                    return;
+
+                if (!AreSameDirectory(_preferences.DatabaseDayFolder, scan.Root))
+                {
+                    _preferences.DatabaseDayFolder = scan.Root;
+                    recipeManager.SavePreferences(_preferences);
+                }
+                ConfigureSharedReportDateWatcher(scan.Root);
+
+                if (AreSameDirectory(CurrentRecipe.DatabaseDayFolder, scan.Day.DayFolder))
+                    return;
+
+                Window owner = Application.Current.Windows.OfType<DatabaseSetupWindow>()
+                    .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
+                ApplySharedReportDay(scan.Day, owner, requireConfirmation: false, automatic: true);
+            }
+            catch (Exception ex)
+            {
+                DatabaseSaveMessage = "自動檢查最新圖庫日期失敗：" + ex.GetBaseException().Message;
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _sharedReportDateCheckRunning, 0);
+            }
+        }
+
+        private void ApplySharedReportDay(
+            RecipeManager.SharedReportDayInfo targetDay,
+            Window owner,
+            bool requireConfirmation,
+            bool automatic)
+        {
+            if (CurrentRecipe == null) return;
+            int stationCount = targetDay.Stations.Count(station => station.Number <= CurrentRecipe.StationCount);
+            int withOkNg = targetDay.Stations.Count(station => station.Number <= CurrentRecipe.StationCount
+                && (station.HasOkSubfolder || station.HasNgSubfolder));
+            if (requireConfirmation)
+            {
+                bool confirm = MessageBox.Show(
+                    owner,
+                    $"將匯入 {targetDay.DayFolder}\n" +
+                    $"各站 ALL/OK/NG 圖庫路徑，共 {stationCount} 站（{withOkNg} 站有 OK/NG 分類）。\n" +
+                    "是否繼續？",
+                    "確認匯入作業圖庫", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+                if (!confirm) return;
+            }
+
+            int okStations = 0, importedStations = 0, clearedStations = 0;
+            var skipList = new List<string>();
+            for (int i = 0; i < CurrentRecipe.Stations.Count && CurrentRecipe.Stations[i].Number <= CurrentRecipe.StationCount; i++)
+            {
+                var station = CurrentRecipe.Stations[i];
+                var info = targetDay.Stations.FirstOrDefault(item => item.Number == station.Number);
+                if (info == null || !info.HasImages)
+                {
+                    if (ClearStationDatabasePaths(station)) clearedStations++;
+                    skipList.Add($"第 {station.Number} 站（當日無資料，已清除舊路徑）");
+                    continue;
+                }
+                try
+                {
+                    SetStationAllDatabaseFolder(station.Number, info.StationFolder);
+                    importedStations++;
+                    if (info.HasOkSubfolder || info.HasNgSubfolder) okStations++;
+                }
+                catch
+                {
+                    if (ClearStationDatabasePaths(station)) clearedStations++;
+                    skipList.Add($"第 {station.Number} 站（匯入失敗，已清除舊路徑）");
+                }
+            }
+
+            CurrentRecipe.DatabaseDayFolder = targetDay.DayFolder;
+            DatabaseDayFolderDisplay = targetDay.DayFolder;
+            recipeManager.SaveManifest(CurrentRecipe);
+            RefreshStationDatabasePaths();
+            RefreshStationSlots();
+            OnPropertyChanged(nameof(RecipeConfigurationSummary));
+
+            string? activeDatabase = _activeStationDatabase;
+            ResetTestImageState();
+            if (activeDatabase != null && !LoadStationDatabase(activeDatabase))
+                _activeStationDatabase = null;
+
+            string action = automatic ? "已自動更新作業圖庫" : "已匯入作業圖庫";
+            SaveSettingsMessage = $"{action}：{importedStations}/{CurrentRecipe.StationCount} 站；{okStations} 站有 OK/NG 分類；已清除 {clearedStations} 站舊路徑。";
+            if (okStations == 0)
+                SaveSettingsMessage += " 本次圖片未分 OK/NG，請在有圖站別使用 ALL DB 載入。";
+            if (skipList.Count > 0)
+                SaveSettingsMessage += $" 跳過：{string.Join(", ", skipList.Take(8))}";
+            DatabaseSaveMessage = automatic
+                ? $"已自動切換至最新圖庫日期：{GetSharedReportDayLabel(targetDay.DayFolder)}"
+                : SaveSettingsMessage;
+        }
+
+        private static RecipeManager.SharedReportDayInfo SelectLatestSharedReportDay(
+            IEnumerable<RecipeManager.SharedReportDayInfo> days)
+            => days.OrderByDescending(GetSharedReportDaySortKey)
+                .ThenByDescending(day => Directory.GetLastWriteTimeUtc(day.DayFolder))
+                .First();
+
+        private static string ResolveSharedReportRootFolder(
+            List<(string MonthFolder, List<RecipeManager.SharedReportDayInfo> Days)> discovered,
+            string selectedFolder)
+        {
+            var roots = discovered
+                .Select(item => Directory.GetParent(item.MonthFolder)?.FullName ?? item.MonthFolder)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            return roots.Count == 1 ? roots[0] : Path.GetFullPath(selectedFolder);
+        }
+
+        private static bool AreSameDirectory(string? left, string? right)
+        {
+            if (string.IsNullOrWhiteSpace(left) || string.IsNullOrWhiteSpace(right)) return false;
+            string normalizedLeft = Path.GetFullPath(left!)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string normalizedRight = Path.GetFullPath(right!)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return string.Equals(normalizedLeft, normalizedRight, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetSharedReportDayLabel(string dayFolder)
+        {
+            string fullPath = dayFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string day = Path.GetFileName(fullPath);
+            string month = Directory.GetParent(fullPath)?.Name ?? string.Empty;
+            if (int.TryParse(month, NumberStyles.Integer, CultureInfo.InvariantCulture, out int monthNumber)
+                && int.TryParse(day, NumberStyles.Integer, CultureInfo.InvariantCulture, out int dayNumber)
+                && monthNumber is >= 1 and <= 12 && dayNumber >= 1
+                && dayNumber <= DateTime.DaysInMonth(2000, monthNumber))
+                return $"{monthNumber:00}/{dayNumber:00}";
+            return day;
+        }
+
+        private static int GetSharedReportDaySortKey(RecipeManager.SharedReportDayInfo day)
+        {
+            string dayFolder = day.DayFolder.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string dayName = Path.GetFileName(dayFolder);
+            string monthName = Directory.GetParent(dayFolder)?.Name ?? string.Empty;
+            if (!int.TryParse(monthName, NumberStyles.Integer, CultureInfo.InvariantCulture, out int month)
+                || !int.TryParse(dayName, NumberStyles.Integer, CultureInfo.InvariantCulture, out int date)
+                || month is < 1 or > 12 || date < 1 || date > DateTime.DaysInMonth(2000, month))
+                return 0;
+
+            return month * 100 + date;
         }
 
         private static bool ClearStationDatabasePaths(RecipeManager.RecipeStation station)
@@ -966,6 +1219,8 @@ namespace LumasharpChecker.viewmodel
             _preferences.LastRecipeId = CurrentRecipe.Id;
             _preferences.StationCount = StationCount;
             recipeManager.SavePreferences(_preferences);
+            if (_preferences.AutoUpdateLatestSharedReportDay)
+                _ = CheckLatestSharedReportDateAsync();
         }
 
         [RelayCommand]
@@ -1692,8 +1947,18 @@ namespace LumasharpChecker.viewmodel
         public bool IsSharpnessEnabled => DetectionMode == ProfileManager.InspectionMode.BrightnessSharpness;
         public bool IsRecipeActive => CurrentRecipe != null;
         // 全域上方工具列直接讀取目前載入的 Recipe／站別，避免只顯示尚未套用的選單項目。
-        public string RecipeConfigurationSummary => CurrentRecipe == null
-            ? "未選擇" : $"已設定 {StationSlots.Count(slot => slot.IsConfigured)}/{StationCount} 站";
+        public string RecipeConfigurationSummary
+        {
+            get
+            {
+                if (CurrentRecipe == null) return "未選擇";
+                int configuredStations = StationSlots.Count(slot => slot.IsConfigured);
+                string? dayFolder = CurrentRecipe.DatabaseDayFolder;
+                return string.IsNullOrWhiteSpace(dayFolder)
+                    ? $"已設定 {configuredStations}/{StationCount} 站"
+                    : $"圖庫 {GetSharedReportDayLabel(dayFolder!)} · 已設定 {configuredStations}/{StationCount} 站";
+            }
+        }
         public string CurrentStationStatusText => CurrentRecipe == null
             ? "—" : $"{CurrentStationNumber} · {(StationSlots.FirstOrDefault(slot => slot.Number == CurrentStationNumber)?.IsConfigured == true ? "已設定" : "待校準")}";
         public string GlobalRunStatusText => CurrentRecipe == null

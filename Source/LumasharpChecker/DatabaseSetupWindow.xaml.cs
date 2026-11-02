@@ -19,8 +19,9 @@ public partial class DatabaseSetupWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void Settings_Click(object sender, RoutedEventArgs e)
+    private void ConfigureOutputFolder_Click(object sender, RoutedEventArgs e)
     {
+        SettingsPopup.IsOpen = false;
         if (DataContext is not mainViewModel vm) return;
         try { vm.ConfigureWorkDatabaseOutput(this); }
         catch (Exception ex)

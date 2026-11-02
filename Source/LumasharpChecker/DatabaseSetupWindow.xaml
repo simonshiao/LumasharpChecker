@@ -4,6 +4,44 @@
         Title="作業圖庫" Width="1000" Height="650" MinWidth="800" MinHeight="520"
         WindowStartupLocation="CenterOwner" FontFamily="Microsoft JhengHei UI" FontSize="13"
         Foreground="{DynamicResource Text}" Background="{DynamicResource Bg}">
+    <Window.Resources>
+        <Style x:Key="HudSettingsToggleButton" TargetType="{x:Type ToggleButton}">
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="MinHeight" Value="34"/>
+            <Setter Property="Background" Value="{DynamicResource Surface}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Blue}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource HudBorder}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type ToggleButton}">
+                        <Border x:Name="Chrome" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                Padding="{TemplateBinding Padding}" CornerRadius="8">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource HudAccent}"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource BlueSoft}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource Blue}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Opacity" Value="0.72"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="BorderThickness" Value="2"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
     <Grid Margin="19,16,19,14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -12,16 +50,10 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <DockPanel Margin="2,0,2,14">
-            <Button DockPanel.Dock="Right" Content="&#xE713;" FontFamily="Segoe MDL2 Assets"
-                    FontSize="16" Padding="8,4" Margin="8,0,0,0" VerticalAlignment="Center"
-                    Click="Settings_Click" ToolTip="設定每個 Recipe 獨立的檢測圖檔輸出路徑"
-                    Style="{DynamicResource HudSecondaryButton}"
-                    AutomationProperties.Name="作業圖庫輸出資料夾設定"/>
-            <TextBlock DockPanel.Dock="Right" Text="{Binding InspectionImageOutputFolderDisplay}"
-                       VerticalAlignment="Center" FontSize="10" MaxWidth="260"
-                       Margin="4,0,8,0" Foreground="{DynamicResource Muted}"
-                       TextTrimming="CharacterEllipsis"
-                       ToolTip="{Binding InspectionImageOutputFolderDisplay}"/>
+            <ToggleButton x:Name="SettingsButton" DockPanel.Dock="Right" Content="&#xE713;" FontFamily="Segoe MDL2 Assets"
+                          FontSize="16" Margin="8,0,0,0" VerticalAlignment="Center"
+                          ToolTip="匯入與輸出設定" Style="{StaticResource HudSettingsToggleButton}"
+                          AutomationProperties.Name="作業圖庫設定"/>
             <TextBlock DockPanel.Dock="Right" Text="{Binding CurrentRecipe.Name, TargetNullValue=尚未選擇配方}"
                        VerticalAlignment="Center" FontSize="12" MaxWidth="350"
                        Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"
@@ -29,6 +61,46 @@
             <TextBlock Text="作業圖庫" FontWeight="SemiBold" FontSize="21"
                        Foreground="{DynamicResource Text}"/>
         </DockPanel>
+
+        <Popup x:Name="SettingsPopup" Grid.Row="0"
+               IsOpen="{Binding IsChecked, ElementName=SettingsButton, Mode=TwoWay}"
+               PlacementTarget="{Binding ElementName=SettingsButton}"
+               Placement="Bottom" HorizontalOffset="-286" VerticalOffset="6"
+               StaysOpen="False" AllowsTransparency="True"
+               DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+            <Border Width="330" Padding="16" CornerRadius="10"
+                    Background="{DynamicResource Surface}"
+                    BorderBrush="{DynamicResource Line}" BorderThickness="1">
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.2"/>
+                </Border.Effect>
+                <StackPanel>
+                    <TextBlock Text="作業圖庫設定" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Text}" Margin="0,0,0,13"/>
+                    <TextBlock Text="匯入" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Blue}"/>
+                    <CheckBox Content="有新日期時自動更新圖庫"
+                              IsChecked="{Binding AutoUpdateLatestSharedReportDay, Mode=TwoWay}"
+                              ToolTip="啟動時立即檢查；偵測到資料夾變更後約 8 秒檢查，每 5 分鐘補查一次。檢測進行中暫緩更新。"
+                              Margin="0,8,0,0"
+                              AutomationProperties.Name="有新日期時自動更新圖庫"/>
+                    <TextBlock Text="資料夾變更安定後約 8 秒檢查；每 5 分鐘補查，檢測時暫緩更新。"
+                               FontSize="11" Foreground="{DynamicResource Muted}"
+                               TextWrapping="Wrap" Margin="0,4,0,12"/>
+                    <Border Height="1" Background="{DynamicResource Line}" Margin="0,0,0,12"/>
+                    <TextBlock Text="檢測輸出資料夾" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Text}"/>
+                    <TextBlock Text="{Binding InspectionImageOutputFolderDisplay}"
+                               FontSize="11" Foreground="{DynamicResource Muted}"
+                               TextTrimming="CharacterEllipsis" ToolTip="{Binding InspectionImageOutputFolderDisplay}"
+                               Margin="0,5,0,10"/>
+                    <Button Content="設定輸出資料夾…" Click="ConfigureOutputFolder_Click"
+                            HorizontalAlignment="Left" Padding="12,6"
+                            Style="{DynamicResource HudSecondaryButton}"
+                            AutomationProperties.Name="設定檢測輸出資料夾"/>
+                </StackPanel>
+            </Border>
+        </Popup>
 
         <Border Grid.Row="1" Background="{DynamicResource Surface}" CornerRadius="9"
                 BorderBrush="{DynamicResource Line}" BorderThickness="1" Padding="11,8"
@@ -76,19 +148,16 @@
                 </Grid.RowDefinitions>
                 <Grid Margin="1,0,4,7">
                     <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="46"/>
+                        <ColumnDefinition Width="50"/>
                         <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="150"/>
                     </Grid.ColumnDefinitions>
                     <TextBlock Text="站" Foreground="{DynamicResource Muted}"
                                FontWeight="SemiBold"/>
-                    <TextBlock Grid.Column="1" Text="ALL" FontWeight="SemiBold"
-                               Foreground="{DynamicResource Blue}" HorizontalAlignment="Center"/>
-                    <TextBlock Grid.Column="2" Text="OK" FontWeight="SemiBold"
-                               Foreground="#078F5A"/>
-                    <TextBlock Grid.Column="3" Text="NG" FontWeight="SemiBold"
-                               Foreground="#D74758"/>
+                    <TextBlock Grid.Column="1" Text="ALL 圖庫路徑" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Blue}"/>
+                    <TextBlock Grid.Column="2" Text="分類狀態" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Muted}" HorizontalAlignment="Center"/>
                 </Grid>
                 <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
@@ -96,73 +165,96 @@
                         <ItemsControl.ItemTemplate>
                             <DataTemplate>
                                 <Border BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0"
-                                        Padding="1,5" MinHeight="46">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="46"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding Number}"
-                                                   FontWeight="SemiBold" FontSize="18"
-                                                   Foreground="{DynamicResource Blue}"
-                                                   VerticalAlignment="Center"/>
-                                        <Grid Grid.Column="1">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Ellipse Width="7" Height="7" Fill="{Binding AllStatusBrush}"
-                                                     VerticalAlignment="Center" Margin="0,0,8,0"
-                                                     ToolTip="{Binding AllStatus}"/>
-                                            <TextBox Grid.Column="1" Text="{Binding AllPathDisplay, Mode=OneWay}"
-                                                     IsReadOnly="True" VerticalContentAlignment="Center"
-                                                     ToolTip="{Binding AllPath}" FontSize="11"
-                                                     Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 ALL 路徑}"/>
-                                            <Button Grid.Column="2" Content="選擇" Click="ChooseAllFolder_Click"
-                                                    Style="{DynamicResource HudSecondaryButton}"
-                                                    Margin="6,0,1,0" MinHeight="30" Padding="10,4"
-                                                    ToolTip="載入所選資料夾內全部圖片；若包含 OK／NG 子資料夾，會自動填入對應路徑。"
-                                                    AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 ALL 圖庫}"/>
-                                        </Grid>
-                                        <Grid Grid.Column="2">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Ellipse Width="7" Height="7" Fill="{Binding OkStatusBrush}"
-                                                     VerticalAlignment="Center" Margin="0,0,8,0"
-                                                     ToolTip="{Binding OkStatus}"/>
-                                            <TextBox Grid.Column="1" Text="{Binding OkPathDisplay, Mode=OneWay}"
-                                                     IsReadOnly="True" VerticalContentAlignment="Center"
-                                                     ToolTip="{Binding OkPath}" FontSize="11"
-                                                     Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 OK 路徑}"/>
-                                            <Button Grid.Column="2" Content="選擇" Click="ChooseOkFolder_Click"
-                                                    Style="{DynamicResource HudSecondaryButton}"
-                                                    Margin="6,0,1,0" MinHeight="30" Padding="10,4"
-                                                    AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 OK 圖庫}"/>
-                                        </Grid>
-                                        <Grid Grid.Column="3">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Ellipse Width="7" Height="7" Fill="{Binding NgStatusBrush}"
-                                                     VerticalAlignment="Center" Margin="0,0,8,0"
-                                                     ToolTip="{Binding NgStatus}"/>
-                                            <TextBox Grid.Column="1" Text="{Binding NgPathDisplay, Mode=OneWay}"
-                                                     IsReadOnly="True" VerticalContentAlignment="Center"
-                                                     ToolTip="{Binding NgPath}" FontSize="11"
-                                                     Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 NG 路徑}"/>
-                                            <Button Grid.Column="2" Content="選擇" Click="ChooseNgFolder_Click"
-                                                    Margin="6,0,1,0" MinHeight="30" Padding="10,4"
-                                                    AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 NG 圖庫}"/>
-                                        </Grid>
-                                    </Grid>
+                                        Padding="1,5">
+                                    <Expander IsExpanded="False" HorizontalContentAlignment="Stretch">
+                                        <Expander.Header>
+                                            <Grid Margin="2,1,6,1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="44"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="150"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="{Binding Number}"
+                                                           FontWeight="SemiBold" FontSize="18"
+                                                           Foreground="{DynamicResource Blue}"
+                                                           VerticalAlignment="Center"/>
+                                                <Grid Grid.Column="1" Margin="0,0,10,0">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Ellipse Width="7" Height="7" Fill="{Binding AllStatusBrush}"
+                                                             VerticalAlignment="Center" Margin="0,0,8,0"
+                                                             ToolTip="{Binding AllStatus}"/>
+                                                    <TextBox Grid.Column="1" Text="{Binding AllPathDisplay, Mode=OneWay}"
+                                                             IsReadOnly="True" VerticalContentAlignment="Center"
+                                                             ToolTip="{Binding AllPath}" FontSize="11"
+                                                             Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 ALL 路徑}"/>
+                                                    <Button Grid.Column="2" Content="選擇 ALL" Click="ChooseAllFolder_Click"
+                                                            Style="{DynamicResource HudSecondaryButton}"
+                                                            Margin="6,0,1,0" MinHeight="30" Padding="10,4"
+                                                            ToolTip="選擇後會自動帶入其中的 OK／NG 子資料夾。"
+                                                            AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 ALL 圖庫}"/>
+                                                </Grid>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                                                            HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <Border Background="{DynamicResource Bg}" CornerRadius="5"
+                                                            Padding="7,4" Margin="0,0,5,0" ToolTip="{Binding OkStatus}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse Width="7" Height="7" Fill="{Binding OkStatusBrush}"
+                                                                     VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                            <TextBlock Text="OK" Foreground="#078F5A" FontSize="11"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <Border Background="{DynamicResource Bg}" CornerRadius="5"
+                                                            Padding="7,4" ToolTip="{Binding NgStatus}">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <Ellipse Width="7" Height="7" Fill="{Binding NgStatusBrush}"
+                                                                     VerticalAlignment="Center" Margin="0,0,5,0"/>
+                                                            <TextBlock Text="NG" Foreground="#D74758" FontSize="11"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Expander.Header>
+                                        <StackPanel Margin="44,8,6,3">
+                                            <Grid Margin="0,0,0,6">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="36"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="OK" Foreground="#078F5A" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBox Grid.Column="1" Text="{Binding OkPathDisplay, Mode=OneWay}"
+                                                         IsReadOnly="True" VerticalContentAlignment="Center"
+                                                         ToolTip="{Binding OkPath}" FontSize="11" Padding="7,5"
+                                                         AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 OK 路徑}"/>
+                                                <Button Grid.Column="2" Content="選擇" Click="ChooseOkFolder_Click"
+                                                        Style="{DynamicResource HudSecondaryButton}"
+                                                        Margin="6,0,1,0" MinHeight="30" Padding="10,4"
+                                                        AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 OK 圖庫}"/>
+                                            </Grid>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="36"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="NG" Foreground="#D74758" FontWeight="SemiBold"
+                                                           VerticalAlignment="Center"/>
+                                                <TextBox Grid.Column="1" Text="{Binding NgPathDisplay, Mode=OneWay}"
+                                                         IsReadOnly="True" VerticalContentAlignment="Center"
+                                                         ToolTip="{Binding NgPath}" FontSize="11" Padding="7,5"
+                                                         AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 NG 路徑}"/>
+                                                <Button Grid.Column="2" Content="選擇" Click="ChooseNgFolder_Click"
+                                                        Style="{DynamicResource HudSecondaryButton}"
+                                                        Margin="6,0,1,0" MinHeight="30" Padding="10,4"
+                                                        AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 NG 圖庫}"/>
+                                            </Grid>
+                                        </StackPanel>
+                                    </Expander>
                                 </Border>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
