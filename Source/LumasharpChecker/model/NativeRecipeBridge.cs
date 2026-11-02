@@ -145,7 +145,7 @@ namespace LumasharpChecker.model
                 var total = Stopwatch.StartNew();
                 PreparedRecipe native = Prepare(recipe, appBase);
                 double preparationMs = total.Elapsed.TotalMilliseconds;
-                string resultDir = Path.Combine(native.NativeRoot, "LumaProbe");
+                string resultDir = SessionProbeDirectory;
                 Directory.CreateDirectory(resultDir);
                 string result = Path.Combine(resultDir, "flow-" + Guid.NewGuid().ToString("N") + ".json");
                 var roundTrip = Stopwatch.StartNew();
@@ -158,7 +158,31 @@ namespace LumasharpChecker.model
 
         private static readonly object PreparationSync = new object();
         private static string _validatedKey = "";
+        private static readonly string SessionProbeDirectory = Path.Combine(
+            Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeR3", "LumaProbe")),
+            "session-" + Process.GetCurrentProcess().Id + "-" + Guid.NewGuid().ToString("N"));
+
         public static void ShutdownWorker() => NativeFlowWorker.Shutdown();
+
+        public static void CleanupSessionArtifacts()
+        {
+            string probeRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeR3", "LumaProbe"))
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            string sessionDirectory = Path.GetFullPath(SessionProbeDirectory);
+            if (sessionDirectory.StartsWith(probeRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                string relative = sessionDirectory.Substring(probeRoot.Length);
+                if (relative.StartsWith("session-", StringComparison.OrdinalIgnoreCase) &&
+                    relative.IndexOf(Path.DirectorySeparatorChar) < 0 &&
+                    relative.IndexOf(Path.AltDirectorySeparatorChar) < 0 &&
+                    Directory.Exists(sessionDirectory))
+                {
+                    try { Directory.Delete(sessionDirectory, recursive: true); }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+        }
 
         public static PreparedRecipe Prepare(RecipeManager.RecipeManifest recipe, string appBase)
         {
