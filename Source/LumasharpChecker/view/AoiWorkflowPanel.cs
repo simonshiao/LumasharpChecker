@@ -94,10 +94,7 @@ namespace LumasharpChecker.view
         public event EventHandler? LightEnabledChanged;
         public event EventHandler? CollapseRequested;
         public event EventHandler? LightRequested;
-        public event EventHandler? RetestRequested;
-        public event EventHandler? ParetoRequested;
         public event EventHandler? ResultsRequested;
-        public event EventHandler? SizeStatisticsRequested;
         public bool IsLocatorEnabled => _locateToggle.IsChecked == true;
         public bool IsSelectWayEnabled => _selectWayToggle.IsChecked == true;
         public bool IsSelectFaceEnabled => _selectFaceToggle.IsChecked == true;
@@ -140,7 +137,7 @@ namespace LumasharpChecker.view
             _continuousButton.Click += (_, _) => ContinuousRequested?.Invoke(this, EventArgs.Empty);
             content.Children.Add(_continuousButton);
             content.Children.Add(_timing);
-            var flow = new Grid { Height = toolRowHeight * 3, Margin = new Thickness(-3, 3, -3, 0) };
+            var flow = new Grid { Margin = new Thickness(-3, 3, -3, 0) };
             var wiring = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
             flow.Children.Add(wiring);
             var grid = new UniformGrid { Columns = 4 };
@@ -149,18 +146,13 @@ namespace LumasharpChecker.view
                 () => SelectWayRequested?.Invoke(this, EventArgs.Empty)));
             grid.Children.Add(ToolCard("選面", "\uE77B", "使用原生 SelectFaceTool 檢查目前站別／圖片", true,
                 () => SelectFaceRequested?.Invoke(this, EventArgs.Empty)));
-            grid.Children.Add(ToolCard("AI前處理", "\uE9CE", "", false, null));
-            // 光源檢測沿用原廠燈泡節點位置：AI 前處理後、遮罩前。
-            // Luma 的現有 LightRequested 行為維持不變。
+            // 此版本聚焦光源點檢；保留前置定位工具與光源結果節點。
             grid.Children.Add(ToolCard("光源檢測", "\uEA80", "取代原廠流程的燈泡節點；原生定位／選向／選面後使用 Luma 亮度檢測", true, () => LightRequested?.Invoke(this, EventArgs.Empty)));
-            grid.Children.Add(ToolCard("遮罩", "\uE7B7", "", false, null));
-            grid.Children.Add(ToolCard("尺寸量測", "\uE8F1", "", false, null));
-            grid.Children.Add(ToolCard("進階定位", "\uE8AD", "", false, null));
-            grid.Children.Add(ToolCard("AI", "\uE99A", "", false, null));
             grid.Children.Add(ToolCard("結果", "\uE9D9", "查看本站檢測結果", true,
                 () => ResultsRequested?.Invoke(this, EventArgs.Empty)));
             int toolCount = grid.Children.Count;
             int rowCount = (toolCount + 3) / 4;
+            flow.Height = toolRowHeight * rowCount;
             while (grid.Children.Count < rowCount * 4) grid.Children.Add(new Border());
             // Reverse alternate rows so the visual order follows the serpentine route.
             for (int row = 1; row < rowCount; row += 2)
@@ -206,15 +198,6 @@ namespace LumasharpChecker.view
                 }
             };
             content.Children.Add(flow);
-            content.Children.Add(new TextBlock { Text = "檢測與分析", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("#29465B"), Margin = new Thickness(3, 10, 0, 5) });
-            var actions = new UniformGrid { Columns = 4, Margin = new Thickness(-3, 0, -3, 0) };
-            actions.Children.Add(AuxiliaryCard("重新檢測", "\uE72C", () => RetestRequested?.Invoke(this, EventArgs.Empty), "以勾選的定位、選向、選面檢測目前圖片"));
-            actions.Children.Add(AuxiliaryCard("柏拉圖", "\uE9D2", () => ParetoRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("尺寸統計", "\uE80A",
-                () => SizeStatisticsRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("檢測結果", "\uE890", () => ResultsRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("AI 訓練", "\uE99A"));
-            content.Children.Add(actions);
             var frame = new Border { Background = Brushes.White, BorderBrush = Brush("#D8E5EC"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Child = content };
             return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = frame };
         }
@@ -283,18 +266,6 @@ namespace LumasharpChecker.view
                 Opacity = 0.75,
                 IsHitTestVisible = false
             });
-        }
-
-        private static UIElement AuxiliaryCard(string name, string glyph, Action? action = null, string? detail = null)
-        {
-            var body = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            body.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 21, Foreground = Brush(action != null ? "#087AAF" : "#8597A4"), HorizontalAlignment = HorizontalAlignment.Center });
-            body.Children.Add(new TextBlock { Text = name, FontSize = 11, Foreground = Brush(action != null ? "#1D455B" : "#657D8B"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 7, 0, 0) });
-            var button = new Button { Content = body, Margin = new Thickness(6, 4, 6, 4), Padding = new Thickness(1, 3, 1, 3), Height = 58, MinHeight = 0, Background = Brush(action != null ? "#E8F7FD" : "#F5F8FA"), BorderBrush = Brush(action != null ? "#A5D8E9" : "#E1EAF0"), BorderThickness = new Thickness(1), IsEnabled = action != null, ToolTip = action != null ? detail ?? "開啟" + name : "尚未接入" };
-            if (action != null) button.Click += (_, _) => action();
-            AutomationProperties.SetName(button, action != null ? "開啟" + name : name + "尚未接入");
-            ToolTipService.SetShowOnDisabled(button, true);
-            return button;
         }
 
         private static Brush Brush(string color) => (Brush)new BrushConverter().ConvertFromString(color);

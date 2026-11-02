@@ -285,15 +285,21 @@ internal static class Program
     private static void SaveFrame(string resultFile, object buffers)
     {
         string image = Path.ChangeExtension(resultFile, WorkerMode ? ".bmp" : ".png");
-        object mat = Member(buffers, "LocatedSrc");
+        // Match the original LocateWindow preview: show the full Dst canvas,
+        // where the corrected locate crop has already been copied back.
+        object mat = Member(buffers, "Dst");
         if (!(bool)mat.GetType().GetMethod("SaveImage", new[] { typeof(string), typeof(int[]) }).Invoke(mat, new object[] { image, new int[0] }))
             throw new IOException("無法輸出流程影像。");
         object rect = Member(buffers, "LocatedRect");
         object imageRect = Member(buffers, "LocateImageRect");
         State["outputImage"] = image;
-        State["x"] = Member(rect, "X"); State["y"] = Member(rect, "Y");
+        // LocateRect is relative to the cropped locate image. LocateWindow
+        // adds LocateImageRect before drawing it on the full-frame Dst.
+        State["x"] = Convert.ToInt32(Member(rect, "X")) + Convert.ToInt32(Member(imageRect, "X"));
+        State["y"] = Convert.ToInt32(Member(rect, "Y")) + Convert.ToInt32(Member(imageRect, "Y"));
         State["width"] = Member(rect, "Width"); State["height"] = Member(rect, "Height");
-        State["imageX"] = Member(imageRect, "X"); State["imageY"] = Member(imageRect, "Y");
+        // The output image is now the full frame, so its coordinate origin is 0,0.
+        State["imageX"] = 0; State["imageY"] = 0;
     }
 
     private static void AdjustLocatedRect(object inspection, object locate, object way, object param)

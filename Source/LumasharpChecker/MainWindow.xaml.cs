@@ -61,27 +61,10 @@ namespace LumasharpChecker
             AoiWorkflow.SelectFaceEnabledChanged += (_, _) => SaveFlowSelectionFromPanel();
             AoiWorkflow.LightEnabledChanged += (_, _) => SaveFlowSelectionFromPanel();
             AoiWorkflow.LightRequested += OpenAoiLight_Click;
-            AoiWorkflow.RetestRequested += async (_, _) =>
-            {
-                await RunNativeRetestAsync();
-            };
             AoiWorkflow.ContinuousRequested += async (_, _) => await RunContinuousFlowAsync();
             AoiWorkflow.ResultsRequested += (_, _) =>
             {
                 if (DataContext is mainViewModel vm) vm.ShowTestImageResultsCommand.Execute(null);
-            };
-            AoiWorkflow.ParetoRequested += (_, _) =>
-            {
-                if (DataContext is mainViewModel vm)
-                {
-                    var window = new ParetoPreviewWindow(vm.TestImageResults) { Owner = this };
-                    window.ShowDialog();
-                }
-            };
-            AoiWorkflow.SizeStatisticsRequested += (_, _) =>
-            {
-                if (DataContext is mainViewModel vm)
-                    new RoiSizeStatisticsWindow(vm.TestImageResults) { Owner = this }.ShowDialog();
             };
             AoiWorkflow.CollapseRequested += (_, _) => SetAoiPanelExpanded(false);
 

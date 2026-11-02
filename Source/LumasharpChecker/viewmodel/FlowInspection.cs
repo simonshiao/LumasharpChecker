@@ -191,6 +191,14 @@ partial class mainViewModel
     private async Task<FlowImageAnalysis> AnalyzeFlowImageAsync(
         RecipeManager.RecipeManifest recipe, int station, string image, string selection, bool lightInspectionEnabled)
     {
+        var analysis = await AnalyzeFlowImageCoreAsync(recipe, station, image, selection, lightInspectionEnabled);
+        SaveInspectionOutputImage(recipe, station, image, analysis);
+        return analysis;
+    }
+
+    private async Task<FlowImageAnalysis> AnalyzeFlowImageCoreAsync(
+        RecipeManager.RecipeManifest recipe, int station, string image, string selection, bool lightInspectionEnabled)
+    {
         var total = Stopwatch.StartNew();
         LightInspectionSettings? settings = null;
         (double Min, double Max) limits = (0, 255);
@@ -233,10 +241,15 @@ partial class mainViewModel
             return new FlowImageAnalysis { Report = report, Row = row };
         }
 
-        // Show the post-locate/post-orientation image returned by the native flow.
-        // Its overlays use coordinates local to that corrected image, not the source frame.
+        // The native host exports the full Dst frame, following LocateWindow:
+        // the corrected locate crop is copied back into the full image and its
+        // local bounds are offset by LocateImageRect before publishing.
         row.ProcessedImagePath = frame.ImagePath;
-        row.RoiX = frame.Bounds.X; row.RoiY = frame.Bounds.Y;
+        row.FrameOriginX = frame.OriginX; row.FrameOriginY = frame.OriginY;
+        // Every preview uses the same full-frame coordinate space, regardless
+        // of whether SelectWay changed this image.
+        row.ShowProcessedPreview = true;
+        row.RoiX = frame.Bounds.X + frame.OriginX; row.RoiY = frame.Bounds.Y + frame.OriginY;
         row.RoiW = frame.Bounds.Width; row.RoiH = frame.Bounds.Height;
         if (!lightInspectionEnabled)
         {
@@ -260,7 +273,7 @@ partial class mainViewModel
             report.Light = "NOT_RUN";
             return new FlowImageAnalysis { Report = report, Row = row };
         }
-        row.BrightnessRoiX = roi.X; row.BrightnessRoiY = roi.Y;
+        row.BrightnessRoiX = roi.X + frame.OriginX; row.BrightnessRoiY = roi.Y + frame.OriginY;
         row.BrightnessRoiW = roi.Width; row.BrightnessRoiH = roi.Height;
         var timer = Stopwatch.StartNew();
         try
@@ -290,6 +303,44 @@ partial class mainViewModel
         row.Message += $"；光源 {(row.BrightnessSafe ? "OK" : "NG")} {row.Brightness:F2}（{limits.Min:F2}～{limits.Max:F2}）";
         total.Stop(); report.TotalMs = total.Elapsed.TotalMilliseconds;
         return new FlowImageAnalysis { Report = report, Row = row };
+    }
+
+    private static void SaveInspectionOutputImage(RecipeManager.RecipeManifest recipe, int station,
+        string sourceImage, FlowImageAnalysis analysis)
+    {
+        if (string.IsNullOrWhiteSpace(recipe.InspectionImageOutputFolder)) return;
+
+        try
+        {
+            string root = Path.GetFullPath(recipe.InspectionImageOutputFolder);
+            DateTime now = DateTime.Now;
+            string category = analysis.Row.IsOverallPass ? "OK" : "NG";
+            string outputFolder = Path.Combine(root, now.ToString("MM"), now.ToString("dd"),
+                station.ToString(), category);
+            Directory.CreateDirectory(outputFolder);
+
+            string probeRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
+                "NativeR3", "LumaProbe")) + Path.DirectorySeparatorChar;
+            string outputImage = analysis.Report.OutputImage;
+            bool isTrustedProcessedImage = !string.IsNullOrWhiteSpace(outputImage) && File.Exists(outputImage) &&
+                Path.GetFullPath(outputImage).StartsWith(probeRoot, StringComparison.OrdinalIgnoreCase);
+            string imageToSave = isTrustedProcessedImage ? outputImage : sourceImage;
+            if (!File.Exists(imageToSave)) throw new FileNotFoundException("找不到要輸出的檢測圖片。", imageToSave);
+
+            string extension = Path.GetExtension(imageToSave);
+            string baseName = now.ToString("HHmmssfff") + "_" + Path.GetFileNameWithoutExtension(sourceImage);
+            string destination = Path.Combine(outputFolder, baseName + extension);
+            for (int suffix = 1; File.Exists(destination); suffix++)
+                destination = Path.Combine(outputFolder, baseName + "_" + suffix + extension);
+            File.Copy(imageToSave, destination, overwrite: false);
+        }
+        catch (Exception ex)
+        {
+            string warning = "檢測圖檔輸出失敗：" + ex.GetBaseException().Message;
+            analysis.Row.Message += "；" + warning;
+            analysis.Report.Error = string.IsNullOrWhiteSpace(analysis.Report.Error)
+                ? warning : analysis.Report.Error + "；" + warning;
+        }
     }
 
     private static string BuildFlowFailureMessage(NativeRecipeBridge.StageReport report)

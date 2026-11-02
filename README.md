@@ -1,32 +1,22 @@
-# LumasharpCheckerV2
+# LumasharpChecker v3
 
-以 1.0.0.69 為基底的非 AI 開發版本，目前版本 2.0.0.1，使用 WPF、.NET Framework 4.7.2 與 Windows x64。
+v3 以 v2 為基礎，聚焦多站光源點檢。側邊流程只保留定位、選向、選面、光源檢測與結果；停用的灰色工具卡及「檢測與分析」區已移除。
 
-- 保留非 AI 定位、光源與銳利度檢測的開發程式碼。
-- 定位與原廠 R3 工具共用 App/NativeR3，避免重複發布原生 DLL。
-- 不部署 CUDA、TensorRT、Python 訓練環境或 AI Runtime；AI 定位 Recipe 會明確拒絕執行。
-- 本倉庫只包含原始碼、腳本與文件。本機可攜 App、原廠二進位元件、Recipe、資料庫、模型與樣本不納入 Git。
+- WPF、.NET Framework 4.7.2、Windows x64。
+- 配方、站別設定、圖庫、光源 ROI 與亮度上下限仍由各配方管理。
+- 保留連續檢測、結果檢視與 Excel 匯出。
+- v3 使用獨立單實例識別及 3.0.0.0 版本號，可與 v2 區分。
 
-## 本機建置與啟動
+## 建置與啟動
 
-需要 Windows x64、.NET SDK，以及 .NET Framework 4.7.2 targeting pack（或等效參考組件）。
-
-先準備合法取得的非 AI R3 執行環境到 App/NativeR3。定位專案至少需要其中的 InspTools.dll 與 OpenCvSharp.dll；實際執行還需要 R3 的原生 OpenCV DLL、介面依賴、InspToolsStandalone.exe、InspToolsRecipeCli.exe、LumaNativeFlowHost.exe 及既有 portable-review.marker。原廠元件不由此倉庫下載或重建，因此單獨 clone 並不包含完整執行環境。
-
-執行：
+先關閉 v3，再執行：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\建置v2.ps1
+powershell -ExecutionPolicy Bypass -File .\建置v3.ps1
 ```
 
-建置前先關閉 v2。完成後以「啟動v2.vbs」開啟 App/LumasharpChecker.exe。沒有資料庫時 LiteDB 會於使用時建立；Recipe 與圖庫需自行設定。
+完成後以 `啟動v3.vbs` 開啟 `App/LumasharpChecker.exe`。執行環境需有本機 `App/NativeR3` 原廠元件；配方、圖庫及站別設定保存在 App 目錄。
 
-## 目前驗證範圍
+## v2 基底
 
-Release x64 發布成功；1.0.0.69 主視窗啟動且可回應；一張 R002 樣本的非 AI 定位成功。尚未完成全部樣本、八站、參數編輯／存檔與實機驗收。
-
-本機完整開發目錄精簡後約 195 MB，倉庫只保存其中的原始碼部分。整理細節見 [README-v2.md](README-v2.md)。
-
-## 原廠配方自動匯入
-
-在配方管理按「自動匯入」從 `C:\DIAChip8Side\Recipe` 匯入；首次匯入後，啟動時檢查該來源是否新增或變更，並詢問是否更新本機副本。站別設定及更新前的副本會保留；同名但來源不同的配方不會自動覆蓋。其他路徑可在「配方管理」選「其他匯入」，先比對再匯入。匯入不修改原廠資料，亦不等同完成亮度／銳利度參數設定。
+`README-v2.md` 保留前一版的開發與驗證紀錄。v3 是獨立資料夾副本，v2 專案不受本版介面調整影響。

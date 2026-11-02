@@ -1,6 +1,6 @@
 # 原始碼
 
-目前版本為 2.0.0.1 / .NET Framework 4.7.2 / Windows x64 的非 AI v2。
+目前版本為 3.0.0.0 / .NET Framework 4.7.2 / Windows x64 的多站光源點檢版。
 建置、原廠元件需求與驗證範圍請以根目錄 [README](../README.md) 為準。
 
 - LumasharpChecker：WPF 主程式。

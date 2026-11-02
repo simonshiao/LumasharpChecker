@@ -8,8 +8,8 @@
         xmlns:local="clr-namespace:LumasharpChecker"
         xmlns:view="clr-namespace:LumasharpChecker.view"
         mc:Ignorable="d"
-        Title="LumasharpChecker" Height="900" Width="1440"
-        MinHeight="720" MinWidth="1130"
+        Title="LumasharpChecker" Height="880" Width="1120"
+        MinHeight="720" MinWidth="1050"
         FontFamily="Microsoft JhengHei UI"
         FontSize="13"
         Foreground="{DynamicResource Text}"
@@ -445,7 +445,7 @@
                             Click="OpenDatabaseSetup_Click" Content="&#xE8B9;"
                             IsEnabled="{Binding IsRecipeActive}"
                             AutomationProperties.Name="上方各站圖庫"
-                            ToolTip="各站 OK／NG 圖庫設定"/>
+                            ToolTip="各站 OK／NG 作業圖庫設定"/>
                     <Button Style="{StaticResource TopIconButton}"
                             Command="{Binding ExportTestImagesCommand}" Content="&#xE74E;"
                             AutomationProperties.Name="匯出報表"
@@ -615,7 +615,7 @@
                         <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                             <Button Click="OpenDatabaseSetup_Click" IsEnabled="{Binding IsRecipeActive}"
                                     Width="38" Height="34" MinHeight="0" Padding="0" Margin="2"
-                                    ToolTip="開啟各站圖庫設定" AutomationProperties.Name="圖庫設定">
+                                    ToolTip="開啟作業圖庫設定" AutomationProperties.Name="作業圖庫設定">
                                 <Grid Width="23" Height="21">
                                     <Path Data="M2,5 L9,5 L11,8 L22,8 L22,19 L2,19 Z"
                                           Width="18" Height="14" HorizontalAlignment="Left" VerticalAlignment="Top"
@@ -856,11 +856,21 @@
                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                 <DockPanel LastChildFill="True">
                     <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ComboBox Width="108" Height="34" Margin="0,0,8,0"
+                                  VerticalContentAlignment="Center"
+                                  SelectedValuePath="Tag"
+                                  SelectedValue="{Binding MultiStationDatabaseSelection, UpdateSourceTrigger=PropertyChanged}"
+                                  IsEnabled="{Binding CanChangeMultiStationDatabaseSelection}"
+                                  AutomationProperties.Name="總覽測試圖庫">
+                            <ComboBoxItem Content="ALL DB" Tag="ALL"/>
+                            <ComboBoxItem Content="OK DB" Tag="OK"/>
+                            <ComboBoxItem Content="NG DB" Tag="NG"/>
+                        </ComboBox>
                         <Button Command="{Binding RunMultiStationInspectionCommand}"
                                 IsEnabled="{Binding IsRecipeActive}"
-                                Content="▶  測試 ALL DB"
+                                Content="▶  開始測試"
                                 AutomationProperties.Name="測試勾選站別"
-                                ToolTip="逐站測試勾選站別的 ALL DB（每站 OK DB + NG DB）；總數是檢測器判定，卡片明細會列出來源分類與錯判數。未校準站跳過。"
+                                ToolTip="依圖庫選項逐站測試勾選的站別；未校準站跳過。"
                                 Background="#D2F5FF" BorderBrush="{StaticResource HudAccentStrong}"
                                 Foreground="{StaticResource HudAccentStrong}"
                                 FontWeight="SemiBold" Padding="16,7" Margin="0,0,7,0"/>
@@ -903,7 +913,7 @@
                                 <Grid Margin="11,10,11,11">
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
-                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <Grid Margin="4,1,4,9">
                                         <Grid.ColumnDefinitions>
@@ -918,7 +928,7 @@
                                         </StackPanel>
                                         <StackPanel Grid.Column="1" Orientation="Horizontal"
                                                     HorizontalAlignment="Right" Margin="0,0,27,0"
-                                                    VerticalAlignment="Center" ToolTip="{Binding BatchDetails}">
+                                                    VerticalAlignment="Center">
                                             <Ellipse Width="7" Height="7" Fill="{Binding BatchStatusBrush}"
                                                      Margin="0,0,6,0"/>
                                             <TextBlock Text="{Binding BatchStatus}" VerticalAlignment="Center"
@@ -969,11 +979,7 @@
                                                        FontFamily="Consolas" FontWeight="SemiBold" FontSize="19"/>
                                         </StackPanel>
                                     </Grid>
-                                    <TextBlock Grid.Row="3" Text="{Binding BatchDetails}"
-                                               FontSize="9" Foreground="{StaticResource HudTextSoft}"
-                                               TextTrimming="CharacterEllipsis" Margin="1,0,1,3"
-                                               ToolTip="{Binding BatchDetails}"/>
-                                    <ProgressBar Grid.Row="4" Height="3" Minimum="0" Maximum="100"
+                                    <ProgressBar Grid.Row="3" Height="3" Minimum="0" Maximum="100"
                                                  Value="{Binding BatchYieldValue, Mode=OneWay}"
                                                  Foreground="#18BFD7"
                                                  Background="#C5DDE5" BorderThickness="0" Margin="0"

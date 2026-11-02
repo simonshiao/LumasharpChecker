@@ -46,6 +46,8 @@ public sealed class RecipeManager
         public string CreatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         public string UpdatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         public string? DatabaseDayFolder { get; set; }
+        // Per-Recipe destination for inspection result images.
+        public string? InspectionImageOutputFolder { get; set; }
         // 外部原廠 TrainingImage 的唯讀來源；圖片不複製進本地 Recipe。
         public string? TrainingImageRoot { get; set; }
         public string? TrainingProductCode { get; set; }
@@ -76,6 +78,8 @@ public sealed class RecipeManager
     {
         public int StationCount { get; set; } = 8;
         public string? LastRecipeId { get; set; }
+        // Shared picker start folder for the work-image report library.
+        public string? DatabaseDayFolder { get; set; }
     }
 
     public sealed class VendorRecipeFolder
@@ -687,6 +691,110 @@ public sealed class RecipeManager
     }
 
     public string GetProfileBasePath(RecipeManifest recipe) => GetRecipeDirectory(recipe);
+
+    // ── 共用報告格式掃描 ──
+
+    public sealed class SharedReportStationInfo
+    {
+        public int Number { get; init; }
+        public string StationFolder { get; init; } = string.Empty;
+        public bool HasImages { get; init; }
+        public bool HasOkSubfolder { get; init; }
+        public bool HasNgSubfolder { get; init; }
+    }
+
+    public sealed class SharedReportDayInfo
+    {
+        public string DayFolder { get; init; } = string.Empty;
+        public List<SharedReportStationInfo> Stations { get; init; } = new();
+    }
+
+    /// <summary>掃描 月\日\n站 格式的共用報告資料夾，支援選取共用根目錄、月份或日期。</summary>
+    public List<(string MonthFolder, List<SharedReportDayInfo> Days)> DiscoverSharedReportDays(string selectedMonthFolder)
+    {
+        string root = Path.GetFullPath(selectedMonthFolder);
+        if (!Directory.Exists(root))
+            throw new DirectoryNotFoundException("找不到月資料夾：" + root);
+
+        var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { root };
+        foreach (string monthOrDay in Directory.GetDirectories(root))
+        {
+            candidates.Add(monthOrDay);
+            foreach (string day in Directory.GetDirectories(monthOrDay)) candidates.Add(day);
+        }
+
+        var results = new Dictionary<string, List<SharedReportDayInfo>>(StringComparer.OrdinalIgnoreCase);
+        var stationName = new Regex(@"^(\d{1,2})(站)?(_\d+)?$", RegexOptions.IgnoreCase);
+        foreach (string dayFolder in candidates.OrderBy(path => path.Length))
+        {
+            var stations = new Dictionary<int, SharedReportStationInfo>();
+            foreach (string sub in Directory.GetDirectories(dayFolder))
+            {
+                var match = stationName.Match(Path.GetFileName(sub));
+                if (!match.Success) continue;
+                if (int.TryParse(match.Groups[1].Value, out int num) && num is >= 1 and <= MaximumStations)
+                {
+                    bool hasImages = Directory.EnumerateFiles(sub, "*", SearchOption.AllDirectories)
+                        .Any(IsImageFile);
+                    if (!hasImages) continue; // 沒圖片的站跳過
+
+                    string okFolder = Path.Combine(sub, "OK"), ngFolder = Path.Combine(sub, "NG");
+                    bool hasOk = Directory.Exists(okFolder)
+                        && Directory.EnumerateFiles(okFolder, "*", SearchOption.AllDirectories).Any(IsImageFile);
+                    bool hasNg = Directory.Exists(ngFolder)
+                        && Directory.EnumerateFiles(ngFolder, "*", SearchOption.AllDirectories).Any(IsImageFile);
+
+                    if (stations.TryGetValue(num, out var existing))
+                    {
+                        // 同一站多個版本：取有圖片且字典序最小的
+                        if (!existing.HasImages || string.Compare(sub, existing.StationFolder, StringComparison.OrdinalIgnoreCase) < 0)
+                        {
+                            stations[num] = new SharedReportStationInfo
+                            {
+                                Number = num, StationFolder = sub,
+                                HasImages = hasImages, HasOkSubfolder = hasOk, HasNgSubfolder = hasNg
+                            };
+                        }
+                    }
+                    else
+                    {
+                        stations[num] = new SharedReportStationInfo
+                        {
+                            Number = num, StationFolder = sub,
+                            HasImages = hasImages, HasOkSubfolder = hasOk, HasNgSubfolder = hasNg
+                        };
+                    }
+                }
+            }
+
+            if (stations.Count == 0) continue;
+
+            // A month folder can also contain numeric day folders. Do not mistake those
+            // for station folders when the real station folders are one level deeper.
+            bool containsNestedStationLayout = stations.Values.Any(station =>
+                Directory.GetDirectories(station.StationFolder).Any(child =>
+                    stationName.IsMatch(Path.GetFileName(child)) &&
+                    Directory.EnumerateFiles(child, "*", SearchOption.AllDirectories).Any(IsImageFile)));
+            if (containsNestedStationLayout) continue;
+
+            var dayInfo = new SharedReportDayInfo
+            {
+                DayFolder = dayFolder,
+                Stations = stations.OrderBy(kvp => kvp.Key).Select(kvp => kvp.Value).ToList()
+            };
+            string monthFolder = Directory.GetParent(dayFolder)?.FullName ?? dayFolder;
+            if (!results.TryGetValue(monthFolder, out var days)) results[monthFolder] = days = new();
+            days.Add(dayInfo);
+        }
+
+        if (results.Count == 0)
+            throw new InvalidDataException(
+                "資料夾結構不符：找不到 <月>\\<日>\\<n站> 結構，或站資料夾內沒有圖片。");
+
+        return results.OrderBy(item => item.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(item => (item.Key, item.Value.OrderBy(day => day.DayFolder, StringComparer.OrdinalIgnoreCase).ToList()))
+            .ToList();
+    }
 
     public static string GetStationDirectoryName(int stationNumber)
     {

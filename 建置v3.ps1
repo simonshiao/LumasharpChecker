@@ -8,4 +8,6 @@ dotnet publish $project -c Release -p:Platform=x64 -p:SlimPublish=true -o $app -
 if ($LASTEXITCODE -ne 0) { throw 'Publish failed.' }
 $nativeRoot = Join-Path $app 'NativeR3'
 if (-not (Test-Path -LiteralPath $nativeRoot -PathType Container)) { throw 'Missing App/NativeR3 runtime.' }
-Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'Source\LumaNativeFlowHost\bin\Release\net472\LumaNativeFlowHost.exe') -Destination $nativeRoot -Force
+$flowHostOutput = Join-Path $PSScriptRoot 'Source\LumaNativeFlowHost\bin\Release\net472\LumaNativeFlowHost.exe'
+Copy-Item -LiteralPath $flowHostOutput -Destination $nativeRoot -Force
+Copy-Item -LiteralPath ($flowHostOutput + '.config') -Destination ($nativeRoot + '\LumaNativeFlowHost.exe.config') -Force

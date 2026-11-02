@@ -32,6 +32,9 @@ namespace LumasharpChecker.viewmodel
         public string FileName { get; set; } = string.Empty;
         public string FilePath { get; set; } = string.Empty;
         public string ProcessedImagePath { get; set; } = string.Empty;
+        public int FrameOriginX { get; set; }
+        public int FrameOriginY { get; set; }
+        public bool ShowProcessedPreview { get; set; }
         public string InspectionPipeline { get; set; } = "Profile";
         public double Brightness { get; set; }
         public double? BrightnessMin { get; set; }
@@ -244,6 +247,9 @@ namespace LumasharpChecker.viewmodel
 
         [ObservableProperty]
         private string _databaseDayFolderDisplay = string.Empty;
+
+        [ObservableProperty]
+        private string _inspectionImageOutputFolderDisplay = string.Empty;
 
         [ObservableProperty]
         private string _databaseSaveMessage = "選取後自動儲存";
@@ -761,6 +767,159 @@ namespace LumasharpChecker.viewmodel
                 SaveSettingsMessage = "訓練圖庫匯入失敗：" + ex.Message;
                 MessageBox.Show(SaveSettingsMessage, "訓練圖庫匯入失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+        }
+
+        [RelayCommand]
+        private void ImportWorkDatabase()
+        {
+            if (CurrentRecipe == null)
+            {
+                SaveSettingsMessage = "請先載入配方，再匯入作業圖庫。";
+                return;
+            }
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+            {
+                SaveSettingsMessage = "圖片檢測進行中，請完成後再匯入作業圖庫。";
+                return;
+            }
+
+            try
+            {
+                Window owner = Application.Current.Windows.OfType<DatabaseSetupWindow>()
+                    .FirstOrDefault(window => window.IsVisible) ?? Application.Current.MainWindow;
+                string defaultRoot = @"D:\外觀通共用報告\蕪湖\welding";
+                string? folder = view.ExplorerFolderPicker.PickFolder(
+                    owner,
+                    "匯入作業圖庫 · 選擇共用報告、月份或日期資料夾",
+                    _preferences.DatabaseDayFolder ?? CurrentRecipe.DatabaseDayFolder ?? defaultRoot);
+                if (folder == null) return;
+
+                _preferences.DatabaseDayFolder = Path.GetFullPath(folder);
+                recipeManager.SavePreferences(_preferences);
+
+                var discovered = recipeManager.DiscoverSharedReportDays(folder);
+                if (discovered.Count == 0)
+                {
+                    SaveSettingsMessage = "資料夾結構不符：找不到有效的日期/站別資料夾。";
+                    MessageBox.Show(owner, SaveSettingsMessage, "匯入作業圖庫", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                RecipeManager.SharedReportDayInfo targetDay = discovered[0].Days[0];
+                if (discovered.Count > 1 || discovered[0].Days.Count > 1)
+                {
+                    // 多日期 → 彈選擇對話窗
+                    var dayLists = discovered.Select(d => d.MonthFolder).Distinct().ToList();
+                    var dialog = new view.SharedReportImportDialog(
+                        discovered.SelectMany(d => d.Days).ToList(),
+                        "選擇要匯入的日期",
+                        dayLists.Count > 1 ? string.Join(", ", dayLists) : dayLists[0]);
+                    if (!dialog.ShowDialog()!.Value || dialog.SelectedDay == null) return;
+                    targetDay = dialog.SelectedDay;
+                }
+
+                // 確認覆蓋
+                int stationCount = targetDay.Stations.Count(s => s.Number <= CurrentRecipe.StationCount);
+                int withOkNg = targetDay.Stations.Count(s => s.HasOkSubfolder || s.HasNgSubfolder);
+                bool confirm = MessageBox.Show(
+                    owner,
+                    $"將匯入 {targetDay.DayFolder}\n" +
+                    $"各站 ALL/OK/NG 圖庫路徑，共 {stationCount} 站（{withOkNg} 站有 OK/NG 分類）。\n" +
+                    $"是否繼續？",
+                    "確認匯入作業圖庫", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+                if (!confirm) return;
+
+                // 逐站套用（只處理 CurrentRecipe.StationCount 以內的站）
+                int okStations = 0, importedStations = 0, clearedStations = 0;
+                var skipList = new List<string>();
+                for (int i = 0; i < CurrentRecipe.Stations.Count && CurrentRecipe.Stations[i].Number <= CurrentRecipe.StationCount; i++)
+                {
+                    var station = CurrentRecipe.Stations[i];
+                    var info = targetDay.Stations.FirstOrDefault(s => s.Number == station.Number);
+                    if (info == null)
+                    {
+                        if (ClearStationDatabasePaths(station)) clearedStations++;
+                        skipList.Add($"第 {station.Number} 站（當日無資料，已清除舊路徑）");
+                        continue;
+                    }
+                    if (!info.HasImages)
+                    {
+                        if (ClearStationDatabasePaths(station)) clearedStations++;
+                        skipList.Add($"第 {station.Number} 站（當日無圖片，已清除舊路徑）");
+                        continue;
+                    }
+                    try
+                    {
+                        SetStationAllDatabaseFolder(station.Number, info.StationFolder);
+                        importedStations++;
+                        if (info.HasOkSubfolder || info.HasNgSubfolder) okStations++;
+                    }
+                    catch
+                    {
+                        if (ClearStationDatabasePaths(station)) clearedStations++;
+                        skipList.Add($"第 {station.Number} 站（匯入失敗，已清除舊路徑）");
+                    }
+                }
+
+                // Recipe stores the selected input day; app preferences remember the shared source picker path.
+                CurrentRecipe.DatabaseDayFolder = targetDay.DayFolder;
+                DatabaseDayFolderDisplay = targetDay.DayFolder;
+                recipeManager.SaveManifest(CurrentRecipe);
+
+                RefreshStationDatabasePaths();
+                RefreshStationSlots();
+                string? activeDatabase = _activeStationDatabase;
+                ResetTestImageState();
+                if (activeDatabase != null && !LoadStationDatabase(activeDatabase))
+                    _activeStationDatabase = null;
+
+                SaveSettingsMessage = $"已匯入作業圖庫：{importedStations}/{CurrentRecipe.StationCount} 站；{okStations} 站有 OK/NG 分類；已清除 {clearedStations} 站的舊路徑。";
+                if (okStations == 0)
+                    SaveSettingsMessage += " 本次圖片未分 OK/NG，請在有圖站別使用 ALL DB 載入。";
+                if (skipList.Count > 0)
+                    SaveSettingsMessage += $" 跳過：{string.Join(", ", skipList.Take(8))}";
+            }
+            catch (Exception ex)
+            {
+                SaveSettingsMessage = "作業圖庫匯入失敗：" + ex.Message;
+                MessageBox.Show(SaveSettingsMessage, "匯入作業圖庫失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+        }
+
+        private static bool ClearStationDatabasePaths(RecipeManager.RecipeStation station)
+        {
+            bool hadPaths = !string.IsNullOrWhiteSpace(station.AllDatabasePath)
+                || !string.IsNullOrWhiteSpace(station.OkDatabasePath)
+                || !string.IsNullOrWhiteSpace(station.NgDatabasePath);
+            station.AllDatabasePath = null;
+            station.OkDatabasePath = null;
+            station.NgDatabasePath = null;
+            return hadPaths;
+        }
+
+        /// <summary>設定檢測圖檔輸出根目錄，獨立存入目前 Recipe。</summary>
+        public void ConfigureWorkDatabaseOutput(Window owner)
+        {
+            if (CurrentRecipe == null)
+            {
+                DatabaseSaveMessage = "請先載入配方，再設定圖檔輸出路徑。";
+                return;
+            }
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+            {
+                DatabaseSaveMessage = "圖片仍在檢測中，請完成後再設定。";
+                return;
+            }
+
+            string? folder = view.ExplorerFolderPicker.PickFolder(
+                owner,
+                "設定此 Recipe 的檢測圖檔輸出根目錄",
+                CurrentRecipe.InspectionImageOutputFolder);
+            if (folder == null) return;
+            CurrentRecipe.InspectionImageOutputFolder = Path.GetFullPath(folder);
+            recipeManager.SaveManifest(CurrentRecipe);
+            InspectionImageOutputFolderDisplay = CurrentRecipe.InspectionImageOutputFolder;
+            DatabaseSaveMessage = $"檢測圖檔輸出路徑已存入 Recipe：{CurrentRecipe.InspectionImageOutputFolder}";
         }
 
         // 供主畫面與明確 --import-trainingimage 命令列共同使用；不會改原廠母本。
@@ -1631,7 +1790,8 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             RefreshStationSlots();
             RefreshStationDatabasePaths();
-            DatabaseDayFolderDisplay = value?.DatabaseDayFolder ?? string.Empty;
+            DatabaseDayFolderDisplay = value?.DatabaseDayFolder ?? value?.TrainingImageRoot ?? string.Empty;
+            InspectionImageOutputFolderDisplay = value?.InspectionImageOutputFolder ?? string.Empty;
         }
 
         partial void OnStationCountChanged(int value)
@@ -3255,12 +3415,15 @@ namespace LumasharpChecker.viewmodel
 
         private void ApplyTestImageResult(TestImageResultRow result)
         {
+            bool showProcessedPreview = UsesProcessedPreview(result);
+            int originX = showProcessedPreview ? result.FrameOriginX : 0;
+            int originY = showProcessedPreview ? result.FrameOriginY : 0;
             TestImageBrightness = result.Brightness;
             TestImageBrightnessDeltaPercent = result.BrightnessDeltaPercent;
             TestImageSharpness = result.Sharpness;
-            TestImageROI = new System.Drawing.Rectangle(result.RoiX, result.RoiY, result.RoiW, result.RoiH);
-            TestImageBrightnessROI = new System.Drawing.Rectangle(result.BrightnessRoiX, result.BrightnessRoiY, result.BrightnessRoiW, result.BrightnessRoiH);
-            TestImageSharpnessROI = new System.Drawing.Rectangle(result.SharpnessRoiX, result.SharpnessRoiY, result.SharpnessRoiW, result.SharpnessRoiH);
+            TestImageROI = new System.Drawing.Rectangle(result.RoiX - originX, result.RoiY - originY, result.RoiW, result.RoiH);
+            TestImageBrightnessROI = new System.Drawing.Rectangle(result.BrightnessRoiX - originX, result.BrightnessRoiY - originY, result.BrightnessRoiW, result.BrightnessRoiH);
+            TestImageSharpnessROI = new System.Drawing.Rectangle(result.SharpnessRoiX - originX, result.SharpnessRoiY - originY, result.SharpnessRoiW, result.SharpnessRoiH);
             BrightnessColor = !result.BrightnessMeasured ? Brushes.Gray : result.BrightnessSafe ? Brushes.Green : Brushes.Red;
             SharpnessColor = !result.IncludeSharpness || result.SharpnessSafe ? Brushes.Green : Brushes.Red;
             TestImageMatchFailed = result.IsMatched ? string.Empty : result.Message;
@@ -3270,7 +3433,8 @@ namespace LumasharpChecker.viewmodel
         {
             try
             {
-                CurrentTestImageBitmap = LoadBitmapFromPath(string.IsNullOrEmpty(result.ProcessedImagePath) ? CurrentTestImagePath : result.ProcessedImagePath);
+                string previewPath = UsesProcessedPreview(result) ? result.ProcessedImagePath : CurrentTestImagePath;
+                CurrentTestImageBitmap = LoadBitmapFromPath(previewPath);
                 UpdateDisplayImage();
             }
             catch (Exception ex)
@@ -3280,6 +3444,9 @@ namespace LumasharpChecker.viewmodel
                 UpdateDisplayImage();
             }
         }
+
+        private static bool UsesProcessedPreview(TestImageResultRow result) =>
+            result.ShowProcessedPreview && !string.IsNullOrWhiteSpace(result.ProcessedImagePath) && File.Exists(result.ProcessedImagePath);
 
         internal string? LastFlowPreviewPath { get; set; }
 

@@ -15,8 +15,8 @@ namespace LumasharpChecker
     /// </summary>
     public partial class App : Application
     {
-        // 獨立減肥版識別：避免與原 .NET 8 正式版共用單實例鎖。
-        private const string MutexName = "Global\\AB542812-CCE0-47AD-9DEB-362FCE4F4720-V2";
+        // V3 使用獨立單實例識別，可與 v2 並行開啟。
+        private const string MutexName = "Global\\AB542812-CCE0-47AD-9DEB-362FCE4F4720-V3";
         private static Mutex? _mutex;
         public App()
         {

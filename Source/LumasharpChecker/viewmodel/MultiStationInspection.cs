@@ -39,11 +39,13 @@ namespace LumasharpChecker.viewmodel
             {
                 if (SetProperty(ref _isMultiStationTesting, value))
                 {
+                    OnPropertyChanged(nameof(CanChangeMultiStationDatabaseSelection));
                     OnPropertyChanged(nameof(GlobalStatusBrush));
                     OnPropertyChanged(nameof(GlobalRunStatusText));
                 }
             }
         }
+        public bool CanChangeMultiStationDatabaseSelection => !IsMultiStationTesting;
 
         private string _multiStationProgress = "尚未執行檢測";
         public string MultiStationProgress
@@ -65,6 +67,16 @@ namespace LumasharpChecker.viewmodel
             private set => SetProperty(ref _multiStationTotal, value);
         }
 
+        private string _multiStationDatabaseSelection = "ALL";
+        public string MultiStationDatabaseSelection
+        {
+            get => _multiStationDatabaseSelection;
+            set
+            {
+                if (value is "OK" or "NG" or "ALL") SetProperty(ref _multiStationDatabaseSelection, value);
+            }
+        }
+
         [RelayCommand]
         private async Task RunMultiStationInspectionAsync()
         {
@@ -81,6 +93,7 @@ namespace LumasharpChecker.viewmodel
             }
 
             var recipe = CurrentRecipe;
+            string databaseSelection = MultiStationDatabaseSelection;
             var slots = StationSlots.ToArray();
             var selected = slots.Where(slot => slot.IncludeInBatch).ToArray();
             if (selected.Length == 0)
@@ -93,7 +106,7 @@ namespace LumasharpChecker.viewmodel
             using var cancellation = new CancellationTokenSource();
             _multiStationCancellation = cancellation;
             IsMultiStationTesting = true;
-            MultiStationProgress = "準備多站離線檢測";
+            MultiStationProgress = $"準備 {databaseSelection} 多站離線檢測";
             MultiStationTotal = "判定 OK —   NG —   Retest —   良率 —";
             foreach (var slot in selected)
             {
@@ -143,7 +156,8 @@ namespace LumasharpChecker.viewmodel
                     List<string> imageFiles;
                     try
                     {
-                        imageFiles = GetStationInspectionImages(station.OkDatabasePath, station.NgDatabasePath, station.AllDatabasePath);
+                        imageFiles = GetStationInspectionImages(databaseSelection,
+                            station.OkDatabasePath, station.NgDatabasePath, station.AllDatabasePath);
                     }
                     catch (Exception ex)
                     {
@@ -153,14 +167,14 @@ namespace LumasharpChecker.viewmodel
                     }
                     if (imageFiles.Count == 0)
                     {
-                        StoreResult(slot, recipe.Id, new StationRunSummary(0, 0, "無圖片", "本站 OK／NG 圖庫都沒有圖片"));
+                        StoreResult(slot, recipe.Id, new StationRunSummary(0, 0, "無圖片", $"本站 {databaseSelection} 沒有可用圖片"));
                         skipped++;
                         continue;
                     }
 
                     int sourceOkCount = imageFiles.Count(path => GetReferenceClassForImage(path) == "OK");
                     int sourceNgCount = imageFiles.Count(path => GetReferenceClassForImage(path) == "NG");
-                    slot.ApplyBatchResult(0, 0, "檢測中", $"ALL DB 共 {imageFiles.Count} 張");
+                    slot.ApplyBatchResult(0, 0, "檢測中", $"{databaseSelection} 共 {imageFiles.Count} 張");
                     MultiStationProgress = $"第 {stationNumber:00} 站 · 0 / {imageFiles.Count}";
 
                     IProgress<int> progress = new Progress<int>(done =>
@@ -233,8 +247,25 @@ namespace LumasharpChecker.viewmodel
         [RelayCommand]
         private void StopMultiStationInspection() => _multiStationCancellation?.Cancel();
 
-        private List<string> GetStationInspectionImages(string? okPath, string? ngPath, string? allPath)
+        private List<string> GetStationInspectionImages(string kind, string? okPath, string? ngPath, string? allPath)
         {
+            string? selectedPath = kind switch
+            {
+                "OK" => okPath,
+                "NG" => ngPath,
+                _ => null
+            };
+            if (kind is "OK" or "NG")
+            {
+                string folder = recipeManager.ResolveDatabasePath(selectedPath);
+                return Directory.Exists(folder)
+                    ? Directory.EnumerateFiles(folder)
+                        .Where(path => BaselineImageExtensions.Contains(Path.GetExtension(path)))
+                        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                        .ToList()
+                    : new List<string>();
+            }
+
             string allFolder = recipeManager.ResolveDatabasePath(allPath);
             if (Directory.Exists(allFolder))
                 return Directory.EnumerateFiles(allFolder, "*", SearchOption.AllDirectories)
