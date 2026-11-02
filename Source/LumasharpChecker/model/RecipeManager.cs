@@ -61,8 +61,10 @@ public sealed class RecipeManager
 
     public sealed class RecipeStation
     {
+        public const int MaximumRecentImageCount = 500;
         public int Number { get; set; }
         public bool IsConfigured { get; set; }
+        public int RecentImageCount { get; set; } = 1;
         public string? SourceProfileName { get; set; }
         // Local workflow choices belong to this Recipe/station, not the shared UI defaults.
         public string? FlowSelection { get; set; }
@@ -842,6 +844,12 @@ public sealed class RecipeManager
             .Select(group => group.First())
             .OrderBy(station => station.Number)
             .ToList();
+        foreach (RecipeStation station in recipe.Stations)
+        {
+            if (station.RecentImageCount < 1) station.RecentImageCount = 1;
+            if (station.RecentImageCount > RecipeStation.MaximumRecentImageCount)
+                station.RecentImageCount = RecipeStation.MaximumRecentImageCount;
+        }
     }
 
     private static void ValidateStationNumber(int stationNumber)

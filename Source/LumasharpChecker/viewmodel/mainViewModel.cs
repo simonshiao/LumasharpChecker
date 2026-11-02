@@ -1360,12 +1360,22 @@ namespace LumasharpChecker.viewmodel
                     patternPath = Path.Combine(stationDir, "pattern.jpg");
                     configured = File.Exists(profilePath) && File.Exists(patternPath);
                 }
+                Func<int, int>? saveRecentImageCount = null;
+                if (station != null && CurrentRecipe != null)
+                {
+                    var recipeForSetting = CurrentRecipe;
+                    var stationForSetting = station;
+                    saveRecentImageCount = count => SaveStationRecentImageCount(
+                        recipeForSetting, stationForSetting, count);
+                }
                 var slot = new StationSlotViewModel(number, configured,
                     CurrentRecipe != null && number == CurrentStationNumber,
                     patternPath,
                     recipeManager.ResolveDatabasePath(station?.OkDatabasePath),
                     recipeManager.ResolveDatabasePath(station?.NgDatabasePath),
-                    station?.VendorAiModelFiles?.ToArray());
+                    station?.VendorAiModelFiles?.ToArray(),
+                    station?.RecentImageCount ?? 1,
+                    saveRecentImageCount);
                 if (previousSlots.TryGetValue(number, out var previous))
                 {
                     slot.IncludeInBatch = previous.IncludeInBatch;
@@ -1381,6 +1391,33 @@ namespace LumasharpChecker.viewmodel
             StationSlots = slots;
             OnPropertyChanged(nameof(RecipeConfigurationSummary));
             OnPropertyChanged(nameof(CurrentStationStatusText));
+        }
+
+        private int SaveStationRecentImageCount(
+            RecipeManager.RecipeManifest recipe,
+            RecipeManager.RecipeStation station,
+            int recentImageCount)
+        {
+            int count = recentImageCount < 1 ? 1
+                : recentImageCount > RecipeManager.RecipeStation.MaximumRecentImageCount
+                    ? RecipeManager.RecipeStation.MaximumRecentImageCount
+                    : recentImageCount;
+            if (station.RecentImageCount == count) return count;
+
+            int previous = station.RecentImageCount;
+            station.RecentImageCount = count;
+            try
+            {
+                recipeManager.SaveManifest(recipe);
+                SaveSettingsMessage = $"已儲存第 {station.Number:00} 站的最新圖片測試張數：{count} 張。";
+                return count;
+            }
+            catch (Exception ex)
+            {
+                station.RecentImageCount = previous;
+                SaveSettingsMessage = $"儲存第 {station.Number:00} 站測試張數失敗：{ex.GetBaseException().Message}";
+                return previous;
+            }
         }
 
         [RelayCommand]

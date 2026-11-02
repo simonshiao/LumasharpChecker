@@ -874,10 +874,24 @@
                                 Background="#D2F5FF" BorderBrush="{StaticResource HudAccentStrong}"
                                 Foreground="{StaticResource HudAccentStrong}"
                                 FontWeight="SemiBold" Padding="16,7" Margin="0,0,7,0"/>
+                        <Button Command="{Binding RunMultiStationRecentImagesCommand}"
+                                IsEnabled="{Binding IsRecipeActive}"
+                                Content="測最新指定張數"
+                                AutomationProperties.Name="測試勾選站別的最新指定張數"
+                                ToolTip="依各站設定張數，測目前 ALL／OK／NG 圖庫中最新的圖片。"
+                                Background="{StaticResource Surface}" BorderBrush="{StaticResource HudBorder}"
+                                Foreground="{StaticResource HudAccentStrong}"
+                                FontWeight="SemiBold" Padding="12,7" Margin="0,0,7,0"/>
                         <Button Command="{Binding StopMultiStationInspectionCommand}"
                                 IsEnabled="{Binding IsMultiStationTesting}" Content="停止"
                                 AutomationProperties.Name="停止多站測試" Padding="11,7"
                                 BorderBrush="{StaticResource HudNg}" Foreground="#B53048"/>
+                        <ToggleButton x:Name="MultiStationSettingsButton"
+                                      Style="{StaticResource TopIconToggle}"
+                                      Width="38" Height="34" MinHeight="0" Padding="0" Margin="7,0,0,0"
+                                      Content="&#xE713;" ToolTip="設定各站最新測試張數"
+                                      IsEnabled="{Binding IsRecipeActive}"
+                                      AutomationProperties.Name="多站測試設定"/>
                     </StackPanel>
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                         <Border Background="{StaticResource HudAccent}" Width="4"
@@ -889,6 +903,54 @@
                                    FontSize="14" FontWeight="SemiBold" Foreground="{StaticResource HudAccentStrong}"/>
                     </StackPanel>
                 </DockPanel>
+                <Popup x:Name="MultiStationSettingsPopup"
+                       IsOpen="{Binding IsChecked, ElementName=MultiStationSettingsButton, Mode=TwoWay}"
+                       PlacementTarget="{Binding ElementName=MultiStationSettingsButton}"
+                       Placement="Bottom" HorizontalOffset="-290" VerticalOffset="7"
+                       StaysOpen="False" AllowsTransparency="True"
+                       DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
+                    <Border Width="300" Padding="15" CornerRadius="10"
+                            Background="{StaticResource Surface}"
+                            BorderBrush="{StaticResource Line}" BorderThickness="1">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.2"/>
+                        </Border.Effect>
+                        <StackPanel>
+                            <TextBlock Text="各站最新測試張數" FontSize="15" FontWeight="SemiBold"
+                                       Foreground="{StaticResource Text}" Margin="0,0,0,5"/>
+                            <TextBlock Text="設定每個站別要測的最新圖片數；範圍 1–500 張。"
+                                       FontSize="11" Foreground="{StaticResource Muted}"
+                                       TextWrapping="Wrap" Margin="0,0,0,10"/>
+                            <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
+                                <ItemsControl ItemsSource="{Binding StationSlots}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid Margin="0,3">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="{Binding Number, StringFormat=第 {0} 站}"
+                                                           VerticalAlignment="Center" Foreground="{StaticResource Text}"/>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBox Width="58" Height="30" Padding="5,3"
+                                                             TextAlignment="Center"
+                                                             Text="{Binding RecentImageCount, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                             AutomationProperties.Name="各站最新測試張數"/>
+                                                    <TextBlock Text="張" Margin="6,0,0,0" VerticalAlignment="Center"
+                                                               Foreground="{StaticResource Muted}"/>
+                                                </StackPanel>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </ScrollViewer>
+                            <TextBlock Text="設定會保存於目前 Recipe；未勾選的站別不會執行。"
+                                       FontSize="11" Foreground="{StaticResource Muted}"
+                                       TextWrapping="Wrap" Margin="0,10,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Popup>
                 <TextBlock Grid.Row="1" Text="{Binding MultiStationProgress}"
                            Foreground="{StaticResource HudTextSoft}" FontSize="11"
                            Margin="16,4,0,0" MaxHeight="16" TextTrimming="CharacterEllipsis"/>

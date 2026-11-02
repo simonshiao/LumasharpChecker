@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using LumasharpChecker.model;
 using System;
 using System.IO;
 using System.Windows.Media;
@@ -22,6 +23,26 @@ public sealed class StationSlotViewModel : ObservableObject
     public string AiModelStatus { get; }
     public string AiModelPathHint { get; }
     private bool _includeInBatch = true;
+    private int _recentImageCount = 1;
+    private readonly Func<int, int>? _saveRecentImageCount;
+    public int RecentImageCount
+    {
+        get => _recentImageCount;
+        set
+        {
+            int requested = value < 1 ? 1
+                : value > RecipeManager.RecipeStation.MaximumRecentImageCount
+                    ? RecipeManager.RecipeStation.MaximumRecentImageCount
+                    : value;
+            int saved = _saveRecentImageCount?.Invoke(requested) ?? requested;
+            if (saved < 1) saved = 1;
+            if (saved > RecipeManager.RecipeStation.MaximumRecentImageCount)
+                saved = RecipeManager.RecipeStation.MaximumRecentImageCount;
+            if (!SetProperty(ref _recentImageCount, saved))
+                OnPropertyChanged(nameof(RecentImageCount));
+        }
+    }
+
     public bool IncludeInBatch
     {
         get => _includeInBatch;
@@ -121,11 +142,17 @@ public sealed class StationSlotViewModel : ObservableObject
 
     public StationSlotViewModel(int number, bool isConfigured, bool isSelected,
         string? patternPath = null, string? okPath = null, string? ngPath = null,
-        string[]? vendorAiModels = null)
+        string[]? vendorAiModels = null, int recentImageCount = 1,
+        Func<int, int>? saveRecentImageCount = null)
     {
         Number = number;
         _isConfigured = isConfigured;
         _isSelected = isSelected;
+        _recentImageCount = recentImageCount < 1 ? 1
+            : recentImageCount > RecipeManager.RecipeStation.MaximumRecentImageCount
+                ? RecipeManager.RecipeStation.MaximumRecentImageCount
+                : recentImageCount;
+        _saveRecentImageCount = saveRecentImageCount;
         _batchStatus = isConfigured ? "尚未測試" : "未校準";
         OkPath = okPath ?? string.Empty;
         NgPath = ngPath ?? string.Empty;

@@ -78,7 +78,14 @@ namespace LumasharpChecker.viewmodel
         }
 
         [RelayCommand]
-        private async Task RunMultiStationInspectionAsync()
+        private Task RunMultiStationInspectionAsync()
+            => RunMultiStationInspectionCoreAsync(latestImagesOnly: false);
+
+        [RelayCommand]
+        private Task RunMultiStationRecentImagesAsync()
+            => RunMultiStationInspectionCoreAsync(latestImagesOnly: true);
+
+        private async Task RunMultiStationInspectionCoreAsync(bool latestImagesOnly)
         {
             if (IsMultiStationTesting) return;
             if (CurrentRecipe == null)
@@ -106,7 +113,9 @@ namespace LumasharpChecker.viewmodel
             using var cancellation = new CancellationTokenSource();
             _multiStationCancellation = cancellation;
             IsMultiStationTesting = true;
-            MultiStationProgress = $"準備 {databaseSelection} 多站離線檢測";
+            MultiStationProgress = latestImagesOnly
+                ? $"準備依各站設定測試 {databaseSelection} 最新圖片"
+                : $"準備 {databaseSelection} 多站離線檢測";
             MultiStationTotal = "判定 OK —   NG —   Retest —   良率 —";
             foreach (var slot in selected)
             {
@@ -172,10 +181,25 @@ namespace LumasharpChecker.viewmodel
                         continue;
                     }
 
+                    int availableImageCount = imageFiles.Count;
                     int sourceOkCount = imageFiles.Count(path => GetReferenceClassForImage(path) == "OK");
                     int sourceNgCount = imageFiles.Count(path => GetReferenceClassForImage(path) == "NG");
-                    slot.ApplyBatchResult(0, 0, "檢測中", $"{databaseSelection} 共 {imageFiles.Count} 張");
-                    MultiStationProgress = $"第 {stationNumber:00} 站 · 0 / {imageFiles.Count}";
+                    if (latestImagesOnly)
+                    {
+                        imageFiles = imageFiles
+                            .OrderByDescending(GetImageLastWriteTimeUtc)
+                            .ThenByDescending(path => path, StringComparer.OrdinalIgnoreCase)
+                            .Take(slot.RecentImageCount)
+                            .OrderBy(GetImageLastWriteTimeUtc)
+                            .ThenBy(path => path, StringComparer.OrdinalIgnoreCase)
+                            .ToList();
+                    }
+                    slot.ApplyBatchResult(0, 0, "檢測中", latestImagesOnly
+                        ? $"測試最新 {imageFiles.Count} 張 · 圖庫共 {availableImageCount} 張"
+                        : $"{databaseSelection} 共 {availableImageCount} 張");
+                    MultiStationProgress = latestImagesOnly
+                        ? $"第 {stationNumber:00} 站 · 最新 {imageFiles.Count} 張"
+                        : $"第 {stationNumber:00} 站 · 0 / {imageFiles.Count}";
 
                     IProgress<int> progress = new Progress<int>(done =>
                     {
@@ -199,7 +223,7 @@ namespace LumasharpChecker.viewmodel
                             if ((i + 1) % 5 == 0 || i == imageFiles.Count - 1) progress.Report(i + 1);
                         }
                         result = new StationRunSummary(ok, ng, "完成",
-                            $"來源 OK {sourceOkCount}／NG {sourceNgCount}；新版流程判定 OK {ok}／NG {ng}；NG 誤判 OK {ngMissed} 張、OK 誤判 NG {okFalseReject} 張；流程錯誤 {errors} 張",
+                            $"{(latestImagesOnly ? $"測試最新 {imageFiles.Count} 張（圖庫共 {availableImageCount} 張；最後：{Path.GetFileName(imageFiles[imageFiles.Count - 1])}）；" : $"本次測試 {availableImageCount} 張；")}來源 OK {sourceOkCount}／NG {sourceNgCount}；新版流程判定 OK {ok}／NG {ng}；NG 誤判 OK {ngMissed} 張、OK 誤判 NG {okFalseReject} 張；流程錯誤 {errors} 張",
                             imageResults);
                     }
                     catch (OperationCanceledException) { throw; }
@@ -222,7 +246,9 @@ namespace LumasharpChecker.viewmodel
                     completed++;
                     MultiStationTotal = $"判定 OK {totalOk:N0}   NG {totalNg:N0}（含 Retest）   Retest {totalRetest:N0}   良率 {totalOk * 100.0 / (totalOk + totalNg):F1}%";
                 }
-                MultiStationProgress = $"檢測完成：{completed} 站，跳過 {skipped} 站";
+                MultiStationProgress = latestImagesOnly
+                    ? $"最新圖片測試完成：{completed} 站，跳過 {skipped} 站"
+                    : $"檢測完成：{completed} 站，跳過 {skipped} 站";
             }
             catch (OperationCanceledException)
             {
@@ -283,6 +309,12 @@ namespace LumasharpChecker.viewmodel
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private static DateTime GetImageLastWriteTimeUtc(string path)
+        {
+            try { return File.GetLastWriteTimeUtc(path); }
+            catch { return DateTime.MinValue; }
         }
 
         private void StoreResult(StationSlotViewModel slot, string recipeId, StationRunSummary result)
