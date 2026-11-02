@@ -10,11 +10,13 @@ internal static class NativeLocationService
     {
         public System.Drawing.Rectangle Bounds { get; set; }
         public string ImagePath { get; set; } = "";
+        public int OriginX { get; set; }
+        public int OriginY { get; set; }
     }
     internal static async Task<System.Drawing.Rectangle> LocateAsync(string snapshot, int station, string image) => (await LocateFrameAsync(snapshot, station, image)).Bounds;
     internal static async Task<Frame> LocateFrameAsync(string snapshot, int station, string image)
     {
-        string root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeLocator");
+        string root = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeR3");
         string exe = Path.Combine(root, "InspToolsLocator.exe");
         if (!File.Exists(exe)) throw new FileNotFoundException("尚未部署原廠定位引擎。", exe);
         string name = "luma_" + Guid.NewGuid().ToString("N");
@@ -48,3 +50,4 @@ internal static class NativeLocationService
         foreach (string dir in Directory.EnumerateDirectories(source)) CopyTree(dir, Path.Combine(destination, Path.GetFileName(dir)));
     }
 }
+

@@ -1,4 +1,4 @@
-﻿using LumasharpChecker.viewmodel;
+using LumasharpChecker.viewmodel;
 using System.Reflection;
 using System.Text;
 using System.Windows;
@@ -25,10 +25,23 @@ namespace LumasharpChecker
     /// </summary>
     public partial class MainWindow : Window
     {
-        private System.Windows.Point _roiDragStart;
-        private System.Windows.Shapes.Rectangle? _roiDraft;
         private bool _sidebarCollapsed;
         private bool _nativeFlowBusy;
+        private bool _nativeEditorOpen;
+        private bool _stopFlow;
+        private bool _restoringFlowSelection;
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            if (_nativeEditorOpen || _nativeFlowBusy || (DataContext is mainViewModel closingVm && closingVm.IsContinuousTestRunning))
+            {
+                e.Cancel = true;
+                MessageBox.Show("請先關閉原生參數視窗，並等待配方儲存完成。", "參數儲存中",
+                    MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            base.OnClosing(e);
+        }
         private string _lastSettingsMessage = "";
         private System.ComponentModel.INotifyPropertyChanged? _messageSource;
 
@@ -43,32 +56,20 @@ namespace LumasharpChecker
             AoiWorkflow.LocatorRequested += OpenAoiLocator_Click;
             AoiWorkflow.SelectWayRequested += (_, _) => OpenAoiNativeEditor("選向");
             AoiWorkflow.SelectFaceRequested += (_, _) => OpenAoiNativeEditor("選面");
+            AoiWorkflow.LocatorEnabledChanged += (_, _) => SaveFlowSelectionFromPanel();
+            AoiWorkflow.SelectWayEnabledChanged += (_, _) => SaveFlowSelectionFromPanel();
+            AoiWorkflow.SelectFaceEnabledChanged += (_, _) => SaveFlowSelectionFromPanel();
+            AoiWorkflow.LightEnabledChanged += (_, _) => SaveFlowSelectionFromPanel();
             AoiWorkflow.LightRequested += OpenAoiLight_Click;
-            AoiWorkflow.RetestRequested += async (_, _) =>
-            {
-                if (DataContext is mainViewModel vm) await vm.RetestFromAoiAsync();
-            };
+            AoiWorkflow.ContinuousRequested += async (_, _) => await RunContinuousFlowAsync();
             AoiWorkflow.ResultsRequested += (_, _) =>
             {
                 if (DataContext is mainViewModel vm) vm.ShowTestImageResultsCommand.Execute(null);
             };
-            AoiWorkflow.ParetoRequested += (_, _) =>
-            {
-                if (DataContext is mainViewModel vm)
-                {
-                    var window = new ParetoPreviewWindow(vm.TestImageResults) { Owner = this };
-                    window.ShowDialog();
-                }
-            };
-            AoiWorkflow.SizeStatisticsRequested += (_, _) =>
-            {
-                if (DataContext is mainViewModel vm)
-                    new RoiSizeStatisticsWindow(vm.TestImageResults) { Owner = this }.ShowDialog();
-            };
             AoiWorkflow.CollapseRequested += (_, _) => SetAoiPanelExpanded(false);
 
             Version? version = Assembly.GetEntryAssembly().GetName().Version;
-            this.Title += $" {version?.ToString()} [NET472 Slim]";
+            this.Title += $" {version?.ToString()}";
             // 首頁預設為 Chao8Side 風格的極簡看板，設定工具收在左側導覽。
             ToggleSidebar_Click(this, new RoutedEventArgs());
             ShowMainPage(true);
@@ -76,13 +77,83 @@ namespace LumasharpChecker
 
         private void SubscribeAoiMessages()
         {
+            if (_messageSource is mainViewModel previousVm)
+            {
+                previousVm.InspectCurrentFlow = null;
+                previousVm.IsNativeOperationBusy = null;
+            }
             if (_messageSource != null) _messageSource.PropertyChanged -= OnAoiSettingsChanged;
             _messageSource = DataContext as System.ComponentModel.INotifyPropertyChanged;
             if (_messageSource != null) _messageSource.PropertyChanged += OnAoiSettingsChanged;
+            if (_messageSource is mainViewModel vm)
+            {
+                vm.InspectCurrentFlow = () => RunNativeRetestAsync(quiet: true);
+                vm.IsNativeOperationBusy = () => _nativeFlowBusy || _nativeEditorOpen;
+                RestoreFlowSelection(vm);
+            }
+        }
+
+        private void RestoreFlowSelection(mainViewModel vm)
+        {
+            if (vm.CurrentRecipe == null) return;
+            _restoringFlowSelection = true;
+            try
+            {
+                string selection = vm.LoadFlowSelection();
+                AoiWorkflow.SetToolSelection(selection, vm.LoadLightInspectionEnabled());
+                vm.LightFlowSelection = selection;
+            }
+            catch (Exception ex)
+            {
+                AoiWorkflow.SetPipelineStatus("無法載入流程勾選設定：" + ex.GetBaseException().Message);
+            }
+            finally { _restoringFlowSelection = false; }
+        }
+
+        private void SaveFlowSelectionFromPanel()
+        {
+            if (_restoringFlowSelection) return;
+            if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null) return;
+            if (_nativeFlowBusy || _nativeEditorOpen || vm.IsContinuousTestRunning ||
+                vm.IsAnalyzingTestImages || vm.IsMultiStationTesting)
+            {
+                RestoreFlowSelection(vm);
+                return;
+            }
+
+            string selection = (AoiWorkflow.IsLocatorEnabled ? "1" : "0") +
+                (AoiWorkflow.IsSelectWayEnabled ? "1" : "0") +
+                (AoiWorkflow.IsSelectFaceEnabled ? "1" : "0");
+            try
+            {
+                vm.SaveFlowSelection(selection);
+                vm.SaveLightInspectionEnabled(AoiWorkflow.IsLightInspectionEnabled);
+                vm.LightFlowSelection = selection;
+                AoiWorkflow.ClearNativeResults();
+                AoiWorkflow.SetPipelineStatus("流程工具設定已儲存至目前 Recipe／站別。");
+            }
+            catch (Exception ex)
+            {
+                RestoreFlowSelection(vm);
+                AoiWorkflow.SetPipelineStatus("流程工具設定儲存失敗：" + ex.GetBaseException().Message);
+            }
         }
 
         private void OnAoiSettingsChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            if ((e.PropertyName == nameof(mainViewModel.CurrentStationNumber) ||
+                 e.PropertyName == nameof(mainViewModel.CurrentRecipe)) &&
+                DataContext is mainViewModel selectionVm)
+                RestoreFlowSelection(selectionVm);
+
+            if (e.PropertyName == nameof(mainViewModel.CurrentTestImagePath) ||
+                e.PropertyName == nameof(mainViewModel.CurrentStationNumber) ||
+                e.PropertyName == nameof(mainViewModel.CurrentRecipe))
+            {
+                if (e.PropertyName == nameof(mainViewModel.CurrentTestImagePath) && DataContext is mainViewModel batchVm && batchVm.IsContinuousTestRunning) return;
+                if (Dispatcher.CheckAccess()) AoiWorkflow.ClearNativeResults();
+                else Dispatcher.BeginInvoke(new Action(AoiWorkflow.ClearNativeResults));
+            }
             if (e.PropertyName != "SaveSettingsMessage") return;
             if (!Dispatcher.CheckAccess())
             {
@@ -117,23 +188,16 @@ namespace LumasharpChecker
 
         private void ShowOverview_Click(object sender, RoutedEventArgs e) => ShowMainPage(true);
 
-        // 舊單站 UI 暫時隱藏；任何舊入口都轉到統一的 AOI 工作區。
-        private void ShowInspection_Click(object sender, RoutedEventArgs e) => ShowAoiTools_Click(sender, e);
-
         private void ShowAoiTools_Click(object sender, RoutedEventArgs e)
         {
             ShowMainPage(false);
-            InspectionSettingsPanel.Visibility = Visibility.Collapsed;
             SetAoiPanelExpanded(true);
-            InspectionNavButton.Tag = null;
             AoiToolsNavButton.Tag = "Active";
-            InspectionNavButton.Background = System.Windows.Media.Brushes.Transparent;
-            InspectionNavButton.BorderBrush = System.Windows.Media.Brushes.Transparent;
             AoiToolsNavButton.Background = (System.Windows.Media.Brush)FindResource("BlueSoft");
             AoiToolsNavButton.BorderBrush = (System.Windows.Media.Brush)FindResource("Blue");
             // AOI 預設沿用目前站別 OK DB，不用每次開檔案選擇視窗。
             if (DataContext is mainViewModel vm && vm.CurrentRecipe != null)
-                vm.EnsureAoiOkDatabase();
+                vm.EnsureAoiAllDatabase();
         }
 
         private void OpenAoiPanel_Click(object sender, RoutedEventArgs e) => SetAoiPanelExpanded(true);
@@ -157,12 +221,12 @@ namespace LumasharpChecker
 
         // AOI 圖示負責參數編輯；原生執行器仍由光源流程呼叫。
         // 使用已驗證的 R3 隔離 Recipe，避免直接寫入原廠來源。
-        private void OpenAoiNativeEditor(string label)
+        private async void OpenAoiNativeEditor(string label)
         {
             if (_nativeFlowBusy) return;
             if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
             {
-                MessageBox.Show("請先載入 Recipe。", label, MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("請先載入配方。", label, MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
@@ -171,14 +235,25 @@ namespace LumasharpChecker
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            _nativeFlowBusy = true;
+            _nativeEditorOpen = true;
             try
             {
-                var ready = NativeRecipeBridge.Prepare(vm.CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
-                NativeRecipeBridge.OpenSandbox(ready, vm.CurrentStationNumber, label == "定位",
+                NativeRecipeBridge.PreparedRecipe ready;
+                try
+                {
+                    ready = NativeRecipeBridge.Prepare(vm.CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
+                }
+                catch (InvalidDataException ex) when (ex.Message.Contains("與 Luma 快照不一致"))
+                {
+                    NativeRecipeBridge.RefreshNativeCopy(vm.CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
+                    AoiWorkflow.SetPipelineStatus("原生 Recipe 已自動更新至最新匯入版本；舊副本已備份。");
+                    ready = NativeRecipeBridge.Prepare(vm.CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
+                }
+                await NativeRecipeBridge.OpenSandbox(ready, vm.CurrentStationNumber, label == "定位",
                     vm.TestImageFiles, vm.CurrentTestImagePath, label == "選向" ? "way" :
                     label == "選面" ? "face" : null);
-                AoiWorkflow.SetPipelineStatus("已開啟第 " + vm.CurrentStationNumber +
-                    " 站原生 R3 工具工作區，請選擇「" + label + "」參數頁；此視窗操作隔離 Recipe 副本。");
+                AoiWorkflow.SetPipelineStatus("原生「" + label + "」參數已儲存至本機配方。");
             }
             catch (Exception ex)
             {
@@ -186,6 +261,7 @@ namespace LumasharpChecker
                 MessageBox.Show(ex.GetBaseException().Message, label + "設定",
                     MessageBoxButton.OK, MessageBoxImage.Warning);
             }
+            finally { _nativeEditorOpen = false; _nativeFlowBusy = false; }
         }
 
         private async System.Threading.Tasks.Task InspectNativeStageAsync(string step, string label)
@@ -193,7 +269,7 @@ namespace LumasharpChecker
             if (_nativeFlowBusy) return;
             if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
             {
-                MessageBox.Show("請先載入 Recipe。", label, MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("請先載入配方。", label, MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
@@ -203,10 +279,10 @@ namespace LumasharpChecker
                 return;
             }
             if (string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) || !File.Exists(vm.CurrentTestImagePath))
-                vm.EnsureAoiOkDatabase(showError: true);
+                vm.EnsureAoiAllDatabase(showError: true);
             if (string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) || !File.Exists(vm.CurrentTestImagePath))
             {
-                MessageBox.Show("本站 OK DB 尚未設定，無法執行原生工具。", label,
+                MessageBox.Show("本站 ALL DB（或 OK／NG 圖庫）沒有可用圖片，無法執行原生工具。", label,
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -221,13 +297,13 @@ namespace LumasharpChecker
                     recipe, station, imagePath, AppDomain.CurrentDomain.BaseDirectory, step);
                 if (vm.CurrentRecipe?.Id != recipe.Id ||
                     vm.CurrentStationNumber != station || vm.CurrentTestImagePath != imagePath)
-                    throw new InvalidOperationException("站別、Recipe 或圖片已變更，本次結果作廢。");
+                    throw new InvalidOperationException("站別、配方或圖片已變更，本次結果作廢。");
                 AoiWorkflow.SetPipelineStatus(native.Summary);
                 string state = step == "way" ? native.SelectWay
                     : step == "face" ? native.SelectFace : native.Locate;
                 if (state == "SKIPPED_RECIPE_OFF")
                 {
-                    MessageBox.Show("第 " + station + " 站原廠 Recipe 未啟用「" + label +
+                    MessageBox.Show("第 " + station + " 站原廠配方未啟用「" + label +
                         "」，已依原廠設定略過，未執行也未變更參數。\n" + native.Summary,
                         label, MessageBoxButton.OK, MessageBoxImage.Information);
                 }
@@ -241,12 +317,145 @@ namespace LumasharpChecker
             finally { _nativeFlowBusy = false; }
         }
 
+        private async System.Threading.Tasks.Task RunNativeRetestAsync(bool continuous = false, bool quiet = false)
+        {
+            if (_nativeFlowBusy || _nativeEditorOpen) return;
+            void Unavailable(string message)
+            {
+                AoiWorkflow.SetPipelineStatus(message);
+                if (!quiet) MessageBox.Show(message, "重新檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                if (continuous) _stopFlow = true;
+            }
+            if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
+            {
+                Unavailable("請先載入配方。");
+                return;
+            }
+            if (vm.IsAnalyzingTestImages || (!continuous && vm.IsContinuousTestRunning) || vm.IsMultiStationTesting)
+            {
+                Unavailable("檢測進行中，請先完成或停止。");
+                return;
+            }
+            if (!AoiWorkflow.IsLocatorEnabled)
+            {
+                Unavailable("請先勾選定位，再執行定位、選向與選面。");
+                return;
+            }
+            string image = vm.CurrentTestImagePath;
+            if (string.IsNullOrWhiteSpace(image) || !File.Exists(image))
+            {
+                Unavailable("請先載入要檢測的圖片。");
+                return;
+            }
+            var recipe = vm.CurrentRecipe;
+            int station = vm.CurrentStationNumber;
+            string selection = "1" + (AoiWorkflow.IsSelectWayEnabled ? "1" : "0") +
+                (AoiWorkflow.IsSelectFaceEnabled ? "1" : "0");
+            bool lightInspectionEnabled = AoiWorkflow.IsLightInspectionEnabled;
+            _nativeFlowBusy = true;
+            AoiWorkflow.ClearNativeResults();
+            try
+            {
+                AoiWorkflow.SetPipelineStatus(lightInspectionEnabled
+                    ? "正在檢測目前圖片：定位 → 選向 → 選面 → 光源…"
+                    : "正在檢測目前圖片：定位 → 選向 → 選面…（光源略過）");
+                var report = await vm.InspectFlowAsync(image, selection, accumulate: continuous,
+                    lightInspectionEnabled: lightInspectionEnabled);
+                if (vm.CurrentRecipe?.Id != recipe.Id || vm.CurrentStationNumber != station || vm.CurrentTestImagePath != image)
+                    throw new InvalidOperationException("站別、配方或圖片已變更，本次結果作廢。");
+                AoiWorkflow.ShowNativeResults(report);
+                AoiWorkflow.SetPipelineStatus(report.Summary +
+                    (string.IsNullOrWhiteSpace(report.Error) ? "" : "；" + report.Error));
+                if (!string.IsNullOrWhiteSpace(report.SelectWayDetail))
+                    AoiWorkflow.SetPipelineStatus("選向資訊：" + report.SelectWayDetail.Trim());
+                if (report.Exit != 0 && !continuous && !quiet)
+                    MessageBox.Show(report.Summary + (string.IsNullOrWhiteSpace(report.Error) ? "" : "\n" + report.Error),
+                        "原生流程未通過", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                AoiWorkflow.SetPipelineStatus("原生流程無法完成：" + ex.GetBaseException().Message);
+                if (!continuous && !quiet) MessageBox.Show(ex.GetBaseException().Message, "原生流程失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+                if (continuous) _stopFlow = true;
+            }
+            finally { _nativeFlowBusy = false; }
+        }
+
+        private async void StartFlowContinuous_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not mainViewModel vm) return;
+            if (vm.CurrentRecipe != null) await RunContinuousFlowAsync();
+            else vm.StartContinuousTestCommand.Execute(null);
+        }
+
+        private async System.Threading.Tasks.Task RunContinuousFlowAsync()
+        {
+            if (DataContext is not mainViewModel vm) return;
+            if (vm.IsContinuousTestRunning) { _stopFlow = true; return; }
+            if (_nativeFlowBusy || _nativeEditorOpen || vm.IsAnalyzingTestImages || vm.IsMultiStationTesting) return;
+            string? batchRecipe = null; int station = 0, done = 0, count = 0;
+            NativeRecipeBridge.StageReport? last = null;
+            var batch = System.Diagnostics.Stopwatch.StartNew();
+            try
+            {
+                if (vm.CurrentRecipe == null || vm.TestImageFiles.Count == 0) throw new InvalidOperationException("請先載入配方與圖庫。");
+                bool lightInspectionEnabled = AoiWorkflow.IsLightInspectionEnabled;
+                if (lightInspectionEnabled)
+                {
+                    var settings = vm.LoadLightSettings();
+                    if (!settings.HasRoi) throw new InvalidOperationException("請先在「光源檢測」設定 ROI 並儲存。");
+                    settings.EffectiveLimits();
+                }
+                if (!AoiWorkflow.IsLocatorEnabled) throw new InvalidOperationException("請先勾選定位。");
+                var files = vm.TestImageFiles.ToArray(); count = files.Length;
+                batchRecipe = vm.CurrentRecipe.Id; station = vm.CurrentStationNumber;
+                string selection = "1" + (AoiWorkflow.IsSelectWayEnabled ? "1" : "0") + (AoiWorkflow.IsSelectFaceEnabled ? "1" : "0");
+                vm.BeginContinuousFlow();
+                _stopFlow = false; vm.IsContinuousTestRunning = true; AoiWorkflow.SetContinuousRunning(true);
+                AoiWorkflow.ClearNativeResults();
+                AoiWorkflow.SetPipelineStatus("連續檢測開始：過程保留目前影像，結束後顯示最後一張。");
+                foreach (string file in files)
+                {
+                    if (_stopFlow || vm.CurrentRecipe?.Id != batchRecipe || vm.CurrentStationNumber != station) break;
+                    // Do not switch/preview the input image or update the result list per frame.
+                    _nativeFlowBusy = true;
+                    try { last = await vm.InspectFlowAsync(file, selection, accumulate: true,
+                        deferPresentation: true, lightInspectionEnabled: lightInspectionEnabled); }
+                    finally { _nativeFlowBusy = false; }
+                    done++;
+                    AoiWorkflow.SetContinuousProgress(done, files.Length);
+                }
+            }
+            catch (Exception ex)
+            {
+                _stopFlow = true;
+                AoiWorkflow.SetPipelineStatus("連續檢測中止：" + ex.GetBaseException().Message);
+                MessageBox.Show(ex.GetBaseException().Message, "連續檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            finally
+            {
+                bool sameContext = batchRecipe != null && vm.CurrentRecipe?.Id == batchRecipe && vm.CurrentStationNumber == station;
+                try
+                {
+                    double displayMs = vm.FinishContinuousFlow(sameContext);
+                    if (sameContext && last != null) AoiWorkflow.ShowNativeResults(last);
+                    if (batchRecipe != null)
+                    {
+                        vm.IsTestImageAnalysisComplete = sameContext && !_stopFlow && done == count;
+                        batch.Stop();
+                        AoiWorkflow.SetPipelineStatus($"連續流程{(_stopFlow || !sameContext ? "已停止" : "結束")}：{done}/{count} 張，共 {batch.Elapsed.TotalMilliseconds:F0} ms；最後畫面更新 {displayMs:F1} ms。");
+                    }
+                }
+                finally { vm.IsContinuousTestRunning = false; AoiWorkflow.SetContinuousRunning(false); }
+            }
+        }
+
         private async void OpenAoiLight_Click(object? sender, EventArgs e)
         {
             if (_nativeFlowBusy) return;
             if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null)
             {
-                MessageBox.Show("請先載入 Recipe。", "光源檢測", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("請先載入配方。", "光源檢測", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
             if (vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
@@ -256,10 +465,10 @@ namespace LumasharpChecker
                 return;
             }
             if (string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) || !File.Exists(vm.CurrentTestImagePath))
-                vm.EnsureAoiOkDatabase(showError: true);
+                vm.EnsureAoiAllDatabase(showError: true);
             if (string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) || !File.Exists(vm.CurrentTestImagePath))
             {
-                MessageBox.Show("請先設定本站 OK DB。", "光源檢測",
+                MessageBox.Show("請先設定本站 ALL DB 或 OK／NG 圖庫。", "光源檢測",
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
@@ -270,6 +479,7 @@ namespace LumasharpChecker
             {
                 // 設定頁不以定位成功作開窗 Gate；定位結果在單張測試時判斷。
                 AoiWorkflow.SetPipelineStatus("光源設定已開啟，請選圖、定位及校準 ROI。");
+                vm.LightFlowSelection = "1" + (AoiWorkflow.IsSelectWayEnabled ? "1" : "0") + (AoiWorkflow.IsSelectFaceEnabled ? "1" : "0");
                 new LightInspectionWindow(vm, imagePath) { Owner = this }.ShowDialog();
             }
             catch (Exception ex)
@@ -286,17 +496,17 @@ namespace LumasharpChecker
         {
             if (DataContext is mainViewModel vm && (string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) ||
                                                      !File.Exists(vm.CurrentTestImagePath)))
-                vm.EnsureAoiOkDatabase(showError: true);
+                vm.EnsureAoiAllDatabase(showError: true);
             string? imagePath = (DataContext as mainViewModel)?.CurrentTestImagePath;
             if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath))
             {
-                MessageBox.Show("本站 OK DB 沒有可用圖片，請在圖庫設定中指定 OK 路徑。", "定位", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("本站 ALL DB 沒有可用圖片，請在圖庫設定中指定 ALL DB 或 OK／NG 路徑。", "定位", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
-            string exe = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeLocator", "InspToolsLocator.exe");
+            string exe = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeR3", "InspToolsLocator.exe");
             try
             {
-                if (!File.Exists(exe)) throw new FileNotFoundException("找不到原廠定位元件或其 AI 執行環境，請重新部署程式。", exe);
+                if (!File.Exists(exe)) throw new FileNotFoundException("找不到原廠非 AI 定位元件，請重新部署程式。", exe);
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(exe, mode + " \"" + imagePath + "\" \"" + source + "\" " + station)
                 { UseShellExecute = false, WorkingDirectory = System.IO.Path.GetDirectoryName(exe)! });
             }
@@ -310,6 +520,13 @@ namespace LumasharpChecker
         {
             // 站別切換仍用既有 Command，導覽轉向 AOI 而非舊單站頁。
             ShowAoiTools_Click(sender, e);
+            // Button raises Click before executing its bound command, so defer restore
+            // until SelectStation has updated the view model's station number.
+            Dispatcher.BeginInvoke(new System.Action(() =>
+            {
+                if (DataContext is mainViewModel vm)
+                    vm.RestoreMultiStationResultsForCurrentStation();
+            }));
         }
 
         private void OverviewDatabase_Click(object sender, RoutedEventArgs e)
@@ -320,25 +537,17 @@ namespace LumasharpChecker
 
         private void ShowMainPage(bool overview)
         {
-            // 切到另一站或從總覽返回時，預設先顯示檢測摘要，
-            // 不延續上一站展開的編輯閾值，減少誤操作。
-            if (!overview)
-                AdvancedSettingsExpander.IsExpanded = false;
             StationOverviewPage.Visibility = overview ? Visibility.Visible : Visibility.Collapsed;
             InspectionPage.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
-            InspectionSettingsPanel.Visibility = Visibility.Visible;
-            AoiWorkflow.Visibility = Visibility.Collapsed;
+            AoiWorkflow.Visibility = overview ? Visibility.Collapsed : Visibility.Visible;
             AoiPanelReopen.Visibility = Visibility.Collapsed;
             InspectionSideColumn.Width = new GridLength(322);
             OverviewNavButton.Tag = overview ? "Active" : null;
-            InspectionNavButton.Tag = overview ? null : "Active";
             AoiToolsNavButton.Tag = null;
             var activeBackground = (System.Windows.Media.Brush)FindResource("BlueSoft");
             var activeBorder = (System.Windows.Media.Brush)FindResource("Blue");
             OverviewNavButton.Background = overview ? activeBackground : System.Windows.Media.Brushes.Transparent;
             OverviewNavButton.BorderBrush = overview ? activeBorder : System.Windows.Media.Brushes.Transparent;
-            InspectionNavButton.Background = overview ? System.Windows.Media.Brushes.Transparent : activeBackground;
-            InspectionNavButton.BorderBrush = overview ? System.Windows.Media.Brushes.Transparent : activeBorder;
             AoiToolsNavButton.Background = System.Windows.Media.Brushes.Transparent;
             AoiToolsNavButton.BorderBrush = System.Windows.Media.Brushes.Transparent;
         }
@@ -377,57 +586,6 @@ namespace LumasharpChecker
             window.ShowDialog();
         }
 
-        private void OpenStationPatterns_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null ||
-                vm.CurrentProfile == null)
-                return;
-            if (vm.IsMultiStationTesting || vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning)
-            {
-                MessageBox.Show("請先停止檢測，再調整定位樣板。", "定位樣板",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            var station = vm.CurrentRecipe.Stations.FirstOrDefault(s => s.Number == vm.CurrentStationNumber);
-            if (station?.IsConfigured != true ||
-                !Guid.TryParseExact(vm.CurrentRecipe.Id, "N", out _))
-            {
-                MessageBox.Show("請先將本站檢測參數儲存至 Recipe，再加入樣板。", "定位樣板",
-                    MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-            string stationDir = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                "recipes", vm.CurrentRecipe.Id, $"station{vm.CurrentStationNumber:00}");
-            try
-            {
-                string primary = System.IO.Path.GetFullPath(System.IO.Path.Combine(stationDir, "pattern.jpg"));
-                if (string.IsNullOrWhiteSpace(vm.CurrentProfile.ImagePath) ||
-                    !string.Equals(System.IO.Path.GetFullPath(vm.CurrentProfile.ImagePath), primary,
-                        StringComparison.OrdinalIgnoreCase))
-                    throw new InvalidOperationException("目前使用的不是本站 Recipe 設定，請先重新載入本站。");
-                var roi = new System.Drawing.Rectangle(
-                    vm.CurrentProfile.PatternMatchRoiX.GetValueOrDefault(),
-                    vm.CurrentProfile.PatternMatchRoiY.GetValueOrDefault(),
-                    vm.CurrentProfile.PatternMatchRoiW.GetValueOrDefault(),
-                    vm.CurrentProfile.PatternMatchRoiH.GetValueOrDefault());
-                var library = new StationPatternLibrary(primary, roi);
-                var manager = new StationPatternsWindow(this, vm.CurrentStationNumber, library, vm.CurrentTestImagePath);
-                manager.ShowDialog();
-                if (manager.Modified) vm.InvalidatePatternMatchResults();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show("無法開啟本站定位樣板：" + ex.Message, "定位樣板",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-        }
-
-        private void CloseSettingsPanel_Click(object sender, RoutedEventArgs e)
-        {
-            if (DataContext is mainViewModel vm)
-                vm.IsSettingsPanelOpen = false;
-        }
-
         private void OpenTestImagePicker_Click(object sender, RoutedEventArgs e)
         {
             if (DataContext is not mainViewModel viewModel || viewModel.TestImageTree.Count == 0)
@@ -454,101 +612,5 @@ namespace LumasharpChecker
             _ = viewModel.NavigateTestImageByWheelAsync(e.Delta);
         }
 
-        private void MainRoiCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            if (DataContext is not mainViewModel viewModel || !viewModel.IsRoiEditing)
-                return;
-
-            _roiDragStart = ClampRoiPoint(e.GetPosition(MainRoiCanvas));
-            _roiDraft = new System.Windows.Shapes.Rectangle
-            {
-                Stroke = GetRoiBrush(viewModel.SelectedRoiType),
-                StrokeThickness = 3,
-                StrokeDashArray = new DoubleCollection { 4, 2 },
-                Fill = System.Windows.Media.Brushes.Transparent,
-                IsHitTestVisible = false
-            };
-            Canvas.SetLeft(_roiDraft, _roiDragStart.X);
-            Canvas.SetTop(_roiDraft, _roiDragStart.Y);
-            MainRoiCanvas.Children.Add(_roiDraft);
-            MainRoiCanvas.CaptureMouse();
-            MainRoiCanvas.Cursor = Cursors.Cross;
-            e.Handled = true;
-        }
-
-        private void MainRoiCanvas_MouseMove(object sender, MouseEventArgs e)
-        {
-            if (_roiDraft == null || DataContext is not mainViewModel)
-                return;
-
-            System.Windows.Point current = ClampRoiPoint(e.GetPosition(MainRoiCanvas));
-            Canvas.SetLeft(_roiDraft, Math.Min(_roiDragStart.X, current.X));
-            Canvas.SetTop(_roiDraft, Math.Min(_roiDragStart.Y, current.Y));
-            _roiDraft.Width = Math.Abs(current.X - _roiDragStart.X);
-            _roiDraft.Height = Math.Abs(current.Y - _roiDragStart.Y);
-        }
-
-        private void MainRoiCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-        {
-            if (_roiDraft == null)
-                return;
-
-            System.Windows.Point end = ClampRoiPoint(e.GetPosition(MainRoiCanvas));
-            MainRoiCanvas.Children.Remove(_roiDraft);
-            _roiDraft = null;
-            MainRoiCanvas.ReleaseMouseCapture();
-            MainRoiCanvas.Cursor = Cursors.Arrow;
-
-            int x = (int)Math.Round(Math.Min(_roiDragStart.X, end.X));
-            int y = (int)Math.Round(Math.Min(_roiDragStart.Y, end.Y));
-            int width = (int)Math.Round(Math.Abs(end.X - _roiDragStart.X));
-            int height = (int)Math.Round(Math.Abs(end.Y - _roiDragStart.Y));
-            if (width < 2 || height < 2)
-                return;
-
-            if (DataContext is mainViewModel viewModel)
-            {
-                viewModel.UpdateStationRoi(viewModel.SelectedRoiType, x, y, width, height);
-                viewModel.StationStatusMessage = $"{viewModel.SelectedRoiType} ROI 已儲存：X {x}、Y {y}、W {width}、H {height}。";
-            }
-            e.Handled = true;
-        }
-
-        private System.Windows.Point ClampRoiPoint(System.Windows.Point point)
-        {
-            double width = Math.Max(0, MainRoiCanvas.Width);
-            double height = Math.Max(0, MainRoiCanvas.Height);
-            return new System.Windows.Point(Math.Min(Math.Max(point.X, 0), width), Math.Min(Math.Max(point.Y, 0), height));
-        }
-
-        private static System.Windows.Media.Brush GetRoiBrush(string roiType) => roiType switch
-        {
-            "定位" => System.Windows.Media.Brushes.LimeGreen,
-            "亮度" => System.Windows.Media.Brushes.DeepSkyBlue,
-            "銳利度" => System.Windows.Media.Brushes.OrangeRed,
-            _ => System.Windows.Media.Brushes.White
-        };
-        //[DllImport("user32.dll")]
-        //private static extern bool SetForegroundWindow(IntPtr hWnd);
-    }
-
-    /// <summary>
-    /// RoiModeToBoolConverter — 在 mainViewModel.RoiDisplayStyle (Design/Result) 與 RadioButton.IsChecked 之間轉換。
-    /// </summary>
-    public class RoiModeToBoolConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is mainViewModel.RoiDisplayStyle mode && parameter is string param)
-                return mode.ToString() == param;
-            return false;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is bool isChecked && isChecked && parameter is string param)
-                return Enum.Parse(typeof(mainViewModel.RoiDisplayStyle), param);
-            return Binding.DoNothing;
-        }
     }
 }

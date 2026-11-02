@@ -15,8 +15,8 @@ namespace LumasharpChecker
     /// </summary>
     public partial class App : Application
     {
-        // 獨立減肥版識別：避免與原 .NET 8 正式版共用單實例鎖。
-        private const string MutexName = "Global\\AB542812-CCE0-47AD-9DEB-362FCE4F4720";
+        // V3 使用獨立單實例識別，可與 v2 並行開啟。
+        private const string MutexName = "Global\\AB542812-CCE0-47AD-9DEB-362FCE4F4720-V3";
         private static Mutex? _mutex;
         public App()
         {
@@ -64,12 +64,20 @@ namespace LumasharpChecker
                 }
             }
             mainWindow.Show();
+            mainWindow.Dispatcher.BeginInvoke(new Action(viewModel.CheckDefaultVendorRecipeChanges));
             if (e.Args.Any(arg => string.Equals(arg, "--show-multi-appearance-preview", StringComparison.OrdinalIgnoreCase)))
             {
                 mainWindow.Dispatcher.BeginInvoke(new Action(() =>
                     viewModel.OpenMultiAppearanceCalibrationPreviewCommand.Execute(null)));
             }
         }
+        protected override void OnExit(ExitEventArgs e)
+        {
+            LumasharpChecker.model.NativeRecipeBridge.ShutdownWorker();
+            LumasharpChecker.model.NativeRecipeBridge.CleanupSessionArtifacts();
+            base.OnExit(e);
+        }
+
         private void ActivateExistingWindow()
         {
             // 查找当前进程的同名进程
@@ -135,3 +143,4 @@ namespace LumasharpChecker
 
     }
 }
+

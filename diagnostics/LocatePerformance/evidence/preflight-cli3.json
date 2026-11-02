@@ -1,0 +1,20 @@
+[
+  {
+    "exit": 0,
+    "ms": 826.4119,
+    "output": "RECIPE_VALID=E:\\0_軟體開發區\\3.開發中專案區\\1.進行中\\LumasharpChecker-v2\\diagnostics\\LocatePerformance\\runs\\Luma\\Recipe\\LUMA_CURRENT\r\n",
+    "error": ""
+  },
+  {
+    "exit": 0,
+    "ms": 75.3033,
+    "output": "RECIPE_VALID=E:\\0_軟體開發區\\3.開發中專案區\\1.進行中\\LumasharpChecker-v2\\diagnostics\\LocatePerformance\\runs\\Luma\\Recipe\\LUMA_CURRENT\r\n",
+    "error": ""
+  },
+  {
+    "exit": 0,
+    "ms": 67.2469,
+    "output": "RECIPE_VALID=E:\\0_軟體開發區\\3.開發中專案區\\1.進行中\\LumasharpChecker-v2\\diagnostics\\LocatePerformance\\runs\\Luma\\Recipe\\LUMA_CURRENT\r\n",
+    "error": ""
+  }
+]

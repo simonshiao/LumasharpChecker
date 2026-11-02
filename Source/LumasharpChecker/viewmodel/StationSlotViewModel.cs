@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using LumasharpChecker.model;
 using System;
 using System.IO;
 using System.Windows.Media;
@@ -22,6 +23,41 @@ public sealed class StationSlotViewModel : ObservableObject
     public string AiModelStatus { get; }
     public string AiModelPathHint { get; }
     private bool _includeInBatch = true;
+    private int _recentImageCount = 1;
+    private readonly Func<int, int>? _saveRecentImageCount;
+    private string _recentImageSource = "ALL";
+    private readonly Func<string, string>? _saveRecentImageSource;
+    public int RecentImageCount
+    {
+        get => _recentImageCount;
+        set
+        {
+            int requested = value < 1 ? 1
+                : value > RecipeManager.RecipeStation.MaximumRecentImageCount
+                    ? RecipeManager.RecipeStation.MaximumRecentImageCount
+                    : value;
+            int saved = _saveRecentImageCount?.Invoke(requested) ?? requested;
+            if (saved < 1) saved = 1;
+            if (saved > RecipeManager.RecipeStation.MaximumRecentImageCount)
+                saved = RecipeManager.RecipeStation.MaximumRecentImageCount;
+            if (!SetProperty(ref _recentImageCount, saved))
+                OnPropertyChanged(nameof(RecentImageCount));
+        }
+    }
+
+    public string RecentImageSource
+    {
+        get => _recentImageSource;
+        set
+        {
+            string requested = value is "ALL" or "OK" or "NG" ? value : "ALL";
+            string saved = _saveRecentImageSource?.Invoke(requested) ?? requested;
+            if (saved is not ("ALL" or "OK" or "NG")) saved = "ALL";
+            if (!SetProperty(ref _recentImageSource, saved))
+                OnPropertyChanged(nameof(RecentImageSource));
+        }
+    }
+
     public bool IncludeInBatch
     {
         get => _includeInBatch;
@@ -40,6 +76,13 @@ public sealed class StationSlotViewModel : ObservableObject
     {
         get => _batchNgCount;
         private set => SetProperty(ref _batchNgCount, value);
+    }
+
+    private int _batchRetestCount;
+    public int BatchRetestCount
+    {
+        get => _batchRetestCount;
+        private set => SetProperty(ref _batchRetestCount, value);
     }
 
     private string _batchStatus = "尚未測試";
@@ -69,14 +112,16 @@ public sealed class StationSlotViewModel : ObservableObject
     }
     public string BatchOkText => BatchStatus == "完成" ? BatchOkCount.ToString("N0") : "—";
     public string BatchNgText => BatchStatus == "完成" ? BatchNgCount.ToString("N0") : "—";
+    public string BatchRetestText => BatchStatus == "完成" ? BatchRetestCount.ToString("N0") : "—";
     public double BatchYieldValue => BatchStatus == "完成" && BatchOkCount + BatchNgCount > 0
         ? BatchOkCount * 100.0 / (BatchOkCount + BatchNgCount) : 0;
     public string BatchDetails { get; private set; } = string.Empty;
 
-    public void ApplyBatchResult(int okCount, int ngCount, string status, string details = "")
+    public void ApplyBatchResult(int okCount, int ngCount, string status, string details = "", int retestCount = 0)
     {
         BatchOkCount = okCount;
         BatchNgCount = ngCount;
+        BatchRetestCount = retestCount;
         BatchStatus = status;
         BatchDetails = details;
         BatchYield = status == "完成" && okCount + ngCount > 0
@@ -84,6 +129,7 @@ public sealed class StationSlotViewModel : ObservableObject
             : "—";
         OnPropertyChanged(nameof(BatchOkText));
         OnPropertyChanged(nameof(BatchNgText));
+        OnPropertyChanged(nameof(BatchRetestText));
         OnPropertyChanged(nameof(BatchYieldValue));
         OnPropertyChanged(nameof(BatchDetails));
     }
@@ -111,15 +157,24 @@ public sealed class StationSlotViewModel : ObservableObject
 
     public StationSlotViewModel(int number, bool isConfigured, bool isSelected,
         string? patternPath = null, string? okPath = null, string? ngPath = null,
-        string[]? vendorAiModels = null)
+        string[]? vendorAiModels = null, int recentImageCount = 1,
+        Func<int, int>? saveRecentImageCount = null, string recentImageSource = "ALL",
+        Func<string, string>? saveRecentImageSource = null, string? previewOnlyPath = null,
+        string? allDatabasePath = null)
     {
         Number = number;
         _isConfigured = isConfigured;
         _isSelected = isSelected;
+        _recentImageCount = recentImageCount < 1 ? 1
+            : recentImageCount > RecipeManager.RecipeStation.MaximumRecentImageCount
+                ? RecipeManager.RecipeStation.MaximumRecentImageCount
+                : recentImageCount;
+        _saveRecentImageCount = saveRecentImageCount;
+        _recentImageSource = recentImageSource is "ALL" or "OK" or "NG" ? recentImageSource : "ALL";
+        _saveRecentImageSource = saveRecentImageSource;
         _batchStatus = isConfigured ? "尚未測試" : "未校準";
         OkPath = okPath ?? string.Empty;
         NgPath = ngPath ?? string.Empty;
-        PreviewLabel = IsConfigured ? "檢測基準圖" : "圖庫樣本 · 未校準";
         AiModelStatus = vendorAiModels?.Length > 0
             ? $"原廠 AI 模型 {vendorAiModels.Length} 個（未接入）"
             : "原廠 AI 模型 · 未找到";
@@ -132,6 +187,28 @@ public sealed class StationSlotViewModel : ObservableObject
                 ? Directory.EnumerateFiles(OkPath).Where(IsPreviewImage).OrderBy(path => path).FirstOrDefault()
                 : null;
         }
+        if ((string.IsNullOrWhiteSpace(previewPath) || !File.Exists(previewPath)) &&
+            !string.IsNullOrWhiteSpace(allDatabasePath) && Directory.Exists(allDatabasePath))
+        {
+            try
+            {
+                previewPath = Directory.EnumerateFiles(allDatabasePath, "*", SearchOption.AllDirectories)
+                    .Where(IsPreviewImage)
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        bool isPreviewOnly = false;
+        if ((string.IsNullOrWhiteSpace(previewPath) || !File.Exists(previewPath)) &&
+            !string.IsNullOrWhiteSpace(previewOnlyPath) && File.Exists(previewOnlyPath))
+        {
+            previewPath = previewOnlyPath;
+            isPreviewOnly = true;
+        }
+        PreviewLabel = IsConfigured ? "檢測基準圖"
+            : isPreviewOnly ? "預覽圖 · 未校準" : "圖庫樣本 · 未校準";
         if (!string.IsNullOrWhiteSpace(previewPath) && File.Exists(previewPath))
         {
             try

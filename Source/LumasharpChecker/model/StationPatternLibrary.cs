@@ -8,7 +8,7 @@ using Emgu.CV;
 
 namespace LumasharpChecker.model
 {
-    /// <summary>站別定位模板庫。主 pattern.jpg 永不覆寫，附加模板存放 stationXX/patterns。</summary>
+    /// <summary>站別定位模板庫。主標準件圖不會由附加模板操作覆寫；附加模板存放 stationXX/patterns。</summary>
     public sealed class StationPatternLibrary
     {
         public const int MaxTemplates = 8; // 主樣板 + 最多七張額外樣板
@@ -93,7 +93,7 @@ namespace LumasharpChecker.model
                     Path.GetFullPath(VariantDirectory).TrimEnd(Path.DirectorySeparatorChar),
                     StringComparison.OrdinalIgnoreCase) ||
                 !VariantName.IsMatch(Path.GetFileName(path)))
-                throw new InvalidOperationException("只能刪除此站附加的定位樣板，不能刪除原始 pattern.jpg。");
+                throw new InvalidOperationException("只能刪除此站附加的定位樣板，不能刪除本站標準件圖。");
             File.Delete(path);
         }
     }

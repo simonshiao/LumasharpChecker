@@ -118,7 +118,7 @@
         </Grid>
 
         <DockPanel Grid.Row="2" Margin="2,12,2,0" LastChildFill="False">
-            <TextBlock Text="框選完成後會立即儲存至目前 Recipe 的本站。" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
+            <TextBlock Text="框選完成後會立即儲存至目前配方的本站。" Foreground="{StaticResource Muted}" VerticalAlignment="Center"/>
             <Button Content="完成" Click="Done_Click" MinWidth="100" DockPanel.Dock="Right" HorizontalAlignment="Right"/>
         </DockPanel>
     </Grid>

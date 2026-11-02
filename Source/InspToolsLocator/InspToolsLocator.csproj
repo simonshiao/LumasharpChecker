@@ -5,12 +5,19 @@
     <UseWPF>true</UseWPF>
     <PlatformTarget>x64</PlatformTarget>
     <Platforms>x64</Platforms>
-    <InspRuntimeDir Condition="'$(InspRuntimeDir)' == '' and Exists('$(MSBuildThisFileDirectory)..\..\..\..\..\1.成品區\Chao8Side\InspTools.dll')">$(MSBuildThisFileDirectory)..\..\..\..\..\1.成品區\Chao8Side</InspRuntimeDir>
-    <InspRuntimeDir Condition="'$(InspRuntimeDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\InspTools\output\InspToolsV2</InspRuntimeDir>
+    <InspRuntimeDir Condition="'$(InspRuntimeDir)' == ''">$(MSBuildThisFileDirectory)..\..\App\NativeR3</InspRuntimeDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="InspTools"><HintPath>$(InspRuntimeDir)\InspTools.dll</HintPath><Private>false</Private></Reference>
     <Reference Include="OpenCvSharp"><HintPath>$(InspRuntimeDir)\OpenCvSharp.dll</HintPath><Private>false</Private></Reference>
-    <Content Include="$(InspRuntimeDir)\*.dll"><Link>%(Filename)%(Extension)</Link><CopyToOutputDirectory>Always</CopyToOutputDirectory></Content>
   </ItemGroup>
+  <Target Name="CopyNativeHostDependencies" AfterTargets="Build">
+    <ItemGroup>
+      <_HostDll Include="$(InspRuntimeDir)\*.dll" Exclude="$(InspRuntimeDir)\*cuda*.dll;$(InspRuntimeDir)\*tensorrt*.dll;$(InspRuntimeDir)\TRT.dll;$(InspRuntimeDir)\DeltaAIProcessDll.dll;$(InspRuntimeDir)\libtensorflow.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_HostDll)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
 </Project>
+
+
+

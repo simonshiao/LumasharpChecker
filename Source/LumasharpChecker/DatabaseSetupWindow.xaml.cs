@@ -19,11 +19,42 @@ public partial class DatabaseSetupWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void ConfigureOutputFolder_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsPopup.IsOpen = false;
+        if (DataContext is not mainViewModel vm) return;
+        try { vm.ConfigureWorkDatabaseOutput(this); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "輸出資料夾設定失敗：\n" + ex.Message,
+                "作業圖庫設定", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void ChooseOkFolder_Click(object sender, RoutedEventArgs e)
         => ChooseStationFolder(sender, true);
 
     private void ChooseNgFolder_Click(object sender, RoutedEventArgs e)
         => ChooseStationFolder(sender, false);
+
+    private void ChooseAllFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not StationDatabasePathViewModel row
+            || DataContext is not mainViewModel vm) return;
+        try
+        {
+            string? selected = ExplorerFolderPicker.PickFolder(this,
+                $"第 {row.Number:00} 站 · 選擇 ALL 圖庫資料夾",
+                string.IsNullOrWhiteSpace(row.AllPath) ? row.OkPath : row.AllPath);
+            if (selected == null) return;
+            vm.SetStationAllDatabaseFolder(row.Number, selected);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"第 {row.Number:00} 站 ALL 作業圖庫無法儲存：\n{ex.Message}",
+                "作業圖庫設定", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     private void ChooseStationFolder(object sender, bool isOk)
     {
@@ -33,7 +64,7 @@ public partial class DatabaseSetupWindow : Window
         try
         {
             string? selected = ExplorerFolderPicker.PickFolder(this,
-                $"第 {row.Number:00} 站 · 選擇 {category} 圖庫資料夾",
+                $"第 {row.Number:00} 站 · 選擇 {category} 作業圖庫資料夾",
                 isOk ? (string.IsNullOrWhiteSpace(row.OkPath) ? row.NgPath : row.OkPath)
                      : (string.IsNullOrWhiteSpace(row.NgPath) ? row.OkPath : row.NgPath));
             if (selected == null) return;
@@ -42,15 +73,15 @@ public partial class DatabaseSetupWindow : Window
             if (string.Equals(folderName, isOk ? "NG" : "OK", StringComparison.OrdinalIgnoreCase))
             {
                 MessageBox.Show($"你選取的是 {folderName} 資料夾，與目前的 {category} 分類相反，請重新選取。",
-                    "圖庫分類不符", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    "作業圖庫分類不符", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
             vm.SetStationDatabaseFolder(row.Number, isOk, selected);
         }
         catch (Exception ex)
         {
-            MessageBox.Show($"第 {row.Number:00} 站 {category} 圖庫無法儲存：\n{ex.Message}",
-                "圖庫設定失敗", MessageBoxButton.OK, MessageBoxImage.Warning);
+            MessageBox.Show($"第 {row.Number:00} 站 {category} 作業圖庫無法儲存：\n{ex.Message}",
+                "作業圖庫設定", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }

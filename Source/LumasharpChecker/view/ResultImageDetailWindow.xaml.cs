@@ -116,34 +116,19 @@ namespace LumasharpChecker.view
         public ResultImageDetailViewModel(TestImageResultRow result)
         {
             FileName = result.FileName;
+            Result = result.OverallResult;
+            Message = result.IsRetest ? result.Message : string.Empty;
             Image = LoadBitmap(result.FilePath);
             ImagePixelWidth = Image.PixelWidth;
             ImagePixelHeight = Image.PixelHeight;
-
-            BrightnessX = result.BrightnessRoiX;
-            BrightnessY = result.BrightnessRoiY;
-            BrightnessW = Math.Max(0, result.BrightnessRoiW);
-            BrightnessH = Math.Max(0, result.BrightnessRoiH);
-            SharpnessX = result.SharpnessRoiX;
-            SharpnessY = result.SharpnessRoiY;
-            SharpnessW = Math.Max(0, result.SharpnessRoiW);
-            SharpnessH = Math.Max(0, result.SharpnessRoiH);
-            ShowSharpnessRoi = result.IncludeSharpness && SharpnessW > 0 && SharpnessH > 0;
         }
 
         public string FileName { get; }
+        public string Result { get; }
+        public string Message { get; }
         public BitmapImage Image { get; }
         public int ImagePixelWidth { get; }
         public int ImagePixelHeight { get; }
-        public double BrightnessX { get; }
-        public double BrightnessY { get; }
-        public double BrightnessW { get; }
-        public double BrightnessH { get; }
-        public double SharpnessX { get; }
-        public double SharpnessY { get; }
-        public double SharpnessW { get; }
-        public double SharpnessH { get; }
-        public bool ShowSharpnessRoi { get; }
 
         private static BitmapImage LoadBitmap(string path)
         {
