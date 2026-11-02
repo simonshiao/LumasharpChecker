@@ -110,6 +110,7 @@ internal sealed class LightInspectionWindow : Window
         });
         setStandard.ToolTip = "保存目前圖片作為本站標準件，並一併儲存目前 ROI、基準亮度與允收範圍。";
         baseActions.Children.Add(setStandard);
+        baseActions.Children.Add(Button("計算全部樣本基準值", CalculateAllSamplesAsync));
         settings.Children.Add(baseActions); settings.Children.Add(Labeled("亮度（0～255）", _base)); _average.Margin = new Thickness(0, 4, 0, 0); settings.Children.Add(_average);
         settings.Children.Add(Separator()); settings.Children.Add(Text("允收範圍", 15, true));
         _mode.Items.Add("百分比偏差"); _mode.Items.Add("固定上下限"); _mode.SelectedItem = _settings.LimitMode; settings.Children.Add(_mode);
@@ -306,6 +307,31 @@ internal sealed class LightInspectionWindow : Window
         var roi = _settings.GetRoi(frame.Bounds); using var image = new Mat(); CvInvoke.Imdecode(File.ReadAllBytes(frame.ImagePath), ImreadModes.Color, image);
         if (roi.X < 0 || roi.Y < 0 || roi.Right > image.Width || roi.Bottom > image.Height) throw new InvalidOperationException("光源 ROI 超出定位後影像範圍。");
         using var crop = new Mat(image, roi); using var hsv = new Mat(); CvInvoke.CvtColor(crop, hsv, ColorConversion.Bgr2Hsv); return CvInvoke.Mean(hsv).V2;
+    }
+    private async Task CalculateAllSamplesAsync()
+    {
+        CheckContext();
+        if (!_settings.HasRoi) throw new InvalidOperationException("請先設定光源 ROI，才能計算樣本基準值。");
+        if (_images.Length == 0) throw new InvalidOperationException("尚未載入可計算的樣本圖片。");
+        int successes = 0, failures = 0;
+        double total = 0;
+        foreach (string file in _images)
+        {
+            NativeLocationService.Frame frame;
+            try
+            {
+                frame = await _vm.LocateLightFrameAsync(file);
+            }
+            catch { failures++; continue; }
+            CheckContext();
+            try { total += MeasureFrame(frame); successes++; }
+            catch { failures++; }
+        }
+        if (successes == 0) throw new InvalidOperationException("全部樣本定位或 ROI 量測失敗，未產生基準值。");
+        double mean = total / successes;
+        _base.Text = Number(mean);
+        _average.Text = $"全部樣本平均 {mean:F2}（有效 {successes}/{_images.Length}，失敗 {failures}）";
+        Status("樣本平均已帶入基準亮度；請確認允收範圍後儲存本站設定。");
     }
     private void SetBaseline(double value) { _base.Text = Number(value); _average.Text = $"基準亮度 {value:F2}  ·  使用本張圖片"; Status("基準亮度已帶入，正在儲存本站參數…"); UpdateForm(); }
     private void Save()
