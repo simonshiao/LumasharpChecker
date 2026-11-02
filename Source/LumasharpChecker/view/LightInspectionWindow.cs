@@ -91,7 +91,18 @@ internal sealed class LightInspectionWindow : Window
         side.Children.Add(Card(result, 16, new Thickness(0, 0, 0, 10)));
         var settings = new StackPanel(); settings.Children.Add(Text("量測區域", 15, true)); _roiInfo.Margin = new Thickness(0, 4, 0, 4); settings.Children.Add(_roiInfo);
         settings.Children.Add(Separator()); settings.Children.Add(Text("基準亮度", 15, true));
-        var baseActions = new StackPanel { Orientation = Orientation.Horizontal }; baseActions.Children.Add(Button("以本張設基準", () => { RequireFrame(); SetBaseline(MeasureFrame(_frame!)); return Task.CompletedTask; }));
+        var baseActions = new StackPanel { Orientation = Orientation.Horizontal };
+        var setStandard = Button("以本張設為標準件", () =>
+        {
+            RequireFrame();
+            double baseline = MeasureFrame(_frame!);
+            _vm.SaveStationStandardPartImage(_path);
+            SetBaseline(baseline);
+            Status("本張已保存為本站標準件圖並設為亮度基準；請按「儲存本站設定」保存光源參數。");
+            return Task.CompletedTask;
+        });
+        setStandard.ToolTip = "保存目前顯示的圖片作為本站標準件圖，並以本張量測值設定亮度基準。";
+        baseActions.Children.Add(setStandard);
         settings.Children.Add(baseActions); settings.Children.Add(Labeled("亮度（0～255）", _base)); _average.Margin = new Thickness(0, 4, 0, 0); settings.Children.Add(_average);
         settings.Children.Add(Separator()); settings.Children.Add(Text("允收範圍", 15, true));
         _mode.Items.Add("百分比偏差"); _mode.Items.Add("固定上下限"); _mode.SelectedItem = _settings.LimitMode; settings.Children.Add(_mode);

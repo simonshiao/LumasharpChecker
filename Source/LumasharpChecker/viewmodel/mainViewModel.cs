@@ -1576,9 +1576,9 @@ namespace LumasharpChecker.viewmodel
             string resolutionNote = string.Equals(selectedFolder, dayFolder, StringComparison.OrdinalIgnoreCase)
                 ? string.Empty
                 : $"（已從所選子資料夾辨識日期層：{dayFolder}）";
-            SaveSettingsMessage = $"已為 {CurrentRecipe.Name} 的 {CurrentRecipe.StationCount} 站帶入路徑；{availableStations} 站的資料夾存在。{resolutionNote}可用主畫面 OK DB／NG DB／本站圖片載入。";
+            SaveSettingsMessage = $"已為 {CurrentRecipe.Name} 的 {CurrentRecipe.StationCount} 站帶入路徑；{availableStations} 站的資料夾存在。{resolutionNote}可用主畫面 OK DB／NG DB 載入分類圖片，或按「標準件圖」載入站別設定中保存的參考圖。";
             if (showMessages)
-                MessageBox.Show($"日期資料夾：{dayFolder}\n已一次設定 {CurrentRecipe.StationCount} 站路徑，其中 {availableStations} 站資料夾存在，{classifiedStations} 站有 OK 或 NG 子資料夾。\n站號資料夾內未分類的圖片，可用主畫面「本站圖片」載入。",
+                MessageBox.Show($"日期資料夾：{dayFolder}\n已一次設定 {CurrentRecipe.StationCount} 站路徑，其中 {availableStations} 站資料夾存在，{classifiedStations} 站有 OK 或 NG 子資料夾。\n主畫面「標準件圖」會載入站別設定時保存的參考圖片。",
                     "各站圖庫設定完成", MessageBoxButton.OK, MessageBoxImage.Information);
             return true;
         }
@@ -3058,6 +3058,104 @@ namespace LumasharpChecker.viewmodel
             if (LoadStationDatabase(kind, true)) _activeStationDatabase = kind;
         }
 
+        [RelayCommand]
+        private void OpenStandardPartImage()
+        {
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+            {
+                SaveSettingsMessage = "檢測進行中，請完成後再切換圖片。";
+                return;
+            }
+
+            if (CurrentRecipe == null)
+            {
+                SaveSettingsMessage = "請先選擇 Recipe。";
+                return;
+            }
+
+            string imagePath = Path.Combine(
+                recipeManager.GetProfileBasePath(CurrentRecipe),
+                RecipeManager.GetStationDirectoryName(CurrentStationNumber),
+                "pattern.jpg");
+            if (!File.Exists(imagePath))
+            {
+                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站尚未保存標準件圖。請先在站別設定中設定並儲存標準件。";
+                MessageBox.Show(SaveSettingsMessage, "找不到標準件圖", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            _activeStationDatabase = null;
+            ResetTestImageState();
+            TestImageFiles.Add(imagePath);
+            _allLoadedTestImageFiles.Add(imagePath);
+            TestImageTree = BuildTestImageTree(TestImageFiles);
+            _resultListFilter = "ALL";
+            CurrentTestImageIndex = 0;
+            ProcessCurrentTestImage();
+            SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站標準件圖：已載入設定標準件時保存的圖片。";
+        }
+
+        public void SaveStationStandardPartImage(string sourceImagePath)
+        {
+            if (CurrentRecipe == null || CurrentProfile == null)
+                throw new InvalidOperationException("請先設定目前站別的標準件。" );
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting)
+                throw new InvalidOperationException("檢測進行中不能更新標準件圖。" );
+            if (string.IsNullOrWhiteSpace(sourceImagePath) || !File.Exists(sourceImagePath))
+                throw new FileNotFoundException("目前圖片不存在，無法保存為標準件圖。", sourceImagePath);
+
+            var recipe = CurrentRecipe;
+            var profile = CurrentProfile;
+            int stationNumber = CurrentStationNumber;
+            string stationDirectory = Path.Combine(recipeManager.GetProfileBasePath(recipe),
+                RecipeManager.GetStationDirectoryName(stationNumber));
+            Directory.CreateDirectory(stationDirectory);
+            string patternPath = Path.Combine(stationDirectory, "pattern.jpg");
+            string tempPath = patternPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            string backupPath = patternPath + "." + Guid.NewGuid().ToString("N") + ".bak";
+            bool hadPreviousImage = File.Exists(patternPath);
+
+            try
+            {
+                var sourceBitmap = ProfileManager.LoadBitmapFromPath(sourceImagePath);
+                var encoder = new JpegBitmapEncoder { QualityLevel = 95 };
+                encoder.Frames.Add(BitmapFrame.Create(sourceBitmap));
+                using (var stream = new FileStream(tempPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    encoder.Save(stream);
+
+                if (hadPreviousImage) File.Replace(tempPath, patternPath, backupPath);
+                else File.Move(tempPath, patternPath);
+
+                try
+                {
+                    profile.ImagePath = patternPath;
+                    profile.Bitmap = ProfileManager.LoadBitmapFromPath(patternPath);
+                    profile.ImageWidth = profile.Bitmap.PixelWidth;
+                    profile.ImageHeight = profile.Bitmap.PixelHeight;
+                    recipeManager.SaveStation(recipe, stationNumber, profile);
+                }
+                catch
+                {
+                    if (hadPreviousImage && File.Exists(backupPath)) File.Replace(backupPath, patternPath, null);
+                    else if (!hadPreviousImage && File.Exists(patternPath)) File.Delete(patternPath);
+                    throw;
+                }
+            }
+            finally
+            {
+                if (File.Exists(tempPath)) File.Delete(tempPath);
+                if (File.Exists(backupPath)) File.Delete(backupPath);
+            }
+
+            _multiStationResults.Remove((recipe.Id, stationNumber));
+            InvalidatePatternMatchResults();
+            RefreshStationSlots();
+            OnPropertyChanged(nameof(CurrentProfile));
+            OnPropertyChanged(nameof(StationSettingsImage));
+            OnPropertyChanged(nameof(ImageSizeSummary));
+            SaveSettingsMessage = $"第 {stationNumber:00} 站標準件圖已更新；已清除舊判定，請重新測試。";
+        }
+
         /// <summary>
         /// 進入站別時預設載入 ALL DB；已選擇本站圖庫時保留目前清單。
         /// 找不到圖庫僅更新狀態，需提示時由操作者明確觸發。
@@ -3124,12 +3222,10 @@ namespace LumasharpChecker.viewmodel
             {
                 "OK" => station?.OkDatabasePath,
                 "NG" => station?.NgDatabasePath,
-                "Station" when !string.IsNullOrWhiteSpace(CurrentRecipe?.DatabaseDayFolder)
-                    => Path.Combine(CurrentRecipe.DatabaseDayFolder, CurrentStationNumber.ToString()),
                 _ => null
             };
             if (!string.IsNullOrWhiteSpace(folder)) folder = recipeManager.ResolveDatabasePath(folder);
-            string label = kind == "Station" ? "本站圖片" : kind + " DB";
+            string label = kind + " DB";
             if (string.IsNullOrWhiteSpace(folder) || !Directory.Exists(folder))
             {
                 if (showError)

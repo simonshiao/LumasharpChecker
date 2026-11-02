@@ -658,9 +658,9 @@
                             <Button Command="{Binding OpenStationDatabaseCommand}" CommandParameter="ALL" Content="ALL DB"
                                     IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
                                     ToolTip="合併目前站別 OK DB 與 NG DB；統計會同時顯示圖庫標記與檢測判定"/>
-                            <Button Command="{Binding OpenStationDatabaseCommand}" CommandParameter="Station" Content="本站圖片"
+                            <Button Command="{Binding OpenStandardPartImageCommand}" Content="標準件圖"
                                     IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
-                                    ToolTip="載入站號資料夾內未分類的圖片"/>
+                                    ToolTip="載入目前站別在標準件設定時保存的參考圖片"/>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,20,0">
                         <Button Click="OpenTestImagePicker_Click"

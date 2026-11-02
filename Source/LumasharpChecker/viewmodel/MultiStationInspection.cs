@@ -117,7 +117,13 @@ namespace LumasharpChecker.viewmodel
                 ? "準備依各站來源與張數測試最新圖片"
                 : $"準備 {databaseSelection} 多站離線檢測";
             MultiStationTotal = "判定 OK —   NG —   Retest —   良率 —";
-            foreach (var slot in selected)
+            TestImageResults.Clear();
+            ResetTestImageSummary();
+            IsTestImageAnalysisComplete = false;
+            foreach (var key in _singleFlowDetails.Keys
+                         .Where(key => key.RecipeId == recipe.Id).ToArray())
+                _singleFlowDetails.Remove(key);
+            foreach (var slot in slots)
             {
                 _multiStationResults.Remove((recipe.Id, slot.Number));
                 slot.ApplyBatchResult(0, 0, slot.IncludeInBatch ? "待測" : "未選取");
@@ -177,6 +183,9 @@ namespace LumasharpChecker.viewmodel
                             imageFiles = GetStationInspectionImages(effectiveImageSource,
                                 station.OkDatabasePath, station.NgDatabasePath, station.AllDatabasePath);
                         }
+                        imageFiles = imageFiles
+                            .Distinct(StringComparer.OrdinalIgnoreCase)
+                            .ToList();
                     }
                     catch (Exception ex)
                     {
