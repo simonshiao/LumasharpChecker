@@ -3033,7 +3033,8 @@ namespace LumasharpChecker.viewmodel
         private List<string[]> BuildFlowExportSpecRows(RecipeManager.RecipeManifest recipe, int stationNumber)
         {
             var settings = LoadLightSettings(recipe, stationNumber);
-            var limits = settings.EffectiveLimits();
+            bool lightInspectionEnabled = recipeManager.LoadLightInspectionEnabled(recipe, stationNumber);
+            var limits = lightInspectionEnabled ? settings.EffectiveLimits() : ((double Min, double Max)?)null;
             return new List<string[]>
             {
                 new[] { "項目", "值" },
@@ -3041,13 +3042,14 @@ namespace LumasharpChecker.viewmodel
                 new[] { "Recipe ID", recipe.Id },
                 new[] { "站別", stationNumber.ToString(CultureInfo.InvariantCulture) },
                 new[] { "流程工具選取", recipeManager.LoadFlowSelection(recipe, stationNumber) },
-                new[] { "光源檢測 ROI", settings.HasRoi ? $"Left={settings.Left}, Top={settings.Top}, Right={settings.Right}, Bottom={settings.Bottom}" : "未設定" },
-                new[] { "亮度判定方式", settings.LimitMode },
-                new[] { "亮度基準值", settings.BaseValue.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "亮度有效下限", limits.Min.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "亮度有效上限", limits.Max.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "亮度下限偏差%", settings.PercentLower.ToString("F2", CultureInfo.InvariantCulture) },
-                new[] { "亮度上限偏差%", settings.PercentUpper.ToString("F2", CultureInfo.InvariantCulture) },
+                new[] { "光源檢測狀態", lightInspectionEnabled ? "啟用" : "略過（本站未啟用光源檢測）" },
+                new[] { "光源檢測 ROI", !lightInspectionEnabled ? "不適用" : settings.HasRoi ? $"Left={settings.Left}, Top={settings.Top}, Right={settings.Right}, Bottom={settings.Bottom}" : "未設定" },
+                new[] { "亮度判定方式", lightInspectionEnabled ? settings.LimitMode : "不適用" },
+                new[] { "亮度基準值", lightInspectionEnabled ? settings.BaseValue.ToString("F2", CultureInfo.InvariantCulture) : "不適用" },
+                new[] { "亮度有效下限", limits.HasValue ? limits.Value.Min.ToString("F2", CultureInfo.InvariantCulture) : "不適用" },
+                new[] { "亮度有效上限", limits.HasValue ? limits.Value.Max.ToString("F2", CultureInfo.InvariantCulture) : "不適用" },
+                new[] { "亮度下限偏差%", lightInspectionEnabled ? settings.PercentLower.ToString("F2", CultureInfo.InvariantCulture) : "不適用" },
+                new[] { "亮度上限偏差%", lightInspectionEnabled ? settings.PercentUpper.ToString("F2", CultureInfo.InvariantCulture) : "不適用" },
                 new[] { "匯出時間", DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) }
             };
         }
