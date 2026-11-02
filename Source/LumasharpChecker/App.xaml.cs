@@ -74,6 +74,7 @@ namespace LumasharpChecker
         protected override void OnExit(ExitEventArgs e)
         {
             LumasharpChecker.model.NativeRecipeBridge.ShutdownWorker();
+            LumasharpChecker.model.NativeRecipeBridge.CleanupSessionArtifacts();
             base.OnExit(e);
         }
 
