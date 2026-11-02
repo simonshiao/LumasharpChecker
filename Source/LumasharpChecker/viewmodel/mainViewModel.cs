@@ -249,6 +249,9 @@ namespace LumasharpChecker.viewmodel
         private ObservableCollection<StationSlotViewModel> _stationSlots = new();
 
         [ObservableProperty]
+        private int _globalRecentImageCount = 1;
+
+        [ObservableProperty]
         private ObservableCollection<StationDatabasePathViewModel> _stationDatabasePaths = new();
 
         [ObservableProperty]
@@ -1361,12 +1364,15 @@ namespace LumasharpChecker.viewmodel
                     configured = File.Exists(profilePath) && File.Exists(patternPath);
                 }
                 Func<int, int>? saveRecentImageCount = null;
+                Func<string, string>? saveRecentImageSource = null;
                 if (station != null && CurrentRecipe != null)
                 {
                     var recipeForSetting = CurrentRecipe;
                     var stationForSetting = station;
                     saveRecentImageCount = count => SaveStationRecentImageCount(
                         recipeForSetting, stationForSetting, count);
+                    saveRecentImageSource = source => SaveStationRecentImageSource(
+                        recipeForSetting, stationForSetting, source);
                 }
                 var slot = new StationSlotViewModel(number, configured,
                     CurrentRecipe != null && number == CurrentStationNumber,
@@ -1375,7 +1381,9 @@ namespace LumasharpChecker.viewmodel
                     recipeManager.ResolveDatabasePath(station?.NgDatabasePath),
                     station?.VendorAiModelFiles?.ToArray(),
                     station?.RecentImageCount ?? 1,
-                    saveRecentImageCount);
+                    saveRecentImageCount,
+                    station?.RecentImageSource ?? "ALL",
+                    saveRecentImageSource);
                 if (previousSlots.TryGetValue(number, out var previous))
                 {
                     slot.IncludeInBatch = previous.IncludeInBatch;
@@ -1417,6 +1425,66 @@ namespace LumasharpChecker.viewmodel
                 station.RecentImageCount = previous;
                 SaveSettingsMessage = $"儲存第 {station.Number:00} 站測試張數失敗：{ex.GetBaseException().Message}";
                 return previous;
+            }
+        }
+
+        private string SaveStationRecentImageSource(
+            RecipeManager.RecipeManifest recipe,
+            RecipeManager.RecipeStation station,
+            string recentImageSource)
+        {
+            string source = recentImageSource is "ALL" or "OK" or "NG" ? recentImageSource : "ALL";
+            if (station.RecentImageSource == source) return source;
+
+            string previous = station.RecentImageSource;
+            station.RecentImageSource = source;
+            try
+            {
+                recipeManager.SaveManifest(recipe);
+                SaveSettingsMessage = $"已儲存第 {station.Number:00} 站的最新圖片來源：{GetRecentImageSourceLabel(source)}。";
+                return source;
+            }
+            catch (Exception ex)
+            {
+                station.RecentImageSource = previous;
+                SaveSettingsMessage = $"儲存第 {station.Number:00} 站圖片來源失敗：{ex.GetBaseException().Message}";
+                return previous;
+            }
+        }
+
+        private static string GetRecentImageSourceLabel(string source) => source switch
+        {
+            "OK" => "OK",
+            "NG" => "NG",
+            _ => "全部"
+        };
+
+        [RelayCommand]
+        private void ApplyGlobalRecentImageCount()
+        {
+            if (CurrentRecipe == null) return;
+
+            int count = GlobalRecentImageCount < 1 ? 1
+                : GlobalRecentImageCount > RecipeManager.RecipeStation.MaximumRecentImageCount
+                    ? RecipeManager.RecipeStation.MaximumRecentImageCount
+                    : GlobalRecentImageCount;
+            GlobalRecentImageCount = count;
+
+            var stations = CurrentRecipe.Stations
+                .Where(station => station.Number <= CurrentRecipe.StationCount)
+                .ToList();
+            var previousCounts = stations.ToDictionary(station => station, station => station.RecentImageCount);
+            foreach (var station in stations) station.RecentImageCount = count;
+            try
+            {
+                recipeManager.SaveManifest(CurrentRecipe);
+                foreach (var slot in StationSlots) slot.RecentImageCount = count;
+                SaveSettingsMessage = $"已將目前 Recipe 全部 {stations.Count} 站的最新測試張數設為 {count} 張。";
+            }
+            catch (Exception ex)
+            {
+                foreach (var previous in previousCounts) previous.Key.RecentImageCount = previous.Value;
+                SaveSettingsMessage = "套用全站測試張數失敗：" + ex.GetBaseException().Message;
             }
         }
 
@@ -2091,6 +2159,7 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(CurrentInspectionName));
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             RefreshStationSlots();
+            GlobalRecentImageCount = value?.Stations.FirstOrDefault(station => station.Number == 1)?.RecentImageCount ?? 1;
             RefreshStationDatabasePaths();
             DatabaseDayFolderDisplay = value?.DatabaseDayFolder ?? value?.TrainingImageRoot ?? string.Empty;
             InspectionImageOutputFolderDisplay = value?.InspectionImageOutputFolder ?? string.Empty;

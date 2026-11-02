@@ -861,7 +861,8 @@
                                   SelectedValuePath="Tag"
                                   SelectedValue="{Binding MultiStationDatabaseSelection, UpdateSourceTrigger=PropertyChanged}"
                                   IsEnabled="{Binding CanChangeMultiStationDatabaseSelection}"
-                                  AutomationProperties.Name="總覽測試圖庫">
+                                  AutomationProperties.Name="完整多站測試圖庫"
+                                  ToolTip="只影響完整圖庫測試；最新指定張數測試使用齒輪內各站來源設定。">
                             <ComboBoxItem Content="ALL DB" Tag="ALL"/>
                             <ComboBoxItem Content="OK DB" Tag="OK"/>
                             <ComboBoxItem Content="NG DB" Tag="NG"/>
@@ -878,7 +879,7 @@
                                 IsEnabled="{Binding IsRecipeActive}"
                                 Content="測最新指定張數"
                                 AutomationProperties.Name="測試勾選站別的最新指定張數"
-                                ToolTip="依各站設定張數，測目前 ALL／OK／NG 圖庫中最新的圖片。"
+                                ToolTip="依齒輪設定的各站張數與 ALL／OK／NG 來源，測各站最新圖片。缺少所選分類時改用全部。"
                                 Background="{StaticResource Surface}" BorderBrush="{StaticResource HudBorder}"
                                 Foreground="{StaticResource HudAccentStrong}"
                                 FontWeight="SemiBold" Padding="12,7" Margin="0,0,7,0"/>
@@ -906,21 +907,45 @@
                 <Popup x:Name="MultiStationSettingsPopup"
                        IsOpen="{Binding IsChecked, ElementName=MultiStationSettingsButton, Mode=TwoWay}"
                        PlacementTarget="{Binding ElementName=MultiStationSettingsButton}"
-                       Placement="Bottom" HorizontalOffset="-290" VerticalOffset="7"
+                       Placement="Bottom" HorizontalOffset="-340" VerticalOffset="7"
                        StaysOpen="False" AllowsTransparency="True"
                        DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
-                    <Border Width="300" Padding="15" CornerRadius="10"
+                    <Border Width="350" Padding="15" CornerRadius="10"
                             Background="{StaticResource Surface}"
                             BorderBrush="{StaticResource Line}" BorderThickness="1">
                         <Border.Effect>
                             <DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity="0.2"/>
                         </Border.Effect>
                         <StackPanel>
-                            <TextBlock Text="各站最新測試張數" FontSize="15" FontWeight="SemiBold"
+                            <TextBlock Text="各站最新圖片設定" FontSize="15" FontWeight="SemiBold"
                                        Foreground="{StaticResource Text}" Margin="0,0,0,5"/>
-                            <TextBlock Text="設定每個站別要測的最新圖片數；範圍 1–500 張。"
+                            <TextBlock Text="選擇每站的 ALL／OK／NG 來源與最新張數；範圍 1–500 張。分類沒有圖片時自動改用全部。"
                                        FontSize="11" Foreground="{StaticResource Muted}"
                                        TextWrapping="Wrap" Margin="0,0,0,10"/>
+                            <Border Background="{StaticResource SurfaceSubtle}"
+                                    BorderBrush="{StaticResource Line}" BorderThickness="1"
+                                    CornerRadius="7" Padding="8" Margin="0,0,0,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <TextBlock Text="同時調整全站張數" FontWeight="SemiBold"
+                                                   Foreground="{StaticResource Text}"/>
+                                        <TextBlock Text="套用後覆蓋下方各站張數"
+                                                   FontSize="10" Foreground="{StaticResource Muted}"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBox Width="54" Height="30" Padding="4,3" TextAlignment="Center"
+                                                 Text="{Binding GlobalRecentImageCount, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
+                                                 AutomationProperties.Name="全站最新測試張數"/>
+                                        <Button Command="{Binding ApplyGlobalRecentImageCountCommand}"
+                                                Content="套用" Padding="8,4" Margin="6,0,0,0"
+                                                AutomationProperties.Name="套用到全部站別張數"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                             <ScrollViewer MaxHeight="300" VerticalScrollBarVisibility="Auto">
                                 <ItemsControl ItemsSource="{Binding StationSlots}">
                                     <ItemsControl.ItemTemplate>
@@ -929,14 +954,26 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
                                                     <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
                                                 </Grid.ColumnDefinitions>
                                                 <TextBlock Text="{Binding Number, StringFormat=第 {0} 站}"
                                                            VerticalAlignment="Center" Foreground="{StaticResource Text}"/>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <TextBox Width="58" Height="30" Padding="5,3"
+                                                    <ComboBox Width="77" Height="30" Margin="0,0,7,0"
+                                                              VerticalContentAlignment="Center"
+                                                              SelectedValuePath="Tag"
+                                                              SelectedValue="{Binding RecentImageSource, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                              AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站圖片來源}">
+                                                        <ComboBoxItem Content="全部" Tag="ALL"/>
+                                                        <ComboBoxItem Content="OK" Tag="OK"/>
+                                                        <ComboBoxItem Content="NG" Tag="NG"/>
+                                                    </ComboBox>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <TextBox Width="54" Height="30" Padding="4,3"
                                                              TextAlignment="Center"
                                                              Text="{Binding RecentImageCount, Mode=TwoWay, UpdateSourceTrigger=LostFocus}"
-                                                             AutomationProperties.Name="各站最新測試張數"/>
+                                                             AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站最新測試張數}"/>
                                                     <TextBlock Text="張" Margin="6,0,0,0" VerticalAlignment="Center"
                                                                Foreground="{StaticResource Muted}"/>
                                                 </StackPanel>
@@ -945,7 +982,7 @@
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
                             </ScrollViewer>
-                            <TextBlock Text="設定會保存於目前 Recipe；未勾選的站別不會執行。"
+                            <TextBlock Text="設定保存於目前 Recipe。全站張數可一鍵套用；未勾選的站別不執行。"
                                        FontSize="11" Foreground="{StaticResource Muted}"
                                        TextWrapping="Wrap" Margin="0,10,0,0"/>
                         </StackPanel>

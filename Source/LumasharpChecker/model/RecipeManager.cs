@@ -65,6 +65,7 @@ public sealed class RecipeManager
         public int Number { get; set; }
         public bool IsConfigured { get; set; }
         public int RecentImageCount { get; set; } = 1;
+        public string RecentImageSource { get; set; } = "ALL";
         public string? SourceProfileName { get; set; }
         // Local workflow choices belong to this Recipe/station, not the shared UI defaults.
         public string? FlowSelection { get; set; }
@@ -849,6 +850,8 @@ public sealed class RecipeManager
             if (station.RecentImageCount < 1) station.RecentImageCount = 1;
             if (station.RecentImageCount > RecipeStation.MaximumRecentImageCount)
                 station.RecentImageCount = RecipeStation.MaximumRecentImageCount;
+            if (station.RecentImageSource is not ("ALL" or "OK" or "NG"))
+                station.RecentImageSource = "ALL";
         }
     }
 

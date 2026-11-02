@@ -114,7 +114,7 @@ namespace LumasharpChecker.viewmodel
             _multiStationCancellation = cancellation;
             IsMultiStationTesting = true;
             MultiStationProgress = latestImagesOnly
-                ? $"準備依各站設定測試 {databaseSelection} 最新圖片"
+                ? "準備依各站來源與張數測試最新圖片"
                 : $"準備 {databaseSelection} 多站離線檢測";
             MultiStationTotal = "判定 OK —   NG —   Retest —   良率 —";
             foreach (var slot in selected)
@@ -163,10 +163,20 @@ namespace LumasharpChecker.viewmodel
                     }
 
                     List<string> imageFiles;
+                    string requestedImageSource = latestImagesOnly ? slot.RecentImageSource : databaseSelection;
+                    string effectiveImageSource = requestedImageSource;
+                    bool usedAllImageFallback = false;
                     try
                     {
-                        imageFiles = GetStationInspectionImages(databaseSelection,
+                        imageFiles = GetStationInspectionImages(effectiveImageSource,
                             station.OkDatabasePath, station.NgDatabasePath, station.AllDatabasePath);
+                        if (latestImagesOnly && effectiveImageSource != "ALL" && imageFiles.Count == 0)
+                        {
+                            effectiveImageSource = "ALL";
+                            usedAllImageFallback = true;
+                            imageFiles = GetStationInspectionImages(effectiveImageSource,
+                                station.OkDatabasePath, station.NgDatabasePath, station.AllDatabasePath);
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -176,7 +186,7 @@ namespace LumasharpChecker.viewmodel
                     }
                     if (imageFiles.Count == 0)
                     {
-                        StoreResult(slot, recipe.Id, new StationRunSummary(0, 0, "無圖片", $"本站 {databaseSelection} 沒有可用圖片"));
+                        StoreResult(slot, recipe.Id, new StationRunSummary(0, 0, "無圖片", $"本站 {effectiveImageSource} 沒有可用圖片"));
                         skipped++;
                         continue;
                     }
@@ -195,7 +205,7 @@ namespace LumasharpChecker.viewmodel
                             .ToList();
                     }
                     slot.ApplyBatchResult(0, 0, "檢測中", latestImagesOnly
-                        ? $"測試最新 {imageFiles.Count} 張 · 圖庫共 {availableImageCount} 張"
+                        ? $"{GetRecentImageSourceLabel(effectiveImageSource)} · 最新 {imageFiles.Count} 張／共 {availableImageCount} 張"
                         : $"{databaseSelection} 共 {availableImageCount} 張");
                     MultiStationProgress = latestImagesOnly
                         ? $"第 {stationNumber:00} 站 · 最新 {imageFiles.Count} 張"
@@ -222,8 +232,15 @@ namespace LumasharpChecker.viewmodel
                             if (row.Message.StartsWith("處理失敗", StringComparison.Ordinal)) errors++;
                             if ((i + 1) % 5 == 0 || i == imageFiles.Count - 1) progress.Report(i + 1);
                         }
+                        string testScope = latestImagesOnly
+                            ? $"來源：{GetRecentImageSourceLabel(effectiveImageSource)}"
+                                + (usedAllImageFallback
+                                    ? $"（所選 {GetRecentImageSourceLabel(requestedImageSource)} 沒有圖片，已退回全部）"
+                                    : string.Empty)
+                                + $"；測試最新 {imageFiles.Count} 張（圖庫共 {availableImageCount} 張；最後：{Path.GetFileName(imageFiles[imageFiles.Count - 1])}）"
+                            : $"來源：{databaseSelection}；本次測試 {availableImageCount} 張";
                         result = new StationRunSummary(ok, ng, "完成",
-                            $"{(latestImagesOnly ? $"測試最新 {imageFiles.Count} 張（圖庫共 {availableImageCount} 張；最後：{Path.GetFileName(imageFiles[imageFiles.Count - 1])}）；" : $"本次測試 {availableImageCount} 張；")}來源 OK {sourceOkCount}／NG {sourceNgCount}；新版流程判定 OK {ok}／NG {ng}；NG 誤判 OK {ngMissed} 張、OK 誤判 NG {okFalseReject} 張；流程錯誤 {errors} 張",
+                            $"{testScope}；來源 OK {sourceOkCount}／NG {sourceNgCount}；新版流程判定 OK {ok}／NG {ng}；NG 誤判 OK {ngMissed} 張、OK 誤判 NG {okFalseReject} 張；流程錯誤 {errors} 張",
                             imageResults);
                     }
                     catch (OperationCanceledException) { throw; }

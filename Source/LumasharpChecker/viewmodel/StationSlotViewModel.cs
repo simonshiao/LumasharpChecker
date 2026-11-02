@@ -25,6 +25,8 @@ public sealed class StationSlotViewModel : ObservableObject
     private bool _includeInBatch = true;
     private int _recentImageCount = 1;
     private readonly Func<int, int>? _saveRecentImageCount;
+    private string _recentImageSource = "ALL";
+    private readonly Func<string, string>? _saveRecentImageSource;
     public int RecentImageCount
     {
         get => _recentImageCount;
@@ -40,6 +42,19 @@ public sealed class StationSlotViewModel : ObservableObject
                 saved = RecipeManager.RecipeStation.MaximumRecentImageCount;
             if (!SetProperty(ref _recentImageCount, saved))
                 OnPropertyChanged(nameof(RecentImageCount));
+        }
+    }
+
+    public string RecentImageSource
+    {
+        get => _recentImageSource;
+        set
+        {
+            string requested = value is "ALL" or "OK" or "NG" ? value : "ALL";
+            string saved = _saveRecentImageSource?.Invoke(requested) ?? requested;
+            if (saved is not ("ALL" or "OK" or "NG")) saved = "ALL";
+            if (!SetProperty(ref _recentImageSource, saved))
+                OnPropertyChanged(nameof(RecentImageSource));
         }
     }
 
@@ -143,7 +158,8 @@ public sealed class StationSlotViewModel : ObservableObject
     public StationSlotViewModel(int number, bool isConfigured, bool isSelected,
         string? patternPath = null, string? okPath = null, string? ngPath = null,
         string[]? vendorAiModels = null, int recentImageCount = 1,
-        Func<int, int>? saveRecentImageCount = null)
+        Func<int, int>? saveRecentImageCount = null, string recentImageSource = "ALL",
+        Func<string, string>? saveRecentImageSource = null)
     {
         Number = number;
         _isConfigured = isConfigured;
@@ -153,6 +169,8 @@ public sealed class StationSlotViewModel : ObservableObject
                 ? RecipeManager.RecipeStation.MaximumRecentImageCount
                 : recentImageCount;
         _saveRecentImageCount = saveRecentImageCount;
+        _recentImageSource = recentImageSource is "ALL" or "OK" or "NG" ? recentImageSource : "ALL";
+        _saveRecentImageSource = saveRecentImageSource;
         _batchStatus = isConfigured ? "尚未測試" : "未校準";
         OkPath = okPath ?? string.Empty;
         NgPath = ngPath ?? string.Empty;
