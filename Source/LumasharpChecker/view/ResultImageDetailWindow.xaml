@@ -24,14 +24,9 @@
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource Text}"/>
                     <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                        <TextBlock Text="亮度 ROI"
-                                   Foreground="#FF1565C0"
-                                   FontWeight="SemiBold"
-                                   Margin="0,0,18,0"/>
-                        <TextBlock Text="銳利度 ROI"
-                                   Foreground="#FFC62828"
-                                   FontWeight="SemiBold"
-                                   Visibility="{Binding ShowSharpnessRoi, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        <TextBlock Text="結果：" Foreground="{DynamicResource Muted}"/>
+                        <TextBlock Text="{Binding Result}" FontWeight="SemiBold" Margin="0,0,18,0"/>
+                        <TextBlock Text="{Binding Message}" Foreground="{DynamicResource Muted}" TextTrimming="CharacterEllipsis"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -85,24 +80,6 @@
                        Width="{Binding ImagePixelWidth}"
                        Height="{Binding ImagePixelHeight}"
                        Stretch="Fill"/>
-                <Canvas Width="{Binding ImagePixelWidth}"
-                        Height="{Binding ImagePixelHeight}">
-                    <Rectangle Canvas.Left="{Binding BrightnessX}"
-                               Canvas.Top="{Binding BrightnessY}"
-                               Width="{Binding BrightnessW}"
-                               Height="{Binding BrightnessH}"
-                               Stroke="#FF1565C0"
-                               StrokeThickness="6"
-                               Fill="#221565C0"/>
-                    <Rectangle Canvas.Left="{Binding SharpnessX}"
-                               Canvas.Top="{Binding SharpnessY}"
-                               Width="{Binding SharpnessW}"
-                               Height="{Binding SharpnessH}"
-                               Stroke="#FFC62828"
-                               StrokeThickness="6"
-                               Fill="#22C62828"
-                               Visibility="{Binding ShowSharpnessRoi, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                </Canvas>
             </Grid>
         </ScrollViewer>
     </DockPanel>

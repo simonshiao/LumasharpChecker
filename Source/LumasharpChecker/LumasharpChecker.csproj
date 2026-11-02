@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,13 +11,12 @@
     <UseWPF>true</UseWPF>
 	<PublishSingleFile>false</PublishSingleFile>
 	<GeneratePackageOnBuild>False</GeneratePackageOnBuild> <!-- 可选：生成单个文件 -->
-	<Version>1.0.0.69</Version>
-	<AssemblyVersion>1.0.0.69</AssemblyVersion>
-	<FileVersion>1.0.0.69</FileVersion>
-	<InformationalVersion>1.0.0.69-net472-slim</InformationalVersion>
+	<Version>3.0.0.0</Version>
+	<AssemblyVersion>3.0.0.0</AssemblyVersion>
+	<FileVersion>3.0.0.0</FileVersion>
+	<InformationalVersion>3.0.0.0</InformationalVersion>
 	<ApplicationIcon>Icons\CyntecAppIcon.ico</ApplicationIcon>
 	<Product>$(AssemblyName)</Product>
-    <ChaoSideRuntimeDir Condition="'$(ChaoSideRuntimeDir)' == '' and Exists('$(MSBuildThisFileDirectory)..\..\..\..\..\1.成品區\Chao8Side\Runtime\AIRuntime\ChaoAIRuntime.exe')">$(MSBuildThisFileDirectory)..\..\..\..\..\1.成品區\Chao8Side\Runtime</ChaoSideRuntimeDir>
   </PropertyGroup>
 
   <ItemGroup>
@@ -29,20 +28,22 @@
     <ItemGroup>
       <_LocatorFiles Include="$(MSBuildProjectDirectory)\..\InspToolsLocator\bin\$(Platform)\$(Configuration)\net472\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(TargetDir)InspToolsLocator" SkipUnchangedFiles="true" Condition="'$(TargetDir)' != ''" />
-    <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(PublishDir)InspToolsLocator" SkipUnchangedFiles="true" Condition="'$(PublishDir)' != ''" />
+    <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(TargetDir)NativeR3" SkipUnchangedFiles="true" Condition="'$(TargetDir)' != ''" />
+    <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(PublishDir)NativeR3" SkipUnchangedFiles="true" Condition="'$(PublishDir)' != ''" />
   </Target>
 
-  <!-- Keep the full vendor runtime out of ordinary build folders; include it in deployable publishes. -->
-  <Target Name="DeployChaoSideAiRuntime" AfterTargets="Publish"
-          Condition="'$(PublishDir)' != ''">
-    <Error Condition="!Exists('$(ChaoSideRuntimeDir)\AIRuntime\ChaoAIRuntime.exe')"
-           Text="Chao8Side AI Runtime was not found. Set ChaoSideRuntimeDir before publishing Luma." />
-    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\Scripts\CopyChaoAiRuntime.ps1&quot; -Source &quot;$(ChaoSideRuntimeDir)&quot; -Destination &quot;$(PublishDir)NativeLocator\Runtime&quot;" />
-  </Target>
+  <!-- v2 is CPU-only: vendor AI Runtime is deliberately not deployed. -->
 
   <ItemGroup>
     <Content Include="Icons\CyntecAppIcon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="NativeRuntimeConfigs\*.exe.config">
+      <Link>NativeR3\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>
@@ -83,7 +84,7 @@
       <Generator>SettingsSingleFileGenerator</Generator>
       <LastGenOutput>Settings.Designer.cs</LastGenOutput>
     </None>
-    <None Include="Resources\MyData.db">
+    <None Include="Resources\MyData.db" Condition="Exists('Resources\MyData.db')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>MyData.db</TargetPath>
     </None>
@@ -101,3 +102,8 @@
   </Target>
 
 </Project>
+
+
+
+
+

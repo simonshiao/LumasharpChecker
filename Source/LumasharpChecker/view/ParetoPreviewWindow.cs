@@ -20,7 +20,7 @@ namespace LumasharpChecker.view
             var counts = new[] {
                 (Name: "處理失敗", Count: ng.Count(r => r.Message.StartsWith("處理失敗:"))),
                 (Name: "定位未匹配", Count: ng.Count(r => !r.IsMatched && !r.Message.StartsWith("處理失敗:"))),
-                (Name: "亮度不合格", Count: ng.Count(r => r.IsMatched && !r.BrightnessSafe)),
+                (Name: "亮度不合格", Count: ng.Count(r => r.BrightnessMeasured && r.IsMatched && !r.BrightnessSafe)),
                 (Name: "銳利度不合格", Count: ng.Count(r => r.IsMatched && r.IncludeSharpness && !r.SharpnessSafe))
             }.OrderByDescending(x => x.Count).ToArray();
             var stack = new StackPanel { Margin = new Thickness(24) };

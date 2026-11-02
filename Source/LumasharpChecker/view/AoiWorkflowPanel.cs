@@ -5,16 +5,82 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using System.Collections.Generic;
+using LumasharpChecker.model;
 
 namespace LumasharpChecker.view
 {
     /// <summary>Preview of AOI tools; settings remain in each tool window.</summary>
     public sealed class AoiWorkflowPanel : UserControl
     {
+        private readonly Dictionary<string, TextBlock> _durations = new Dictionary<string, TextBlock>();
+        private Button? _continuousButton;
+        private readonly TextBlock _timing = new TextBlock { Text = "檢測合計 — · 整體 —", FontSize = 11,
+            Foreground = Brushes.SlateGray, Margin = new Thickness(4, 2, 4, 4), TextWrapping = TextWrapping.Wrap };
+        public event EventHandler? ContinuousRequested;
+        public void SetContinuousRunning(bool running)
+        {
+            if (_continuousButton != null) _continuousButton.Content = running ? "停止連續檢測" : "連續檢測";
+        }
+        public void SetContinuousProgress(int done, int total)
+        {
+            if (_continuousButton != null) _continuousButton.Content = $"停止連續檢測  {done}/{total}";
+        }
+        public void ClearNativeResults()
+        {
+            _timing.Text = "檢測合計 — · 整體 —";
+            _timing.ToolTip = null;
+            foreach (string name in new[] { "定位", "選向", "選面", "光源檢測", "結果" })
+                if (_durations.TryGetValue(name, out var label)) { label.Text = "— ms"; label.ToolTip = "尚未執行"; }
+        }
+        public void ShowNativeResults(NativeRecipeBridge.StageReport result)
+        {
+            _timing.Text = $"檢測合計 {result.InspectionMs:F1} ms · 整體 {result.TotalMs:F1} ms";
+            _timing.ToolTip = result.TimingDetails;
+            SetStage("定位", result.Locate, result.LocateMs);
+            SetStage("選向", result.SelectWay, result.SelectWayMs);
+            SetStage("選面", result.SelectFace, result.SelectFaceMs);
+            SetStage("光源檢測", result.Light, result.LightMs);
+            if (_durations.TryGetValue("結果", out var label))
+            {
+                string final = result.Light == "SKIPPED_RECIPE_OFF"
+                    ? "OK（光源略過）"
+                    : result.Exit == 0 && result.Light == "PASS" ? "OK" : "NG";
+                label.Text = final + $" · {result.InspectionMs:F1} ms";
+                label.ToolTip = "檢測合計＝定位＋選向＋選面＋光源的工具耗時。\n" + result.TimingDetails;
+            }
+        }
+        private void SetStage(string name, string state, double? elapsed)
+        {
+            if (!_durations.TryGetValue(name, out var label)) return;
+            label.Text = elapsed.HasValue ? $"{elapsed.Value:F1} ms" : state == "SKIPPED_RECIPE_OFF" ? "略過" : "— ms";
+            label.ToolTip = string.IsNullOrEmpty(state) ? "未執行" : state;
+        }
         private readonly CheckBox _locateToggle = new CheckBox
         {
             Content = "啟用定位", IsChecked = true, FontSize = 12,
             VerticalAlignment = VerticalAlignment.Center
+        };
+        private readonly CheckBox _selectWayToggle = new CheckBox
+        {
+            Content = "使用", IsChecked = true, FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "勾選：本次流程使用選向；取消勾選：略過選向"
+        };
+        private readonly CheckBox _selectFaceToggle = new CheckBox
+        {
+            Content = "使用", IsChecked = true, FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "勾選：本次流程使用選面；取消勾選：略過選面"
+        };
+        private readonly CheckBox _lightToggle = new CheckBox
+        {
+            Content = "使用", IsChecked = true, FontSize = 9,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "勾選：執行亮度檢測；取消勾選：略過亮度判定，結果列為 Retest"
         };
         public event Action<string>? PipelineStatusChanged;
         public void SetPipelineStatus(string message) => PipelineStatusChanged?.Invoke(message);
@@ -23,19 +89,35 @@ namespace LumasharpChecker.view
         public event EventHandler? SelectWayRequested;
         public event EventHandler? SelectFaceRequested;
         public event EventHandler? LocatorEnabledChanged;
+        public event EventHandler? SelectWayEnabledChanged;
+        public event EventHandler? SelectFaceEnabledChanged;
+        public event EventHandler? LightEnabledChanged;
         public event EventHandler? CollapseRequested;
         public event EventHandler? LightRequested;
-        public event EventHandler? RetestRequested;
-        public event EventHandler? ParetoRequested;
         public event EventHandler? ResultsRequested;
-        public event EventHandler? SizeStatisticsRequested;
         public bool IsLocatorEnabled => _locateToggle.IsChecked == true;
+        public bool IsSelectWayEnabled => _selectWayToggle.IsChecked == true;
+        public bool IsSelectFaceEnabled => _selectFaceToggle.IsChecked == true;
+        public bool IsLightInspectionEnabled => _lightToggle.IsChecked == true;
+        public void SetToolSelection(string selection, bool lightEnabled = true)
+        {
+            _locateToggle.IsChecked = selection[0] == '1';
+            _selectWayToggle.IsChecked = selection[1] == '1';
+            _selectFaceToggle.IsChecked = selection[2] == '1';
+            _lightToggle.IsChecked = lightEnabled;
+        }
 
         public AoiWorkflowPanel()
         {
             AutomationProperties.SetName(_locateToggle, "啟用定位測試");
             _locateToggle.Checked += (_, _) => LocatorEnabledChanged?.Invoke(this, EventArgs.Empty);
             _locateToggle.Unchecked += (_, _) => LocatorEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectWayToggle.Checked += (_, _) => SelectWayEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectWayToggle.Unchecked += (_, _) => SelectWayEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectFaceToggle.Checked += (_, _) => SelectFaceEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _selectFaceToggle.Unchecked += (_, _) => SelectFaceEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _lightToggle.Checked += (_, _) => LightEnabledChanged?.Invoke(this, EventArgs.Empty);
+            _lightToggle.Unchecked += (_, _) => LightEnabledChanged?.Invoke(this, EventArgs.Empty);
             Content = BuildContent();
         }
 
@@ -49,7 +131,13 @@ namespace LumasharpChecker.view
             DockPanel.SetDock(collapse, Dock.Right);
             header.Children.Add(collapse);
             content.Children.Add(header);
-            var flow = new Grid { Height = toolRowHeight * 3, Margin = new Thickness(-3, 3, -3, 0) };
+            _continuousButton = new Button { Content = "連續檢測", Margin = new Thickness(3, 3, 3, 5), MinHeight = 32,
+                ToolTip = "依序執行目前圖片清單：定位 → 選向 → 選面 → 光源；再次按下停止" };
+            AutomationProperties.SetName(_continuousButton, "流程連續檢測或停止");
+            _continuousButton.Click += (_, _) => ContinuousRequested?.Invoke(this, EventArgs.Empty);
+            content.Children.Add(_continuousButton);
+            content.Children.Add(_timing);
+            var flow = new Grid { Margin = new Thickness(-3, 3, -3, 0) };
             var wiring = new Canvas { IsHitTestVisible = false, ClipToBounds = true };
             flow.Children.Add(wiring);
             var grid = new UniformGrid { Columns = 4 };
@@ -58,18 +146,13 @@ namespace LumasharpChecker.view
                 () => SelectWayRequested?.Invoke(this, EventArgs.Empty)));
             grid.Children.Add(ToolCard("選面", "\uE77B", "使用原生 SelectFaceTool 檢查目前站別／圖片", true,
                 () => SelectFaceRequested?.Invoke(this, EventArgs.Empty)));
-            grid.Children.Add(ToolCard("AI前處理", "\uE9CE", "", false, null));
-            // 光源檢測沿用原廠燈泡節點位置：AI 前處理後、遮罩前。
-            // Luma 的現有 LightRequested 行為維持不變。
+            // 此版本聚焦光源點檢；保留前置定位工具與光源結果節點。
             grid.Children.Add(ToolCard("光源檢測", "\uEA80", "取代原廠流程的燈泡節點；原生定位／選向／選面後使用 Luma 亮度檢測", true, () => LightRequested?.Invoke(this, EventArgs.Empty)));
-            grid.Children.Add(ToolCard("遮罩", "\uE7B7", "", false, null));
-            grid.Children.Add(ToolCard("尺寸量測", "\uE8F1", "", false, null));
-            grid.Children.Add(ToolCard("進階定位", "\uE8AD", "", false, null));
-            grid.Children.Add(ToolCard("AI", "\uE99A", "", false, null));
             grid.Children.Add(ToolCard("結果", "\uE9D9", "查看本站檢測結果", true,
                 () => ResultsRequested?.Invoke(this, EventArgs.Empty)));
             int toolCount = grid.Children.Count;
             int rowCount = (toolCount + 3) / 4;
+            flow.Height = toolRowHeight * rowCount;
             while (grid.Children.Count < rowCount * 4) grid.Children.Add(new Border());
             // Reverse alternate rows so the visual order follows the serpentine route.
             for (int row = 1; row < rowCount; row += 2)
@@ -115,15 +198,6 @@ namespace LumasharpChecker.view
                 }
             };
             content.Children.Add(flow);
-            content.Children.Add(new TextBlock { Text = "檢測與分析", FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brush("#29465B"), Margin = new Thickness(3, 10, 0, 5) });
-            var actions = new UniformGrid { Columns = 4, Margin = new Thickness(-3, 0, -3, 0) };
-            actions.Children.Add(AuxiliaryCard("重新檢測", "\uE72C", () => RetestRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("柏拉圖", "\uE9D2", () => ParetoRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("尺寸統計", "\uE80A",
-                () => SizeStatisticsRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("檢測結果", "\uE890", () => ResultsRequested?.Invoke(this, EventArgs.Empty)));
-            actions.Children.Add(AuxiliaryCard("AI 訓練", "\uE99A"));
-            content.Children.Add(actions);
             var frame = new Border { Background = Brushes.White, BorderBrush = Brush("#D8E5EC"), BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(12), Child = content };
             return new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled, Content = frame };
         }
@@ -151,13 +225,21 @@ namespace LumasharpChecker.view
                 Grid.SetRow(_locateToggle, 0);
                 cell.Children.Add(_locateToggle);
             }
-            else if (name != "光源檢測" && name != "結果")
+            else if (name == "光源檢測")
+            {
+                AutomationProperties.SetName(_lightToggle, "本次使用光源檢測");
+                Grid.SetRow(_lightToggle, 0);
+                cell.Children.Add(_lightToggle);
+            }
+            else if (name != "結果")
             {
                 var nativeToggle = name == "選向" || name == "選面";
-                var toggle = new CheckBox { IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Center,
-                    ToolTip = nativeToggle ? "原廠 Recipe 控制此工具是否啟用；此處不修改原廠參數" : "工具尚未接入" };
-                AutomationProperties.SetName(toggle, nativeToggle ? name + "依原廠 Recipe 設定" : name + "尚未開放");
-                ToolTipService.SetShowOnDisabled(toggle, true);
+                var toggle = name == "選向" ? _selectWayToggle :
+                    name == "選面" ? _selectFaceToggle :
+                    new CheckBox { IsEnabled = false, HorizontalAlignment = HorizontalAlignment.Center,
+                        ToolTip = "工具尚未接入" };
+                AutomationProperties.SetName(toggle, nativeToggle ? "本次使用" + name : name + "尚未開放");
+                if (!nativeToggle) ToolTipService.SetShowOnDisabled(toggle, true);
                 Grid.SetRow(toggle, 0);
                 cell.Children.Add(toggle);
             }
@@ -165,6 +247,7 @@ namespace LumasharpChecker.view
             Grid.SetRow(button, 1);
             cell.Children.Add(button);
             var duration = new TextBlock { Text = "— ms", HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Foreground = Brush("#758A98"), FontSize = 10, MinHeight = 16 };
+            _durations[name] = duration;
             Grid.SetRow(duration, 2);
             cell.Children.Add(duration);
             return cell;
@@ -183,18 +266,6 @@ namespace LumasharpChecker.view
                 Opacity = 0.75,
                 IsHitTestVisible = false
             });
-        }
-
-        private static UIElement AuxiliaryCard(string name, string glyph, Action? action = null)
-        {
-            var body = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-            body.Children.Add(new TextBlock { Text = glyph, FontFamily = new FontFamily("Segoe MDL2 Assets"), FontSize = 21, Foreground = Brush(action != null ? "#087AAF" : "#8597A4"), HorizontalAlignment = HorizontalAlignment.Center });
-            body.Children.Add(new TextBlock { Text = name, FontSize = 11, Foreground = Brush(action != null ? "#1D455B" : "#657D8B"), HorizontalAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 7, 0, 0) });
-            var button = new Button { Content = body, Margin = new Thickness(6, 4, 6, 4), Padding = new Thickness(1, 3, 1, 3), Height = 58, MinHeight = 0, Background = Brush(action != null ? "#E8F7FD" : "#F5F8FA"), BorderBrush = Brush(action != null ? "#A5D8E9" : "#E1EAF0"), BorderThickness = new Thickness(1), IsEnabled = action != null, ToolTip = action != null ? "開啟" + name : "尚未接入" };
-            if (action != null) button.Click += (_, _) => action();
-            AutomationProperties.SetName(button, action != null ? "開啟" + name : name + "尚未接入");
-            ToolTipService.SetShowOnDisabled(button, true);
-            return button;
         }
 
         private static Brush Brush(string color) => (Brush)new BrushConverter().ConvertFromString(color);
