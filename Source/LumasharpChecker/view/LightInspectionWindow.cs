@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -9,8 +9,6 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using Emgu.CV;
-using Emgu.CV.CvEnum;
 using LumasharpChecker.model;
 using LumasharpChecker.viewmodel;
 using RectD = System.Drawing.Rectangle;
@@ -54,6 +52,7 @@ internal sealed class LightInspectionWindow : Window
     private readonly StackPanel _actions = new() { Orientation = Orientation.Horizontal };
     private readonly ProgressBar _progress = new() { Height = 3, Visibility = Visibility.Collapsed };
     private readonly Button _save;
+    public bool SettingsSaved { get; private set; }
 
     public LightInspectionWindow(mainViewModel vm, string imagePath)
     {
@@ -69,7 +68,8 @@ internal sealed class LightInspectionWindow : Window
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.RowDefinitions.Add(new RowDefinition()); root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         var header = new DockPanel { Margin = new Thickness(24, 16, 24, 16) };
         _dirty.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(_dirty, Dock.Right); header.Children.Add(_dirty);
-        var heading = new StackPanel(); heading.Children.Add(Text("光源檢測", 23, true)); heading.Children.Add(Text($"{vm.CurrentRecipe.Name}  /  第 {_station} 站")); header.Children.Add(heading); root.Children.Add(header);
+        var heading = new StackPanel(); heading.Children.Add(Text("光源檢測", 23, true)); heading.Children.Add(Text($"{vm.CurrentRecipe.Name}  /  第 {_station} 站"));
+        header.Children.Add(heading); root.Children.Add(header);
         _body.Margin = new Thickness(16, 0, 16, 12); _body.ColumnDefinitions.Add(new ColumnDefinition()); _body.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(354) });
         var preview = new Grid { Margin = new Thickness(0, 0, 14, 0) };
         preview.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); preview.RowDefinitions.Add(new RowDefinition()); preview.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -91,18 +91,34 @@ internal sealed class LightInspectionWindow : Window
         side.Children.Add(Card(result, 16, new Thickness(0, 0, 0, 10)));
         var settings = new StackPanel(); settings.Children.Add(Text("量測區域", 15, true)); _roiInfo.Margin = new Thickness(0, 4, 0, 4); settings.Children.Add(_roiInfo);
         settings.Children.Add(Separator()); settings.Children.Add(Text("基準亮度", 15, true));
-        var baseActions = new StackPanel { Orientation = Orientation.Horizontal };
-        var setStandard = Button("以本張設為標準件", () =>
+        var baseActions = new WrapPanel();
+        var setStandard = Button("設為標準件並儲存參數", () =>
         {
             RequireFrame();
             double baseline = MeasureFrame(_frame!);
-            _vm.SaveStationStandardPartImage(_path);
+            // The standard-part action derives a valid baseline from the current image.
+            // Read the other fields first without rejecting the old (possibly zero) baseline.
+            var candidate = ReadForm(validateLimits: false);
+            candidate.BaseValue = baseline;
+            candidate.EffectiveLimits();
+            candidate.GetRoi(_frame!.Bounds);
+            string saved = _vm.SaveLightStandardPart(_path, candidate);
+            SettingsSaved = true;
             SetBaseline(baseline);
-            Status("本張已保存為本站標準件圖並設為亮度基準；請按「儲存本站設定」保存光源參數。");
+            _settings = candidate; _savedState = FormState(); UpdateForm();
+            Status(saved);
             return Task.CompletedTask;
         });
-        setStandard.ToolTip = "保存目前顯示的圖片作為本站標準件圖，並以本張量測值設定亮度基準。";
+        setStandard.ToolTip = "保存目前圖片作為本站標準件，並一併儲存目前 ROI、基準亮度與允收範圍。";
         baseActions.Children.Add(setStandard);
+        baseActions.Children.Add(Button("計算全部樣本基準值", CalculateAllSamplesAsync));
+        baseActions.Children.Add(Button("還原樣本…", RestoreSampleAsync));
+        baseActions.Children.Add(Button("重設 ROI", () =>
+        {
+            RequireFrame(); _settings.ResetRoi(_frame!.Bounds); ApplyRoi(_settings.GetRoi(_frame.Bounds));
+            Status("已依目前定位範圍重設 ROI，尚未儲存；請調整後重新設為標準件。");
+            return Task.CompletedTask;
+        }));
         settings.Children.Add(baseActions); settings.Children.Add(Labeled("亮度（0～255）", _base)); _average.Margin = new Thickness(0, 4, 0, 0); settings.Children.Add(_average);
         settings.Children.Add(Separator()); settings.Children.Add(Text("允收範圍", 15, true));
         _mode.Items.Add("百分比偏差"); _mode.Items.Add("固定上下限"); _mode.SelectedItem = _settings.LimitMode; settings.Children.Add(_mode);
@@ -159,7 +175,7 @@ internal sealed class LightInspectionWindow : Window
         field.BorderBrush = valid ? Line : Brushes.Firebrick; field.ToolTip = valid ? null : $"{label}須為 0～{maximum} 的數值。";
         if (!valid) throw new InvalidOperationException($"{label}須為 0～{maximum} 的數值。"); return value;
     }
-    private LightInspectionSettings ReadForm()
+    private LightInspectionSettings ReadForm(bool validateLimits = true)
     {
         // Validate a copy: incomplete input must not change the active measurement settings.
         var c = new LightInspectionSettings { Left = _settings.Left, Top = _settings.Top, Right = _settings.Right, Bottom = _settings.Bottom, HasRoi = _settings.HasRoi,
@@ -167,7 +183,7 @@ internal sealed class LightInspectionWindow : Window
         c.BaseValue = Read(_base, "基準亮度", 255);
         if (c.LimitMode == "百分比偏差") { c.PercentLower = Read(_low, "下限偏差", 100); c.PercentUpper = Read(_high, "上限偏差", 100); }
         else { c.Minimum = Read(_min, "亮度下限", 255); c.Maximum = Read(_max, "亮度上限", 255); }
-        c.EffectiveLimits(); return c;
+        if (validateLimits) c.EffectiveLimits(); return c;
     }
     private void UpdateForm()
     {
@@ -184,11 +200,13 @@ internal sealed class LightInspectionWindow : Window
     {
         _start = null; _frame = null; _canvas.ReleaseMouseCapture(); _located.Visibility = _roi.Visibility = Visibility.Collapsed; HideHandles(); _canvas.Cursor = Cursors.Arrow; InvalidateResult(); SetImage(_path); Status("正在定位影像…");
         _frame = await _vm.LocateLightFrameAsync(_path); CheckContext(); SetImage(_frame.ImagePath); Show(_located, _frame.Bounds);
-        if (!_settings.HasRoi)
+        bool hadRoi = _settings.HasRoi;
+        if (_settings.EnsureEditableRoi(_frame.Bounds))
         {
-            int width = Math.Max(2, _frame.Bounds.Width / 2), height = Math.Max(2, _frame.Bounds.Height / 2);
-            ApplyRoi(new RectD(_frame.Bounds.X + (_frame.Bounds.Width - width) / 2, _frame.Bounds.Y + (_frame.Bounds.Height - height) / 2, width, height));
-            Status("已載入點檢設定。"); return;
+            ApplyRoi(_settings.GetRoi(_frame.Bounds));
+            Status(hadRoi ? "原 ROI 不適用目前定位尺寸，已重建可調整的 ROI，尚未儲存；請確認後重新設為標準件。"
+                : "已依目前定位尺寸建立初始 ROI，尚未儲存；請調整後設為標準件。");
+            return;
         }
         var roi = _settings.GetRoi(_frame.Bounds); ShowRoi(roi);
         try { Measure(); } catch (Exception ex) { Status("定位與選向完成；" + ex.Message); }
@@ -207,7 +225,7 @@ internal sealed class LightInspectionWindow : Window
             if (_busy || _frame == null) return; var p = e.GetPosition(_canvas);
             var part = HitRoi(p); if (part == RoiPart.None) return;
             _canvas.Focus(); _start = p; _dragPart = part;
-            _dragOriginal = _settings.HasRoi ? _settings.GetRoi(_frame.Bounds) : RectD.Empty;
+            _dragOriginal = part == RoiPart.Draw ? RectD.Empty : _settings.GetRoi(_frame.Bounds);
             _dragPreview = _dragOriginal; _canvas.CaptureMouse(); _canvas.Cursor = CursorFor(part); e.Handled = true;
         };
         _canvas.MouseMove += (_, e) =>
@@ -247,7 +265,7 @@ internal sealed class LightInspectionWindow : Window
         if (_frame == null) return RoiPart.None;
         if (!_settings.HasRoi) return _frame.Bounds.Contains((int)p.X, (int)p.Y) ? RoiPart.Draw : RoiPart.None;
         try { return RoiEditorGeometry.HitTest(_settings.GetRoi(_frame.Bounds), p.X, p.Y, 7 / ImageScale()); }
-        catch (InvalidOperationException) { return RoiPart.None; }
+        catch (InvalidOperationException) { return _frame.Bounds.Contains((int)p.X, (int)p.Y) ? RoiPart.Draw : RoiPart.None; }
     }
     private static Cursor CursorFor(RoiPart part) => part switch
     {
@@ -296,16 +314,66 @@ internal sealed class LightInspectionWindow : Window
     }
     private double MeasureFrame(NativeLocationService.Frame frame)
     {
-        var roi = _settings.GetRoi(frame.Bounds); using var image = new Mat(); CvInvoke.Imdecode(File.ReadAllBytes(frame.ImagePath), ImreadModes.Color, image);
-        if (roi.X < 0 || roi.Y < 0 || roi.Right > image.Width || roi.Bottom > image.Height) throw new InvalidOperationException("光源 ROI 超出定位後影像範圍。");
-        using var crop = new Mat(image, roi); using var hsv = new Mat(); CvInvoke.CvtColor(crop, hsv, ColorConversion.Bgr2Hsv); return CvInvoke.Mean(hsv).V2;
+        return LightBrightnessMeasurement.Measure(frame, _settings);
     }
-    private void SetBaseline(double value) { _base.Text = Number(value); _average.Text = $"基準亮度 {value:F2}  ·  使用本張圖片"; Status("基準亮度已帶入。請確認允收範圍並儲存本站設定。"); UpdateForm(); }
+    private async Task CalculateAllSamplesAsync()
+    {
+        CheckContext();
+        if (!_settings.HasRoi) throw new InvalidOperationException("請先設定光源 ROI，才能計算樣本基準值。");
+        if (_images.Length == 0) throw new InvalidOperationException("尚未載入可計算的樣本圖片。");
+        int successes = 0, failures = 0;
+        double total = 0;
+        foreach (string file in _images)
+        {
+            NativeLocationService.Frame frame;
+            try
+            {
+                frame = await _vm.LocateLightFrameAsync(file);
+            }
+            catch { failures++; continue; }
+            CheckContext();
+            try { total += MeasureFrame(frame); successes++; }
+            catch { failures++; }
+        }
+        if (successes == 0) throw new InvalidOperationException("全部樣本定位或 ROI 量測失敗，未產生基準值。");
+        double mean = total / successes;
+        _base.Text = Number(mean);
+        _average.Text = $"全部樣本平均 {mean:F2}（有效 {successes}/{_images.Length}，失敗 {failures}）";
+        Status("樣本平均已帶入基準亮度；請確認允收範圍後儲存本站設定。");
+    }
+    private void SetBaseline(double value) { _base.Text = Number(value); _average.Text = $"基準亮度 {value:F2}  ·  使用本張圖片"; Status("基準亮度已帶入，正在儲存本站參數…"); UpdateForm(); }
     private void Save()
     {
         CheckContext(); if (!_settings.HasRoi) throw new InvalidOperationException("請先設定光源 ROI。"); var candidate = ReadForm(); if (_frame != null) candidate.GetRoi(_frame.Bounds);
-        _vm.SaveLightSettings(candidate); _settings = candidate; _savedState = FormState(); UpdateForm(); Status($"已儲存至「{_vm.CurrentRecipe!.Name}」第 {_station} 站，後續檢測會使用這組設定。");
+        _vm.SaveLightSettings(candidate); SettingsSaved = true; _settings = candidate; _savedState = FormState(); UpdateForm(); Status($"已儲存至「{_vm.CurrentRecipe!.Name}」第 {_station} 站，後續檢測會使用這組設定。");
     }
+    private async Task RestoreSampleAsync()
+    {
+        CheckContext();
+        string directory = _vm.LightSampleHistoryDirectory;
+        if (!Directory.Exists(directory) || !Directory.EnumerateFiles(directory, "sample-*.zip").Any())
+        { Status("本站尚未建立樣本還原點；設為標準件後會自動保存。"); return; }
+        var dialog = new Microsoft.Win32.OpenFileDialog { Title = "選擇本站樣本還原點（原圖與光源參數一起還原）",
+            InitialDirectory = directory, Filter = "樣本還原點|sample-*.zip", CheckFileExists = true };
+        if (dialog.ShowDialog(this) != true) return;
+        CheckContext();
+        _settings = _vm.RestoreLightStandardPart(dialog.FileName);
+        SettingsSaved = true;
+        _loading = true;
+        try
+        {
+            _min.Text = Number(_settings.Minimum); _max.Text = Number(_settings.Maximum);
+            _base.Text = Number(_settings.BaseValue); _low.Text = Number(_settings.PercentLower); _high.Text = Number(_settings.PercentUpper);
+            _mode.SelectedItem = _settings.LimitMode;
+        }
+        finally { _loading = false; }
+        _path = _vm.GetCurrentStationPatternPath() ?? _path;
+        SetImage(_path); _savedState = FormState(); InvalidateResult(); UpdateForm();
+        await LoadFrameAsync();
+        if (FormState() == _savedState)
+            Status("已還原本站樣本原圖與光源參數；舊判定已清除，請重新測試。");
+    }
+
     private void OnClosing(object? sender, System.ComponentModel.CancelEventArgs e)
     {
         if (_busy) { e.Cancel = true; Status("處理中，請稍後再關閉。"); return; }

@@ -44,7 +44,7 @@
 4. 調整該站的亮度／銳利度規格後，按「儲存檢測設定」。切換站別前，程式也會先保存目前站別。
 5. 從「Recipe 與設定」載入其他 Recipe；按「關閉目前 Recipe」回到原有設定檔庫。未載入 Recipe 時站別切換按鈕會停用，但仍可選擇設定檔並在主畫面重設參數。各站 OK／NG 圖庫設定與載入入口位於主畫面。
 
-Recipe 儲存在程式執行目錄的 `recipes/<RecipeId>/`。根目錄有 `recipe.json`，每站有 `station01` 至 `station10` 目錄；已設定站別包含 `profile.json` 與 `pattern.jpg`。備份整個 Recipe 目錄即可保存多站資料。
+Recipe 儲存在程式執行目錄的 `recipes/<RecipeId>/`。根目錄有 `recipe.json`，每站有 `station01` 至 `station10` 獨立目錄；各站標準件圖片會依來源檔名與副檔名保存，並由 `recipe.json` 記錄。已完成檢測參數設定的站別另有 `profile.json`。備份整個 Recipe 目錄即可保存各站資料。
 
 ## 5. 載入測試圖片
 

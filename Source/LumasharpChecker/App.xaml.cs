@@ -36,6 +36,7 @@ namespace LumasharpChecker
                 Shutdown();
                 return;
             }
+
             // 註冊服務
             var services = new ServiceCollection();
             services.AddSingleton<mainViewModel.IWindowService, mainViewModel.WindowService>();
@@ -74,6 +75,7 @@ namespace LumasharpChecker
         protected override void OnExit(ExitEventArgs e)
         {
             LumasharpChecker.model.NativeRecipeBridge.ShutdownWorker();
+            LumasharpChecker.model.NativeRecipeBridge.CleanupSessionArtifacts();
             base.OnExit(e);
         }
 

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,10 +11,10 @@
     <UseWPF>true</UseWPF>
 	<PublishSingleFile>false</PublishSingleFile>
 	<GeneratePackageOnBuild>False</GeneratePackageOnBuild> <!-- 可选：生成单个文件 -->
-	<Version>3.0.0.0</Version>
-	<AssemblyVersion>3.0.0.0</AssemblyVersion>
-	<FileVersion>3.0.0.0</FileVersion>
-	<InformationalVersion>3.0.0.0</InformationalVersion>
+	<Version>1.1.0.14</Version>
+	<AssemblyVersion>1.1.0.14</AssemblyVersion>
+	<FileVersion>1.1.0.14</FileVersion>
+	<InformationalVersion>1.1.0.14</InformationalVersion>
 	<ApplicationIcon>Icons\CyntecAppIcon.ico</ApplicationIcon>
 	<Product>$(AssemblyName)</Product>
   </PropertyGroup>
@@ -26,7 +26,8 @@
 
   <Target Name="CopyInspToolsLocator" AfterTargets="Build;Publish">
     <ItemGroup>
-      <_LocatorFiles Include="$(MSBuildProjectDirectory)\..\InspToolsLocator\bin\$(Platform)\$(Configuration)\net472\*" />
+      <_LocatorFiles Include="$(MSBuildProjectDirectory)\..\InspToolsLocator\bin\$(Platform)\$(Configuration)\net472\*" Condition="'$(UseArtifactsOutput)' != 'true'" />
+      <_LocatorFiles Include="$(ArtifactsPath)\bin\InspToolsLocator\$(ArtifactsPivots)\*" Condition="'$(UseArtifactsOutput)' == 'true'" />
     </ItemGroup>
     <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(TargetDir)NativeR3" SkipUnchangedFiles="true" Condition="'$(TargetDir)' != ''" />
     <Copy SourceFiles="@(_LocatorFiles)" DestinationFolder="$(PublishDir)NativeR3" SkipUnchangedFiles="true" Condition="'$(PublishDir)' != ''" />
@@ -54,6 +55,8 @@
 
   <ItemGroup>
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="Microsoft.VisualBasic" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Emgu.CV" Version="4.10.0.5680" />
@@ -87,6 +90,13 @@
     <None Include="Resources\MyData.db" Condition="Exists('Resources\MyData.db')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>MyData.db</TargetPath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="RecipeDefaults\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
     </None>
   </ItemGroup>
 

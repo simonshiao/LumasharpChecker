@@ -58,7 +58,10 @@ internal static class NativeFlowWorker
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? throw new InvalidDataException("原生流程回傳空結果。");
             if (report.RequestId != id || report.Recipe != native.Name || report.Station != station ||
                 report.Image != Path.GetFileName(image) || report.WorkerProcessId != process.Id || report.AiExecuted)
+            {
+                Trace.WriteLine("Native worker response rejected: " + line);
                 throw new InvalidDataException("原生回傳的工作／配方／站別／圖片不一致，結果作廢。");
+            }
             if (report.Exit != 0 && report.Exit != 2)
                 throw new IOException("原生流程無法完成：" + report.Error);
             return report;

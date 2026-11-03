@@ -1,0 +1,6 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+<PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net472</TargetFramework><PlatformTarget>x64</PlatformTarget><LangVersion>latest</LangVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+<ItemGroup><Reference Include="System.Drawing" /><PackageReference Include="Emgu.CV" Version="4.10.0.5680" />
+<Compile Include="..\..\Source\LumasharpChecker\model\LightBrightnessMeasurement.cs" Link="LightBrightnessMeasurement.cs" />
+<Compile Include="..\..\Source\LumasharpChecker\model\LightInspectionSettings.cs" Link="LightInspectionSettings.cs" />
+</ItemGroup></Project>

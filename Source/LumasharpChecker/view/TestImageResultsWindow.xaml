@@ -68,6 +68,7 @@
                         </DataTemplate>
                     </DataGridTemplateColumn.CellTemplate>
                 </DataGridTemplateColumn>
+                <DataGridTextColumn Header="站別" Binding="{Binding StationDisplay}" Width="92"/>
                 <DataGridTextColumn Header="檔名" Binding="{Binding FileName}" Width="2*"/>
                 <DataGridTextColumn Header="亮度" Binding="{Binding BrightnessDisplay}" Width="*"/>
                 <DataGridTextColumn Header="結果" Binding="{Binding Result}" Width="*" ElementStyle="{StaticResource ResultStatusCellStyle}"/>

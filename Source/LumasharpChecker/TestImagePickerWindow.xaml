@@ -33,6 +33,9 @@
         <Border Grid.Row="1" Background="White" BorderBrush="{DynamicResource Line}" BorderThickness="1"
                 CornerRadius="12" Padding="8">
             <TreeView x:Name="ImageTree" BorderThickness="0" Background="Transparent"
+                      VirtualizingPanel.IsVirtualizing="True"
+                      VirtualizingPanel.VirtualizationMode="Recycling"
+                      ScrollViewer.CanContentScroll="True"
                       SelectedItemChanged="ImageTree_SelectedItemChanged"
                       MouseDoubleClick="ImageTree_MouseDoubleClick">
                 <TreeView.ItemContainerStyle>

@@ -1,4 +1,4 @@
-# LumasharpChecker-Slim: source-only GitHub branch.
+﻿# LumasharpChecker-Slim: source-only GitHub branch.
 # Do not upload private original DIA images, models, runtime profiles or app binaries.
 
 # Published and diagnostic builds
@@ -88,3 +88,6 @@ desktop.ini
 *.db-*
 *.sqlite*
 /Source/LumasharpChecker/LightInspector - Backup.csproj
+
+# Private deployment baseline; contains vendor runtime recipe parameters
+/Source/LumasharpChecker/RecipeDefaults/*.ini

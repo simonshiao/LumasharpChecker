@@ -130,8 +130,7 @@ partial class mainViewModel
 
     private static NativeLocationService.Frame CheckedFrame(NativeRecipeBridge.StageReport report)
     {
-        string root = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "NativeR3", "LumaProbe")) + Path.DirectorySeparatorChar;
-        if (string.IsNullOrEmpty(report.OutputImage) || !Path.GetFullPath(report.OutputImage).StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(report.OutputImage))
+        if (!NativeRecipeBridge.IsTrustedProbeImage(report.OutputImage))
             throw new InvalidDataException("流程未回傳有效影像。");
         return new NativeLocationService.Frame { ImagePath = report.OutputImage,
             Bounds = new System.Drawing.Rectangle(report.X, report.Y, report.Width, report.Height),
@@ -278,14 +277,7 @@ partial class mainViewModel
         var timer = Stopwatch.StartNew();
         try
         {
-            using var mat = new Mat();
-            CvInvoke.Imdecode(File.ReadAllBytes(frame.ImagePath), ImreadModes.Color, mat);
-            if (roi.X < 0 || roi.Y < 0 || roi.Right > mat.Width || roi.Bottom > mat.Height)
-                throw new InvalidOperationException($"ROI 超出定位影像範圍（影像 {mat.Width}×{mat.Height}，ROI {roi.X},{roi.Y},{roi.Width},{roi.Height}）。");
-            using var crop = new Mat(mat, roi);
-            using var hsv = new Mat();
-            CvInvoke.CvtColor(crop, hsv, ColorConversion.Bgr2Hsv);
-            row.Brightness = CvInvoke.Mean(hsv).V2;
+            row.Brightness = LightBrightnessMeasurement.Measure(frame, settings);
             row.BrightnessMeasured = true;
             row.BrightnessSafe = row.Brightness >= limits.Min && row.Brightness <= limits.Max;
             row.BrightnessDeltaPercent = settings.BaseValue > 0 ? (row.Brightness / settings.BaseValue - 1) * 100 : double.NaN;
@@ -319,11 +311,8 @@ partial class mainViewModel
                 station.ToString(), category);
             Directory.CreateDirectory(outputFolder);
 
-            string probeRoot = Path.GetFullPath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory,
-                "NativeR3", "LumaProbe")) + Path.DirectorySeparatorChar;
             string outputImage = analysis.Report.OutputImage;
-            bool isTrustedProcessedImage = !string.IsNullOrWhiteSpace(outputImage) && File.Exists(outputImage) &&
-                Path.GetFullPath(outputImage).StartsWith(probeRoot, StringComparison.OrdinalIgnoreCase);
+            bool isTrustedProcessedImage = NativeRecipeBridge.IsTrustedProbeImage(outputImage);
             string imageToSave = isTrustedProcessedImage ? outputImage : sourceImage;
             if (!File.Exists(imageToSave)) throw new FileNotFoundException("找不到要輸出的檢測圖片。", imageToSave);
 

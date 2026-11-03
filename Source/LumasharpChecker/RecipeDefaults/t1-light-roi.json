@@ -1,0 +1,16 @@
+{
+  "Version": 1,
+  "ReferenceImageWidth": 1292,
+  "ReferenceImageHeight": 964,
+  "Left": 439,
+  "Top": 216,
+  "Right": 439,
+  "Bottom": 216,
+  "HasRoi": true,
+  "Minimum": 0,
+  "Maximum": 255,
+  "LimitMode": "百分比偏差",
+  "BaseValue": 0,
+  "PercentLower": 10,
+  "PercentUpper": 10
+}

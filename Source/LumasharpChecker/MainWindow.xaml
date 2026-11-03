@@ -8,7 +8,7 @@
         xmlns:local="clr-namespace:LumasharpChecker"
         xmlns:view="clr-namespace:LumasharpChecker.view"
         mc:Ignorable="d"
-        Title="LumasharpChecker" Height="880" Width="1120"
+        Title="LumasharpChecker" Height="880" Width="1120" WindowState="Maximized"
         MinHeight="720" MinWidth="1050"
         FontFamily="Microsoft JhengHei UI"
         FontSize="13"
@@ -251,8 +251,8 @@
         </Style>
         <!-- Chao8Side-style command strip. All actions remain real WPF commands. -->
         <Style x:Key="TopIconButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="Width" Value="48"/>
-            <Setter Property="Height" Value="45"/>
+            <Setter Property="Width" Value="56"/>
+            <Setter Property="Height" Value="56"/>
             <Setter Property="MinHeight" Value="0"/>
             <Setter Property="Padding" Value="0"/>
             <Setter Property="Margin" Value="2,0"/>
@@ -436,24 +436,44 @@
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button Style="{StaticResource TopIconButton}"
-                            Click="OpenRecipeManager_Click" Content="&#xE8B7;"
+                            Click="OpenRecipeManager_Click"
                             AutomationProperties.Name="上方選擇配方"
-                            ToolTip="選擇／管理配方"/>
+                            ToolTip="選擇／管理配方">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="&#xE8B7;" FontFamily="Segoe MDL2 Assets" FontSize="21" HorizontalAlignment="Center"/>
+                            <TextBlock Text="配方" FontFamily="Microsoft JhengHei UI" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Border Width="1" Height="30" Background="{StaticResource HudBorder}"
                             Margin="6,0"/>
                     <Button Style="{StaticResource TopIconButton}"
-                            Click="OpenDatabaseSetup_Click" Content="&#xE8B9;"
+                            Click="OpenDatabaseSetup_Click"
                             IsEnabled="{Binding IsRecipeActive}"
                             AutomationProperties.Name="上方各站圖庫"
-                            ToolTip="各站 OK／NG 作業圖庫設定"/>
+                            ToolTip="各站 OK／NG 作業圖庫設定">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="&#xE8B9;" FontFamily="Segoe MDL2 Assets" FontSize="21" HorizontalAlignment="Center"/>
+                            <TextBlock Text="圖庫" FontFamily="Microsoft JhengHei UI" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource TopIconButton}"
-                            Command="{Binding ExportTestImagesCommand}" Content="&#xE74E;"
+                            Command="{Binding ExportTestImagesCommand}"
                             AutomationProperties.Name="匯出報表"
-                            ToolTip="匯出目前 Recipe 所有已完成站別的 Excel 檢測報表；未測站別不建立工作表"/>
+                            ToolTip="匯出目前 Recipe 所有已完成站別的 Excel 檢測報表；未測站別不建立工作表">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="&#xE74E;" FontFamily="Segoe MDL2 Assets" FontSize="21" HorizontalAlignment="Center"/>
+                            <TextBlock Text="報表" FontFamily="Microsoft JhengHei UI" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                     <Button Style="{StaticResource TopIconButton}"
-                            Command="{Binding ShowTestImageResultsCommand}" Content="&#xE8A1;"
-                            AutomationProperties.Name="檢視結果"
-                            ToolTip="查看目前單站檢測結果"/>
+                            Command="{Binding ShowTestImageResultsCommand}"
+                            AutomationProperties.Name="檢視全部站別結果"
+                            ToolTip="查看目前配方全部站別的檢測結果，清單會標示站別">
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="&#xE8A1;" FontFamily="Segoe MDL2 Assets" FontSize="21" HorizontalAlignment="Center"/>
+                            <TextBlock Text="結果" FontFamily="Microsoft JhengHei UI" FontSize="10" Margin="0,2,0,0" HorizontalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
 
                 </StackPanel>
                 <Border Grid.Column="2" Width="235" Background="#E8F8FE" CornerRadius="8"
@@ -660,7 +680,14 @@
                                     ToolTip="合併目前站別 OK DB 與 NG DB；統計會同時顯示圖庫標記與檢測判定"/>
                             <Button Command="{Binding OpenStandardPartImageCommand}" Content="標準件圖"
                                     IsEnabled="{Binding IsRecipeActive}" Height="34" MinHeight="0" Padding="7,0" Margin="2"
-                                    ToolTip="載入目前站別在標準件設定時保存的參考圖片"/>
+                                    ToolTip="左鍵：載入本站標準件圖；右鍵選單：直接以目前圖片設為標準件">
+                                <Button.ContextMenu>
+                                    <ContextMenu Opened="StandardPartMenu_Opened">
+                                        <MenuItem Header="設為標準件" Click="ConfigureStandardPart_Click"
+                                                  ToolTipService.ShowOnDisabled="True"/>
+                                    </ContextMenu>
+                                </Button.ContextMenu>
+                            </Button>
                         </StackPanel>
                         <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="20,0,20,0">
                         <Button Click="OpenTestImagePicker_Click"
@@ -869,17 +896,17 @@
                         </ComboBox>
                         <Button Command="{Binding RunMultiStationInspectionCommand}"
                                 IsEnabled="{Binding IsRecipeActive}"
-                                Content="▶  開始測試"
-                                AutomationProperties.Name="測試勾選站別"
-                                ToolTip="依圖庫選項逐站測試勾選的站別；未校準站跳過。"
+                                Content="▶  連續測試"
+                                AutomationProperties.Name="連續測試勾選站別"
+                                ToolTip="依圖庫選項逐站連續測試勾選站別的全部圖片；未校準站跳過。"
                                 Background="#D2F5FF" BorderBrush="{StaticResource HudAccentStrong}"
                                 Foreground="{StaticResource HudAccentStrong}"
                                 FontWeight="SemiBold" Padding="16,7" Margin="0,0,7,0"/>
                         <Button Command="{Binding RunMultiStationRecentImagesCommand}"
                                 IsEnabled="{Binding IsRecipeActive}"
-                                Content="測最新指定張數"
-                                AutomationProperties.Name="測試勾選站別的最新指定張數"
-                                ToolTip="依齒輪設定的各站張數與 ALL／OK／NG 來源，測各站最新圖片。缺少所選分類時改用全部。"
+                                Content="單顆點檢"
+                                AutomationProperties.Name="點檢勾選站別的最新圖片"
+                                ToolTip="只點檢目前勾選的站別，並依齒輪設定的各站圖庫來源與張數選取最新圖片；選用的 OK／NG 圖庫沒有圖片時會改用 ALL DB。各站來源與張數可在齒輪設定。"
                                 Background="{StaticResource Surface}" BorderBrush="{StaticResource HudBorder}"
                                 Foreground="{StaticResource HudAccentStrong}"
                                 FontWeight="SemiBold" Padding="12,7" Margin="0,0,7,0"/>

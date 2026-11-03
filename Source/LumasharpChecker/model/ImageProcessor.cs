@@ -253,7 +253,7 @@ namespace LumasharpChecker.model
 
                     // 正／反面樣板都參與定位，取相關係數最高者，而不是先通過就採用。
                     var matchRoi = FindTemplateMatch(image, templateImage, patternMatchRoiRect, _coarseTemplateImage, _halfTemplateImage);
-                    string selectedTemplate = "pattern.jpg";
+                    string selectedTemplate = Path.GetFileName(profileManager.ImagePath) ?? "主標準件";
                     if (_additionalTemplates.Count > 0)
                     {
                         double bestScore = matchRoi.HasValue

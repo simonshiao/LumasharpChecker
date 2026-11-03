@@ -128,7 +128,7 @@ internal static class Program
             if (name != Path.GetFileName(name) || string.IsNullOrWhiteSpace(name))
                 throw new InvalidDataException("Invalid Recipe name");
             var root = AppDomain.CurrentDomain.BaseDirectory;
-            if (!Path.GetFullPath(resultFile).StartsWith(Path.GetFullPath(root).TrimEnd('\\') + "\\", StringComparison.OrdinalIgnoreCase))
+            if (!IsAllowedResultPath(resultFile))
                 throw new InvalidDataException("Result path outside runtime.");
             string recipe = Path.Combine(root, "Recipe", name);
             if (!File.Exists(Path.Combine(recipe, "Setting.ini")) ||
@@ -165,7 +165,9 @@ internal static class Program
             object color = Enum.Parse(modes, "Color");
             var imread = cv.GetType("OpenCvSharp.Cv2", true).GetMethod("ImRead",
                 new[] { typeof(string), modes });
+            var imageRead = Stopwatch.StartNew();
             var mat = imread.Invoke(null, new[] { (object)input, color });
+            imageRead.Stop(); State["imageReadMs"] = imageRead.Elapsed.TotalMilliseconds;
             try
             {
                 if ((int)matType.GetProperty("Width").GetValue(mat) <= 0)
@@ -284,12 +286,14 @@ internal static class Program
 
     private static void SaveFrame(string resultFile, object buffers)
     {
+        var imageWrite = Stopwatch.StartNew();
         string image = Path.ChangeExtension(resultFile, WorkerMode ? ".bmp" : ".png");
         // Match the original LocateWindow preview: show the full Dst canvas,
         // where the corrected locate crop has already been copied back.
         object mat = Member(buffers, "Dst");
         if (!(bool)mat.GetType().GetMethod("SaveImage", new[] { typeof(string), typeof(int[]) }).Invoke(mat, new object[] { image, new int[0] }))
             throw new IOException("無法輸出流程影像。");
+        imageWrite.Stop(); State["frameExportMs"] = imageWrite.Elapsed.TotalMilliseconds;
         object rect = Member(buffers, "LocatedRect");
         object imageRect = Member(buffers, "LocateImageRect");
         State["outputImage"] = image;
@@ -340,13 +344,31 @@ internal static class Program
         State["exit"] = code;
         try
         {
-            if (!Path.GetFullPath(path).StartsWith(
-                Path.GetFullPath(AppDomain.CurrentDomain.BaseDirectory), StringComparison.OrdinalIgnoreCase))
+            if (!IsAllowedResultPath(path))
                 return 13;
             Directory.CreateDirectory(Path.GetDirectoryName(path));
             File.WriteAllText(path, new JavaScriptSerializer().Serialize(State));
         }
         catch { return 14; }
         return code;
+    }
+
+    private static bool IsAllowedResultPath(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        string localData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        if (string.IsNullOrWhiteSpace(localData)) return false;
+        string probeRoot = Path.GetFullPath(Path.Combine(localData, "LumasharpChecker", "LumaProbe"))
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        if (!fullPath.StartsWith(probeRoot, StringComparison.OrdinalIgnoreCase)) return false;
+
+        string relative = fullPath.Substring(probeRoot.Length);
+        string[] parts = relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar },
+            StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 &&
+            System.Text.RegularExpressions.Regex.IsMatch(parts[0],
+                @"^session-\d+-[0-9a-f]{32}$", System.Text.RegularExpressions.RegexOptions.IgnoreCase) &&
+            System.Text.RegularExpressions.Regex.IsMatch(parts[1],
+                @"^flow-[0-9a-f]{32}\.json$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
     }
 }

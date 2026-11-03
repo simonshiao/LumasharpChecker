@@ -1,4 +1,4 @@
-using System.IO;
+﻿using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -64,12 +64,18 @@ public sealed class RecipeManager
         public const int MaximumRecentImageCount = 500;
         public int Number { get; set; }
         public bool IsConfigured { get; set; }
+        public string? PatternFileName { get; set; }
         public int RecentImageCount { get; set; } = 1;
         public string RecentImageSource { get; set; } = "ALL";
         public string? SourceProfileName { get; set; }
         // Local workflow choices belong to this Recipe/station, not the shared UI defaults.
         public string? FlowSelection { get; set; }
         public bool LightInspectionEnabled { get; set; } = true;
+        // New local recipes start with t1 Station 1 pixel-based ROI defaults. Scale
+        // those defaults once to the first image opened for this station.
+        public bool InitialRoiScalePending { get; set; }
+        public int InitialRoiReferenceWidth { get; set; }
+        public int InitialRoiReferenceHeight { get; set; }
         public string? OkDatabasePath { get; set; }
         public string? NgDatabasePath { get; set; }
         public string? AllDatabasePath { get; set; }
@@ -306,33 +312,21 @@ public sealed class RecipeManager
             baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("原廠來源與本機配方目錄不可互相包含。");
 
-        string nonce = Guid.NewGuid().ToString("N");
-        string stage = Path.Combine(recipeDir, ".vendor-stage-" + nonce);
         string target = Path.Combine(recipeDir, "vendor-source");
-        string backup = Path.Combine(recipeDir, ".vendor-backup-" + nonce);
         string? previousPath = recipe.VendorRecipePath;
         string previousUpdatedAt = recipe.UpdatedAt;
-        bool movedOld = false, movedNew = false;
         try
         {
-            CopyVendorDirectory(source, stage);
-            if (Directory.Exists(target)) { Directory.Move(target, backup); movedOld = true; }
-            Directory.Move(stage, target); movedNew = true;
-            recipe.VendorRecipePath = source;
-            SaveManifest(recipe);
-            // Preserve the previous snapshot so a completed update remains recoverable.
+            RecipeSnapshotStorage.Replace(source, target, () =>
+            {
+                recipe.VendorRecipePath = source;
+                SaveManifest(recipe);
+            });
         }
         catch
         {
             recipe.VendorRecipePath = previousPath;
             recipe.UpdatedAt = previousUpdatedAt;
-            if (movedNew && Directory.Exists(target)) Directory.Move(target, stage);
-            if (movedOld && Directory.Exists(backup) && !Directory.Exists(target)) Directory.Move(backup, target);
-            if (Directory.Exists(stage))
-            {
-                try { Directory.Delete(stage, true); }
-                catch { /* A leftover hidden staging folder does not affect the active recipe. */ }
-            }
             throw;
         }
     }
@@ -439,7 +433,7 @@ public sealed class RecipeManager
     }
 
     /// <summary>Attach a verified vendor snapshot to an existing Luma recipe.
-    /// Existing Luma profiles and the previous snapshot are retained.</summary>
+    /// Existing Luma profiles are retained; rollback copies are removed after successful sync.</summary>
     public void AttachVendorSnapshot(RecipeManifest recipe, string selectedPath)
     {
         if (recipe == null) throw new ArgumentNullException(nameof(recipe));
@@ -457,25 +451,21 @@ public sealed class RecipeManager
         string sourcePrefix = source + Path.DirectorySeparatorChar;
         if (sourcePrefix.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) || baseFull.StartsWith(sourcePrefix, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException("原廠來源與本機配方目錄不可互相包含。");
-        string nonce = Guid.NewGuid().ToString("N");
-        string stage = Path.Combine(recipeDir, ".vendor-stage-" + nonce);
         string target = Path.Combine(recipeDir, "vendor-source");
-        string backup = Path.Combine(recipeDir, "vendor-backup-" + nonce);
         string? previousPath = recipe.VendorRecipePath;
-        bool movedOld = false, movedNew = false;
-        CopyVendorDirectory(source, stage);
+        string previousUpdatedAt = recipe.UpdatedAt;
         try
         {
-            if (Directory.Exists(target)) { Directory.Move(target, backup); movedOld = true; }
-            Directory.Move(stage, target); movedNew = true;
-            recipe.VendorRecipePath = source;
-            SaveManifest(recipe);
+            RecipeSnapshotStorage.Replace(source, target, () =>
+            {
+                recipe.VendorRecipePath = source;
+                SaveManifest(recipe);
+            });
         }
         catch
         {
             recipe.VendorRecipePath = previousPath;
-            if (movedNew && Directory.Exists(target)) Directory.Move(target, stage);
-            if (movedOld && Directory.Exists(backup) && !Directory.Exists(target)) Directory.Move(backup, target);
+            recipe.UpdatedAt = previousUpdatedAt;
             throw;
         }
     }
@@ -572,6 +562,8 @@ public sealed class RecipeManager
         string vendorModelRoot = Path.Combine(Directory.GetParent(trainingRoot)!.FullName, "Model");
         foreach (var station in recipe.Stations.Where(item => item.Number <= 8))
         {
+            // 訓練圖匯入後，ALL 由此站 OK／NG 組成，不沿用先前選取的資料夾。
+            station.AllDatabasePath = null;
             station.OkDatabasePath = cacheSamples
                 ? CacheTrainingImages(paths[station.Number].Item1, product, station.Number, "OK")
                 : paths[station.Number].Item1;
@@ -627,11 +619,12 @@ public sealed class RecipeManager
         var station = recipe.Stations.Single(item => item.Number == stationNumber);
         string stationDirectory = GetStationDirectory(recipe, stationNumber);
         string profilePath = Path.Combine(stationDirectory, "profile.json");
-        string patternPath = Path.Combine(stationDirectory, "pattern.jpg");
-        if (!station.IsConfigured || !File.Exists(profilePath) || !File.Exists(patternPath)) return null;
+        if (!station.IsConfigured || !File.Exists(profilePath)) return null;
 
         var profile = JsonSerializer.Deserialize<ProfileData>(File.ReadAllText(profilePath), JsonOptions);
         if (profile == null) return null;
+        string? patternPath = ResolveStationPatternPath(station, stationDirectory, profile.ImagePath);
+        if (patternPath == null) return null;
         profile.Name = GetStationProfileName(recipe, stationNumber);
         profile.ImagePath = patternPath;
         profile.Bitmap = ProfileManager.LoadBitmapFromPath(patternPath);
@@ -640,13 +633,47 @@ public sealed class RecipeManager
         return profile;
     }
 
+    public string? GetStationPatternPath(RecipeManifest recipe, int stationNumber)
+    {
+        ValidateStationNumber(stationNumber);
+        string stationDirectory = GetStationDirectory(recipe, stationNumber);
+        RecipeStation station = recipe.Stations.Single(item => item.Number == stationNumber);
+        string? profileImagePath = null;
+        string profilePath = Path.Combine(stationDirectory, "profile.json");
+        if (File.Exists(profilePath))
+        {
+            try
+            {
+                profileImagePath = JsonSerializer.Deserialize<ProfileData>(File.ReadAllText(profilePath), JsonOptions)?.ImagePath;
+            }
+            catch { }
+        }
+        return ResolveStationPatternPath(station, stationDirectory, profileImagePath);
+    }
+
+    private static string? ResolveStationPatternPath(RecipeStation station, string stationDirectory, string? profileImagePath)
+    {
+        string? fileName = !string.IsNullOrWhiteSpace(station.PatternFileName)
+            ? Path.GetFileName(station.PatternFileName)
+            : !string.IsNullOrWhiteSpace(profileImagePath) ? Path.GetFileName(profileImagePath) : null;
+        if (!string.IsNullOrWhiteSpace(fileName))
+        {
+            string candidate = Path.Combine(stationDirectory, fileName);
+            if (File.Exists(candidate)) return candidate;
+        }
+
+        // Existing recipes created before PatternFileName was introduced use pattern.jpg.
+        string legacyPath = Path.Combine(stationDirectory, "pattern.jpg");
+        return File.Exists(legacyPath) ? legacyPath : null;
+    }
+
     public ProfileData AssignProfile(RecipeManifest recipe, int stationNumber, ProfileData sourceProfile)
     {
         ValidateStationNumber(stationNumber);
         string sourceImagePath = ResolveProfileImage(sourceProfile);
         string stationDirectory = GetStationDirectory(recipe, stationNumber);
         Directory.CreateDirectory(stationDirectory);
-        string patternPath = Path.Combine(stationDirectory, "pattern.jpg");
+        string patternPath = Path.Combine(stationDirectory, Path.GetFileName(sourceImagePath));
         File.Copy(sourceImagePath, patternPath, true);
 
         var profileJson = JsonSerializer.Serialize(sourceProfile, JsonOptions);
@@ -668,22 +695,22 @@ public sealed class RecipeManager
         ValidateStationNumber(stationNumber);
         string stationDirectory = GetStationDirectory(recipe, stationNumber);
         Directory.CreateDirectory(stationDirectory);
-        string patternPath = Path.Combine(stationDirectory, "pattern.jpg");
-        if (!File.Exists(patternPath))
-        {
-            string sourceImagePath = ResolveProfileImage(profile);
+        string sourceImagePath = ResolveProfileImage(profile);
+        string patternPath = Path.Combine(stationDirectory, Path.GetFileName(sourceImagePath));
+        if (!string.Equals(Path.GetFullPath(sourceImagePath), Path.GetFullPath(patternPath), StringComparison.OrdinalIgnoreCase))
             File.Copy(sourceImagePath, patternPath, true);
-        }
 
         string storedName = GetStationProfileName(recipe, stationNumber);
         var storedProfile = JsonSerializer.Deserialize<ProfileData>(JsonSerializer.Serialize(profile, JsonOptions), JsonOptions)
             ?? throw new InvalidOperationException("無法保存站別設定。");
         storedProfile.Name = storedName;
-        storedProfile.ImagePath = "pattern.jpg";
+        storedProfile.ImagePath = Path.GetFileName(patternPath);
         WriteJsonAtomically(Path.Combine(stationDirectory, "profile.json"), storedProfile);
         profile.Name = storedName;
         profile.ImagePath = patternPath;
-        recipe.Stations.Single(item => item.Number == stationNumber).IsConfigured = true;
+        var station = recipe.Stations.Single(item => item.Number == stationNumber);
+        station.PatternFileName = Path.GetFileName(patternPath);
+        station.IsConfigured = true;
         SaveManifest(recipe);
     }
 

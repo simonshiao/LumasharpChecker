@@ -44,4 +44,28 @@ public sealed class LightInspectionSettings
         if (!HasRoi || w <= 0 || h <= 0) throw new InvalidOperationException("尚未設定 ROI，或定位範圍不足以容納光源 ROI。");
         return new Rectangle(checked(located.X + Left), checked(located.Y + Top), (int)w, (int)h);
     }
+
+    // Editing may start from another face's pixel margins. Recover only in the editor;
+    // inspection keeps GetRoi's strict validation and never silently changes a saved ROI.
+    public bool EnsureEditableRoi(Rectangle located)
+    {
+        Validate();
+        if (HasRoi && (long)located.Width - Left - Right >= 2 &&
+            (long)located.Height - Top - Bottom >= 2) return false;
+        ResetRoi(located);
+        return true;
+    }
+
+    public void ResetRoi(Rectangle located)
+    {
+        if (located.Width < 2 || located.Height < 2)
+            throw new InvalidOperationException("定位範圍小於 2 × 2 像素，請先確認定位結果。");
+        int width = System.Math.Max(2, located.Width / 2);
+        int height = System.Math.Max(2, located.Height / 2);
+        Left = (located.Width - width) / 2;
+        Top = (located.Height - height) / 2;
+        Right = located.Width - Left - width;
+        Bottom = located.Height - Top - height;
+        HasRoi = true;
+    }
 }

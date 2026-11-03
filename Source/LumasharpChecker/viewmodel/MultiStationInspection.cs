@@ -275,18 +275,21 @@ namespace LumasharpChecker.viewmodel
                 MultiStationProgress = latestImagesOnly
                     ? $"最新圖片測試完成：{completed} 站，跳過 {skipped} 站"
                     : $"檢測完成：{completed} 站，跳過 {skipped} 站";
+                RefreshCurrentStationBatchDisplay(selected, recipe.Id);
             }
             catch (OperationCanceledException)
             {
                 foreach (var slot in selected.Where(slot => slot.BatchStatus == "檢測中"))
                     StoreResult(slot, recipe.Id, new StationRunSummary(0, 0, "已停止", "取消中的未完成站不計入良率"));
                 MultiStationProgress = $"測試已停止：已完成 {completed} 站，跳過 {skipped} 站";
+                RefreshCurrentStationBatchDisplay(selected, recipe.Id);
             }
             catch (Exception ex)
             {
                 foreach (var slot in selected.Where(slot => slot.BatchStatus == "檢測中"))
                     StoreResult(slot, recipe.Id, new StationRunSummary(0, 0, "執行失敗", ex.Message));
                 MultiStationProgress = "多站測試中斷：" + ex.Message;
+                RefreshCurrentStationBatchDisplay(selected, recipe.Id);
             }
             finally
             {
@@ -356,6 +359,20 @@ namespace LumasharpChecker.viewmodel
                 if (visible != null && !ReferenceEquals(visible, slot))
                     visible.ApplyBatchResult(result.Ok, result.Ng, result.Status, result.Details, retestCount);
             }
+        }
+
+        private void RefreshCurrentStationBatchDisplay(IReadOnlyCollection<StationSlotViewModel> selected, string recipeId)
+        {
+            if (CurrentRecipe?.Id != recipeId || !selected.Any(slot => slot.Number == CurrentStationNumber))
+                return;
+
+            if (RestoreMultiStationResultsForCurrentStation())
+                return;
+
+            // 目前站若被跳過或沒有圖片，清除舊的單站預覽，避免畫面留著前一次結果。
+            ResetTestImageState();
+            if (_multiStationResults.TryGetValue((recipeId, CurrentStationNumber), out var summary))
+                SaveSettingsMessage = $"第 {CurrentStationNumber:00} 站未載入測試結果：{summary.Status}；{summary.Details}";
         }
 
         internal bool RestoreMultiStationResultsForCurrentStation()

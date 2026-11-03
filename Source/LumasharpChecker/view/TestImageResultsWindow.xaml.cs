@@ -13,19 +13,29 @@ namespace LumasharpChecker.view
 {
     public partial class TestImageResultsWindow : Window
     {
-        public TestImageResultsWindow(IEnumerable<TestImageResultRow> results, string thumbnailMode, string statusFilter = "ALL")
+        public TestImageResultsWindow(
+            IEnumerable<(int StationNumber, TestImageResultRow Result)> results,
+            string thumbnailMode,
+            string statusFilter = "ALL",
+            bool allStations = false)
         {
             InitializeComponent();
+            var allResults = results.ToArray();
             var filteredResults = statusFilter switch
             {
-                "OK" => results.Where(result => result.IsOverallPass),
-                "NG" => results.Where(result => !result.IsOverallPass),
-                "Retest" => results.Where(result => result.IsRetest),
-                _ => results
+                "OK" => allResults.Where(item => item.Result.IsOverallPass),
+                "NG" => allResults.Where(item => !item.Result.IsOverallPass),
+                "Retest" => allResults.Where(item => item.Result.IsRetest),
+                _ => allResults
             };
-            Title = statusFilter == "ALL" ? "測試圖片結果" : $"{statusFilter} 檢測結果";
+            int stationCount = allResults.Select(item => item.StationNumber).Distinct().Count();
+            Title = allStations
+                ? $"全部站別檢測結果（{stationCount} 站）"
+                : statusFilter == "ALL" ? "測試圖片結果" : $"{statusFilter} 檢測結果";
             ResultsTitle.Text = Title;
-            DataContext = filteredResults.Select(result => new TestImageResultDisplayRow(result, thumbnailMode)).ToList();
+            DataContext = filteredResults
+                .Select(item => new TestImageResultDisplayRow(item.StationNumber, item.Result, thumbnailMode))
+                .ToList();
         }
 
         private void ResultsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -47,12 +57,15 @@ namespace LumasharpChecker.view
     {
         private readonly string _thumbnailMode;
 
-        public TestImageResultDisplayRow(TestImageResultRow source, string thumbnailMode)
+        public TestImageResultDisplayRow(int stationNumber, TestImageResultRow source, string thumbnailMode)
         {
+            StationNumber = stationNumber;
             Source = source;
             _thumbnailMode = thumbnailMode;
         }
 
+        public int StationNumber { get; }
+        public string StationDisplay => $"第 {StationNumber:00} 站";
         public TestImageResultRow Source { get; }
         public string ThumbnailPath
         {

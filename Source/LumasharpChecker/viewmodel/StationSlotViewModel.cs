@@ -159,7 +159,8 @@ public sealed class StationSlotViewModel : ObservableObject
         string? patternPath = null, string? okPath = null, string? ngPath = null,
         string[]? vendorAiModels = null, int recentImageCount = 1,
         Func<int, int>? saveRecentImageCount = null, string recentImageSource = "ALL",
-        Func<string, string>? saveRecentImageSource = null)
+        Func<string, string>? saveRecentImageSource = null, string? previewOnlyPath = null,
+        string? allDatabasePath = null)
     {
         Number = number;
         _isConfigured = isConfigured;
@@ -174,7 +175,6 @@ public sealed class StationSlotViewModel : ObservableObject
         _batchStatus = isConfigured ? "尚未測試" : "未校準";
         OkPath = okPath ?? string.Empty;
         NgPath = ngPath ?? string.Empty;
-        PreviewLabel = IsConfigured ? "檢測基準圖" : "圖庫樣本 · 未校準";
         AiModelStatus = vendorAiModels?.Length > 0
             ? $"原廠 AI 模型 {vendorAiModels.Length} 個（未接入）"
             : "原廠 AI 模型 · 未找到";
@@ -187,6 +187,28 @@ public sealed class StationSlotViewModel : ObservableObject
                 ? Directory.EnumerateFiles(OkPath).Where(IsPreviewImage).OrderBy(path => path).FirstOrDefault()
                 : null;
         }
+        if ((string.IsNullOrWhiteSpace(previewPath) || !File.Exists(previewPath)) &&
+            !string.IsNullOrWhiteSpace(allDatabasePath) && Directory.Exists(allDatabasePath))
+        {
+            try
+            {
+                previewPath = Directory.EnumerateFiles(allDatabasePath, "*", SearchOption.AllDirectories)
+                    .Where(IsPreviewImage)
+                    .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        bool isPreviewOnly = false;
+        if ((string.IsNullOrWhiteSpace(previewPath) || !File.Exists(previewPath)) &&
+            !string.IsNullOrWhiteSpace(previewOnlyPath) && File.Exists(previewOnlyPath))
+        {
+            previewPath = previewOnlyPath;
+            isPreviewOnly = true;
+        }
+        PreviewLabel = IsConfigured ? "檢測基準圖"
+            : isPreviewOnly ? "預覽圖 · 未校準" : "圖庫樣本 · 未校準";
         if (!string.IsNullOrWhiteSpace(previewPath) && File.Exists(previewPath))
         {
             try

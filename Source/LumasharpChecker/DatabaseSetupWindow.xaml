@@ -79,6 +79,16 @@
                                Foreground="{DynamicResource Text}" Margin="0,0,0,13"/>
                     <TextBlock Text="匯入" FontWeight="SemiBold"
                                Foreground="{DynamicResource Blue}"/>
+                    <TextBlock Text="共用作業圖庫來源路徑" FontWeight="SemiBold"
+                               Foreground="{DynamicResource Text}" Margin="0,8,0,0"/>
+                    <TextBlock Text="{Binding SharedReportSourceFolderDisplay}"
+                               FontSize="11" Foreground="{DynamicResource Muted}"
+                               TextWrapping="Wrap" ToolTip="{Binding SharedReportSourceFolderDisplay}"
+                               Margin="0,4,0,7"/>
+                    <Button Content="設定作業圖庫來源…" Click="ConfigureSharedReportSourceFolder_Click"
+                            HorizontalAlignment="Left" Padding="12,6"
+                            Style="{DynamicResource HudSecondaryButton}"
+                            AutomationProperties.Name="設定作業圖庫來源路徑"/>
                     <CheckBox Content="有新日期時自動更新圖庫"
                               IsChecked="{Binding AutoUpdateLatestSharedReportDay, Mode=TwoWay}"
                               ToolTip="啟動時立即檢查；偵測到資料夾變更後約 8 秒檢查，每 5 分鐘補查一次。檢測進行中暫緩更新。"
@@ -112,7 +122,6 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <TextBlock Text="批次" FontWeight="SemiBold"
                            VerticalAlignment="Center" Margin="0,0,11,0"/>
@@ -126,15 +135,12 @@
                         AutomationProperties.Name="批次選取所有站別圖庫"/>
                 <Button Grid.Column="3" Content="訓練圖庫…" Margin="6,0,0,0"
                         Command="{Binding ApplyTrainingImageToCurrentRecipeCommand}"
-                        ToolTip="依產品前綴選擇各站訓練圖庫版本，套用至目前配方"
-                        AutomationProperties.Name="套用訓練圖庫"/>
-                <Button Grid.Column="4" Content="匯入…" Margin="6,0,0,0"
-                        Command="{Binding ImportTrainingImageCommand}"
-                        AutomationProperties.Name="匯入訓練圖庫"/>
-                <Button Grid.Column="5" Content="匯入作業圖庫…" Margin="6,0,0,0"
+                        ToolTip="依產品前綴選擇各站訓練圖庫版本，套用到目前配方的站別路徑"
+                        AutomationProperties.Name="訓練圖庫"/>
+                <Button Grid.Column="4" Content="作業圖庫…" Margin="6,0,0,0"
                         Command="{Binding ImportWorkDatabaseCommand}"
                         ToolTip="從外觀通共用報告格式（月\日\n站，可含 OK／NG 子資料夾）匯入各站圖庫"
-                        AutomationProperties.Name="匯入作業圖庫"/>
+                        AutomationProperties.Name="作業圖庫"/>
             </Grid>
         </Border>
 

@@ -31,13 +31,25 @@ public partial class DatabaseSetupWindow : Window
         }
     }
 
+    private void ConfigureSharedReportSourceFolder_Click(object sender, RoutedEventArgs e)
+    {
+        SettingsPopup.IsOpen = false;
+        if (DataContext is not mainViewModel vm) return;
+        try { vm.ConfigureSharedReportSourceFolder(this); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, "作業圖庫來源路徑設定失敗：\n" + ex.Message,
+                "作業圖庫設定", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
+
     private void ChooseOkFolder_Click(object sender, RoutedEventArgs e)
         => ChooseStationFolder(sender, true);
 
     private void ChooseNgFolder_Click(object sender, RoutedEventArgs e)
         => ChooseStationFolder(sender, false);
 
-    private void ChooseAllFolder_Click(object sender, RoutedEventArgs e)
+    private async void ChooseAllFolder_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button button || button.DataContext is not StationDatabasePathViewModel row
             || DataContext is not mainViewModel vm) return;
@@ -47,7 +59,7 @@ public partial class DatabaseSetupWindow : Window
                 $"第 {row.Number:00} 站 · 選擇 ALL 圖庫資料夾",
                 string.IsNullOrWhiteSpace(row.AllPath) ? row.OkPath : row.AllPath);
             if (selected == null) return;
-            vm.SetStationAllDatabaseFolder(row.Number, selected);
+            await vm.SetStationAllDatabaseFolderAsync(row.Number, selected);
         }
         catch (Exception ex)
         {
@@ -56,7 +68,7 @@ public partial class DatabaseSetupWindow : Window
         }
     }
 
-    private void ChooseStationFolder(object sender, bool isOk)
+    private async void ChooseStationFolder(object sender, bool isOk)
     {
         if (sender is not Button button || button.DataContext is not StationDatabasePathViewModel row
             || DataContext is not mainViewModel vm) return;
@@ -76,7 +88,7 @@ public partial class DatabaseSetupWindow : Window
                     "作業圖庫分類不符", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
-            vm.SetStationDatabaseFolder(row.Number, isOk, selected);
+            await vm.SetStationDatabaseFolderAsync(row.Number, isOk, selected);
         }
         catch (Exception ex)
         {

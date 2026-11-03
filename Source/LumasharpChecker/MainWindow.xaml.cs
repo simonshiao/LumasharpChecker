@@ -1,4 +1,4 @@
-using LumasharpChecker.viewmodel;
+﻿using LumasharpChecker.viewmodel;
 using System.Reflection;
 using System.Text;
 using System.Windows;
@@ -235,10 +235,17 @@ namespace LumasharpChecker
                     MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
+            string recipeId = vm.CurrentRecipe.Id;
+            int editedStation = vm.CurrentStationNumber;
+            string editedImage = vm.CurrentTestImagePath;
             _nativeFlowBusy = true;
             _nativeEditorOpen = true;
             try
             {
+                // 新配方的初始定位 ROI 以 t1 第一站為基準；每站第一次進入定位編輯器時，
+                // 依本站目前選取的圖片尺寸縮放並保存，再建立隔離 Recipe 副本。
+                if (label == "定位") vm.ApplyInitialRoiScaleForCurrentImage();
+
                 NativeRecipeBridge.PreparedRecipe ready;
                 try
                 {
@@ -247,13 +254,14 @@ namespace LumasharpChecker
                 catch (InvalidDataException ex) when (ex.Message.Contains("與 Luma 快照不一致"))
                 {
                     NativeRecipeBridge.RefreshNativeCopy(vm.CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
-                    AoiWorkflow.SetPipelineStatus("原生 Recipe 已自動更新至最新匯入版本；舊副本已備份。");
+                    AoiWorkflow.SetPipelineStatus("原生 Recipe 已自動更新至最新匯入版本；副本校驗完成。");
                     ready = NativeRecipeBridge.Prepare(vm.CurrentRecipe, AppDomain.CurrentDomain.BaseDirectory);
                 }
                 await NativeRecipeBridge.OpenSandbox(ready, vm.CurrentStationNumber, label == "定位",
                     vm.TestImageFiles, vm.CurrentTestImagePath, label == "選向" ? "way" :
                     label == "選面" ? "face" : null);
                 AoiWorkflow.SetPipelineStatus("原生「" + label + "」參數已儲存至本機配方。");
+                await RetestSavedImageAsync(vm, recipeId, editedStation, editedImage);
             }
             catch (Exception ex)
             {
@@ -315,6 +323,21 @@ namespace LumasharpChecker
                     label, MessageBoxButton.OK, MessageBoxImage.Warning);
             }
             finally { _nativeFlowBusy = false; }
+        }
+
+        private async System.Threading.Tasks.Task RetestSavedImageAsync(mainViewModel vm, string recipeId, int station, string image)
+        {
+            if (vm.CurrentRecipe?.Id != recipeId || vm.CurrentStationNumber != station || vm.CurrentTestImagePath != image)
+            {
+                AoiWorkflow.SetPipelineStatus("設定已儲存；配方、站別或圖片已切換，未將舊圖結果套用至目前畫面。");
+                return;
+            }
+            // Saving has finished. Transfer the busy state to the existing single-image runner
+            // synchronously, before its first await; it updates preview, tools and detail results.
+            _nativeEditorOpen = false;
+            _nativeFlowBusy = false;
+            AoiWorkflow.SetPipelineStatus("設定已儲存，正在複測目前圖片…");
+            await RunNativeRetestAsync(quiet: true);
         }
 
         private async System.Threading.Tasks.Task RunNativeRetestAsync(bool continuous = false, bool quiet = false)
@@ -450,6 +473,52 @@ namespace LumasharpChecker
             }
         }
 
+        private void StandardPartMenu_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is not ContextMenu menu || menu.Items[0] is not MenuItem item) return;
+            var vm = DataContext as mainViewModel;
+            bool hasImage = vm != null && !string.IsNullOrWhiteSpace(vm.CurrentTestImagePath) && File.Exists(vm.CurrentTestImagePath);
+            bool busy = _nativeFlowBusy || _nativeEditorOpen || vm?.IsAnalyzingTestImages == true ||
+                vm?.IsContinuousTestRunning == true || vm?.IsMultiStationTesting == true;
+            item.IsEnabled = vm?.CurrentRecipe != null && hasImage && !busy;
+            item.Header = vm?.CurrentRecipe == null ? "設為標準件" : $"設為第 {vm.CurrentStationNumber} 站標準件";
+            item.ToolTip = busy ? "請先完成檢測或關閉原生參數工具。" : !hasImage ? "請先選擇本站要設為標準件的圖片。"
+                : $"配方：{vm!.CurrentRecipe?.Name}\n圖片：{System.IO.Path.GetFileName(vm.CurrentTestImagePath)}\n直接以這張圖片計算基準亮度並保存本站標準件。";
+        }
+
+        private async void ConfigureStandardPart_Click(object sender, RoutedEventArgs e)
+        {
+            if (DataContext is not mainViewModel vm || vm.CurrentRecipe == null) return;
+            if (_nativeFlowBusy || _nativeEditorOpen || vm.IsAnalyzingTestImages || vm.IsContinuousTestRunning || vm.IsMultiStationTesting)
+            {
+                MessageBox.Show("請先完成檢測或關閉原生參數工具，再設定標準件。", "設定標準件", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string image = vm.CurrentTestImagePath;
+            if (string.IsNullOrWhiteSpace(image) || !File.Exists(image))
+            {
+                MessageBox.Show("請先選擇本站要設為標準件的圖片。", "設定標準件", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            string recipeId = vm.CurrentRecipe.Id;
+            int station = vm.CurrentStationNumber;
+            try
+            {
+                _nativeFlowBusy = true;
+                vm.LightFlowSelection = "1" + (AoiWorkflow.IsSelectWayEnabled ? "1" : "0") + (AoiWorkflow.IsSelectFaceEnabled ? "1" : "0");
+                AoiWorkflow.SetPipelineStatus("正在以目前圖片設定本站標準件…");
+                string saved = await vm.SetCurrentImageAsLightStandardAsync();
+                AoiWorkflow.SetPipelineStatus(saved);
+                await RetestSavedImageAsync(vm, recipeId, station, image);
+            }
+            catch (Exception ex)
+            {
+                AoiWorkflow.SetPipelineStatus("設定標準件失敗：" + ex.GetBaseException().Message);
+                MessageBox.Show(ex.GetBaseException().Message, "設定標準件", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally { _nativeFlowBusy = false; }
+        }
+
         private async void OpenAoiLight_Click(object? sender, EventArgs e)
         {
             if (_nativeFlowBusy) return;
@@ -480,7 +549,10 @@ namespace LumasharpChecker
                 // 設定頁不以定位成功作開窗 Gate；定位結果在單張測試時判斷。
                 AoiWorkflow.SetPipelineStatus("光源設定已開啟，請選圖、定位及校準 ROI。");
                 vm.LightFlowSelection = "1" + (AoiWorkflow.IsSelectWayEnabled ? "1" : "0") + (AoiWorkflow.IsSelectFaceEnabled ? "1" : "0");
-                new LightInspectionWindow(vm, imagePath) { Owner = this }.ShowDialog();
+                var lightWindow = new LightInspectionWindow(vm, imagePath) { Owner = this };
+                lightWindow.ShowDialog();
+                if (lightWindow.SettingsSaved)
+                    await RetestSavedImageAsync(vm, recipe.Id, station, imagePath);
             }
             catch (Exception ex)
             {
@@ -588,10 +660,10 @@ namespace LumasharpChecker
 
         private void OpenTestImagePicker_Click(object sender, RoutedEventArgs e)
         {
-            if (DataContext is not mainViewModel viewModel || viewModel.TestImageTree.Count == 0)
+            if (DataContext is not mainViewModel viewModel || viewModel.TestImageFiles.Count == 0)
                 return;
 
-            var picker = new TestImagePickerWindow(viewModel.TestImageTree, viewModel.CurrentTestImagePath)
+            var picker = new TestImagePickerWindow(viewModel.CreateTestImagePickerTree(), viewModel.CurrentTestImagePath)
             {
                 Owner = this
             };
