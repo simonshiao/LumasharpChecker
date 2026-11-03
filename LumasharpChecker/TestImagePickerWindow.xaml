@@ -1,0 +1,56 @@
+<Window x:Class="LumasharpChecker.TestImagePickerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:LumasharpChecker.viewmodel"
+        Title="選擇測試圖片" Width="480" Height="560"
+        MinWidth="400" MinHeight="420"
+        WindowStartupLocation="CenterOwner"
+        FontFamily="Microsoft JhengHei UI" FontSize="13"
+        Background="#F5F5F7" Foreground="#1D1D1F">
+    <Window.Resources>
+        <HierarchicalDataTemplate DataType="{x:Type vm:TestImageTreeNode}" ItemsSource="{Binding Children}">
+            <TextBlock Text="{Binding Name}" Padding="4,3"/>
+        </HierarchicalDataTemplate>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="36"/>
+            <Setter Property="Padding" Value="14,7"/>
+            <Setter Property="Margin" Value="4,0,0,0"/>
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="BorderBrush" Value="#D9D9DE"/>
+        </Style>
+    </Window.Resources>
+    <Grid Margin="18">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <StackPanel Margin="0,0,0,12">
+            <TextBlock Text="測試圖片" FontSize="20" FontWeight="SemiBold"/>
+            <TextBlock Text="選擇要顯示的圖片；此操作只切換預覽，不會執行檢測。"
+                       Foreground="#6E6E73" Margin="0,4,0,0" TextWrapping="Wrap"/>
+        </StackPanel>
+        <Border Grid.Row="1" Background="White" BorderBrush="#D9D9DE" BorderThickness="1"
+                CornerRadius="12" Padding="8">
+            <TreeView x:Name="ImageTree" BorderThickness="0" Background="Transparent"
+                      SelectedItemChanged="ImageTree_SelectedItemChanged"
+                      MouseDoubleClick="ImageTree_MouseDoubleClick">
+                <TreeView.ItemContainerStyle>
+                    <Style TargetType="TreeViewItem">
+                        <Setter Property="IsExpanded" Value="True"/>
+                    </Style>
+                </TreeView.ItemContainerStyle>
+            </TreeView>
+        </Border>
+        <DockPanel Grid.Row="2" Margin="0,14,0,0" LastChildFill="False">
+            <TextBlock x:Name="SelectionLabel" Text="尚未選擇圖片" Foreground="#6E6E73"
+                       VerticalAlignment="Center" MaxWidth="250" TextTrimming="CharacterEllipsis"/>
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                <Button Content="取消" IsCancel="True"/>
+                <Button x:Name="SelectButton" Content="選擇圖片" IsDefault="True"
+                        IsEnabled="False" Click="SelectButton_Click"
+                        Background="#007AFF" Foreground="White" BorderBrush="#007AFF"/>
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

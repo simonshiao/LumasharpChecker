@@ -1,0 +1,23 @@
+<Window x:Class="LumasharpChecker.view.SavingProfileDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:LumasharpChecker.view"
+        mc:Ignorable="d"
+        Title="SavingProfileDialog" Height="210" Width="424">
+    <Grid Margin="0,0,0,0">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="2*"/>
+            <RowDefinition Height="2*"/>
+        </Grid.RowDefinitions>
+        <TextBox x:Name="TBNewProfileName" Grid.ColumnSpan="2" HorizontalAlignment="Center" Margin="0" Grid.Row="1" TextWrapping="Wrap" Text="" VerticalAlignment="Center" Width="260"/>
+        <Button Content="Save" HorizontalAlignment="Center" Margin="0" Grid.Row="2" VerticalAlignment="Center" Click="Button_Click"/>
+        <Button Content="Cancel" HorizontalAlignment="Center" Margin="0" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center" Click="Button_Click_1"/>
+    </Grid>
+</Window>
