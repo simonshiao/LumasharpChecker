@@ -43,6 +43,7 @@ public sealed class RecipeManager
         public string Id { get; set; } = Guid.NewGuid().ToString("N");
         public string Name { get; set; } = string.Empty;
         public int StationCount { get; set; } = 8;
+        public string RecentImageSource { get; set; } = "OK";
         public string CreatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         public string UpdatedAt { get; set; } = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
         public string? DatabaseDayFolder { get; set; }
@@ -497,52 +498,15 @@ public sealed class RecipeManager
     /// </summary>
     public RecipeManifest ImportTrainingImageRecipe(string selectedPath, bool cacheSamples = true)
     {
-        if (!Directory.Exists(selectedPath))
-            throw new DirectoryNotFoundException("TrainingImage 來源資料夾不存在：" + selectedPath);
-
-        string? trainingRoot = null;
-        string? product = null;
-        var folder = new DirectoryInfo(Path.GetFullPath(selectedPath));
-        for (var current = folder; current != null; current = current.Parent)
+        var found = TrainingImageDiscovery.Discover(selectedPath, 8);
+        string trainingRoot = found.Root, product = found.Product;
+        if (found.Candidates.GroupBy(c => c.Station).Any(g => g.Count() > 1))
+            throw new InvalidOperationException("同一站有多個訓練圖庫版本，請從目前配方的「訓練圖庫」入口逐站選取，避免自動混用版本。");
+        var paths = Enumerable.Range(1, 8).ToDictionary(number => number, number =>
         {
-            var match = Regex.Match(current.Name, @"^(.+)-CCD([1-9]|10)$", RegexOptions.IgnoreCase);
-            if (match.Success) product = match.Groups[1].Value;
-            if (current.Name.Equals("TrainingImage", StringComparison.OrdinalIgnoreCase))
-            {
-                trainingRoot = current.FullName;
-                break;
-            }
-        }
-        if (trainingRoot == null)
-            throw new ArgumentException("請選取 TrainingImage、產品 CCD 資料夾或 Origional 下的站別資料夾。");
-        if (string.IsNullOrWhiteSpace(product))
-        {
-            var candidates = Directory.GetDirectories(trainingRoot)
-                .Select(path => Regex.Match(Path.GetFileName(path), @"^(.+)-CCD1$", RegexOptions.IgnoreCase))
-                .Where(match => match.Success).Select(match => match.Groups[1].Value)
-                .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
-            if (candidates.Length != 1)
-                throw new ArgumentException("TrainingImage 中有多個產品；請選擇 R002-CCD1 這類產品站別資料夾。");
-            product = candidates[0];
-        }
-
-        // 必須真的有影像才建立 Recipe，避免空站被當作有效樣本。
-        var paths = new Dictionary<int, Tuple<string?, string?>>();
-        for (int number = 1; number <= 8; number++)
-        {
-            var stationRoot = Path.Combine(trainingRoot, product + "-CCD" + number,
-                "Origional", number.ToString());
-            if (!Directory.Exists(stationRoot))
-                stationRoot = Path.Combine(trainingRoot, product + "-CCD" + number,
-                    "Original", number.ToString());
-            string okPath = Path.Combine(stationRoot, "OK");
-            string ngPath = Path.Combine(stationRoot, "NG");
-            paths[number] = Tuple.Create(
-                HasImageFiles(okPath) ? okPath : null,
-                HasImageFiles(ngPath) ? ngPath : null);
-        }
-        if (!paths.Values.Any(item => item.Item1 != null || item.Item2 != null))
-            throw new InvalidOperationException("找不到 CCD1～8 的 Origional\\站號\\OK／NG 影像。");
+            var candidate = found.Candidates.SingleOrDefault(c => c.Station == number);
+            return Tuple.Create(candidate?.OkPath, candidate?.NgPath);
+        });
 
         string name = product + "（TrainingImage）";
         var recipe = LoadAllRecipes().FirstOrDefault(item =>
@@ -570,7 +534,7 @@ public sealed class RecipeManager
             station.NgDatabasePath = cacheSamples
                 ? CacheTrainingImages(paths[station.Number].Item2, product, station.Number, "NG")
                 : paths[station.Number].Item2;
-            string modelStem = product + "-CCD" + station.Number;
+            string modelStem = found.Candidates.SingleOrDefault(c => c.Station == station.Number)?.FolderName ?? product + "-CCD" + station.Number;
             station.VendorAiModelFiles = new[] { ".h5d", ".pbd" }
                 .Select(ext => Path.Combine(vendorModelRoot, modelStem + ext))
                 .Where(File.Exists).ToList();
@@ -578,6 +542,41 @@ public sealed class RecipeManager
         }
         SaveManifest(recipe);
         return recipe;
+    }
+
+    public void SetRecentImageSource(RecipeManifest recipe, string source)
+    {
+        if (source is not ("ALL" or "OK" or "NG")) throw new ArgumentException("無效的圖片來源。", nameof(source));
+        if (recipe.RecentImageSource == source) return;
+        string previous = recipe.RecentImageSource, updated = recipe.UpdatedAt;
+        recipe.RecentImageSource = source;
+        try { SaveManifest(recipe); }
+        catch { recipe.RecentImageSource = previous; recipe.UpdatedAt = updated; throw; }
+    }
+
+    public bool ClearStationDatabase(RecipeManifest recipe, int stationNumber, string category)
+    {
+        ValidateStationNumber(stationNumber);
+        if (stationNumber > recipe.StationCount) throw new ArgumentOutOfRangeException(nameof(stationNumber));
+        if (category != "STATION" && category != "OK" && category != "NG")
+            throw new ArgumentException("無效的圖庫分類。", nameof(category));
+        var station = recipe.Stations.Single(s => s.Number == stationNumber);
+        string? all = station.AllDatabasePath, ok = station.OkDatabasePath, ng = station.NgDatabasePath;
+        string updated = recipe.UpdatedAt;
+        // Removing a category also removes the explicit ALL override, so ALL cannot
+        // silently reload the category that the operator just cleared.
+        station.AllDatabasePath = null;
+        if (category == "STATION" || category == "OK") station.OkDatabasePath = null;
+        if (category == "STATION" || category == "NG") station.NgDatabasePath = null;
+        if (all == station.AllDatabasePath && ok == station.OkDatabasePath && ng == station.NgDatabasePath) return false;
+        try { SaveManifest(recipe); }
+        catch
+        {
+            station.AllDatabasePath = all; station.OkDatabasePath = ok; station.NgDatabasePath = ng;
+            recipe.UpdatedAt = updated;
+            throw;
+        }
+        return true;
     }
 
     private string? CacheTrainingImages(string? source, string product, int station, string category)
@@ -861,6 +860,7 @@ public sealed class RecipeManager
 
     private static void NormalizeStations(RecipeManifest recipe)
     {
+        if (recipe.RecentImageSource is not ("ALL" or "OK" or "NG")) recipe.RecentImageSource = "OK";
         recipe.Stations ??= new List<RecipeStation>();
         for (int number = 1; number <= MaximumStations; number++)
         {

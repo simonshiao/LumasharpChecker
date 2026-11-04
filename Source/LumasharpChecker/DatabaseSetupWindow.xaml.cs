@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -48,6 +48,19 @@ public partial class DatabaseSetupWindow : Window
 
     private void ChooseNgFolder_Click(object sender, RoutedEventArgs e)
         => ChooseStationFolder(sender, false);
+
+    private async void ClearFolder_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button || button.DataContext is not StationDatabasePathViewModel row
+            || DataContext is not mainViewModel vm || button.Tag is not string category) return;
+        e.Handled = true;
+        try { await vm.ClearStationDatabaseAsync(row.Number, category); }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"第 {row.Number:00} 站圖庫路徑無法清除：\n{ex.Message}",
+                "清除圖庫路徑", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+    }
 
     private async void ChooseAllFolder_Click(object sender, RoutedEventArgs e)
     {

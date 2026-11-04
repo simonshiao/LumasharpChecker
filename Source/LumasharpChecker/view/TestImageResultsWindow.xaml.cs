@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
 using System.Windows.Data;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -13,6 +15,8 @@ namespace LumasharpChecker.view
 {
     public partial class TestImageResultsWindow : Window
     {
+        private readonly List<TestImageResultDisplayRow> _rows;
+        private ListCollectionView? _view;
         public TestImageResultsWindow(
             IEnumerable<(int StationNumber, TestImageResultRow Result)> results,
             string thumbnailMode,
@@ -21,21 +25,38 @@ namespace LumasharpChecker.view
         {
             InitializeComponent();
             var allResults = results.ToArray();
-            var filteredResults = statusFilter switch
-            {
-                "OK" => allResults.Where(item => item.Result.IsOverallPass),
-                "NG" => allResults.Where(item => !item.Result.IsOverallPass),
-                "Retest" => allResults.Where(item => item.Result.IsRetest),
-                _ => allResults
-            };
             int stationCount = allResults.Select(item => item.StationNumber).Distinct().Count();
             Title = allStations
                 ? $"全部站別檢測結果（{stationCount} 站）"
                 : statusFilter == "ALL" ? "測試圖片結果" : $"{statusFilter} 檢測結果";
             ResultsTitle.Text = Title;
-            DataContext = filteredResults
-                .Select(item => new TestImageResultDisplayRow(item.StationNumber, item.Result, thumbnailMode))
-                .ToList();
+            _rows = allResults.Select(item => new TestImageResultDisplayRow(item.StationNumber, item.Result, BatchPreviewModes.All)).ToList();
+            _view = new ListCollectionView(_rows);
+            ResultsGrid.ItemsSource = _view;
+            ResultFilter.SelectedValue = statusFilter is "OK" or "NG" or "Retest" ? statusFilter : "ALL";
+            ShowThumbnails.IsChecked = thumbnailMode != BatchPreviewModes.None;
+            ApplyOptions();
+        }
+
+        private void ResultOptions_Changed(object sender, SelectionChangedEventArgs e) => ApplyOptions();
+        private void ThumbnailOptions_Changed(object sender, RoutedEventArgs e) => ApplyOptions();
+
+        private void ApplyOptions()
+        {
+            if (_view == null) return;
+            string filter = ResultFilter.SelectedValue as string ?? "ALL";
+            _view.Filter = value => value is TestImageResultDisplayRow row && (filter switch
+            {
+                "OK" => row.Source.IsOverallPass,
+                "NG" => !row.Source.IsOverallPass,
+                "Retest" => row.Source.IsRetest,
+                _ => true
+            });
+            bool thumbnails = ShowThumbnails.IsChecked == true;
+            foreach (var row in _rows) row.SetThumbnailMode(thumbnails ? BatchPreviewModes.All : BatchPreviewModes.None);
+            ThumbnailColumn.Visibility = thumbnails ? Visibility.Visible : Visibility.Collapsed;
+            ResultsGrid.RowHeight = thumbnails ? 78 : 32;
+            ResultCount.Text = _view.Count == 0 ? $"沒有符合結果（共 {_rows.Count} 張）" : $"顯示 {_view.Count}／{_rows.Count} 張";
         }
 
         private void ResultsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -53,9 +74,16 @@ namespace LumasharpChecker.view
         }
     }
 
-    public class TestImageResultDisplayRow
+    public class TestImageResultDisplayRow : INotifyPropertyChanged
     {
-        private readonly string _thumbnailMode;
+        private string _thumbnailMode;
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public void SetThumbnailMode(string mode)
+        {
+            if (_thumbnailMode == mode) return;
+            _thumbnailMode = mode;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ThumbnailPath)));
+        }
 
         public TestImageResultDisplayRow(int stationNumber, TestImageResultRow source, string thumbnailMode)
         {
@@ -86,6 +114,8 @@ namespace LumasharpChecker.view
         }
         public string FileName => Source.FileName;
         public string BrightnessDisplay => Source.BrightnessMeasured ? Source.Brightness.ToString("F2") : "—";
+        public string MinimumDisplay => !Source.LightInspectionSkipped && Source.BrightnessMin.HasValue ? Source.BrightnessMin.Value.ToString("F2") : "—";
+        public string MaximumDisplay => !Source.LightInspectionSkipped && Source.BrightnessMax.HasValue ? Source.BrightnessMax.Value.ToString("F2") : "—";
         public string Result => Source.OverallResult;
         public string Message => Source.IsRetest ? Source.Message : string.Empty;
     }

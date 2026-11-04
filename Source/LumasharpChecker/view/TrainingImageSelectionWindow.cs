@@ -12,14 +12,14 @@ namespace LumasharpChecker.view
     {
         private readonly Dictionary<int, ComboBox> _choices = new();
         public List<TrainingImageCandidate> SelectedCandidates => _choices.Values
-            .Select(box => box.SelectedItem as TrainingImageCandidate).Where(item => item != null && !string.IsNullOrEmpty(item.FolderName)).Cast<TrainingImageCandidate>().ToList();
+            .Select(box => box.SelectedItem as TrainingImageCandidate).Where(item => item != null && (item.ClearPaths || !string.IsNullOrEmpty(item.FolderName))).Cast<TrainingImageCandidate>().ToList();
 
         public TrainingImageSelectionWindow(Window owner, string product, IReadOnlyList<TrainingImageCandidate> candidates, int stationCount)
         {
             Owner = owner; Title = "選擇訓練圖庫"; Width = 760; Height = 620;
             MinWidth = 620; MinHeight = 440; WindowStartupLocation = WindowStartupLocation.CenterOwner;
             var layout = new DockPanel { Margin = new Thickness(18) };
-            var heading = new TextBlock { Text = $"產品前綴：{product}\n每站選擇一個版本；留空的站別保留原路徑。多個版本不會自動合併。\n僅列出 Origional／Original 站號內有圖片的圖庫，X／Y 不納入。",
+            var heading = new TextBlock { Text = $"產品前綴：{product}\n每站可選圖庫版本、不變更或清空本站圖庫。多個版本不會自動合併。\n僅列出 Origional／Original 站號內有圖片的圖庫，X／Y 不納入。",
                 TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 0, 0, 12) };
             DockPanel.SetDock(heading, Dock.Top); layout.Children.Add(heading);
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 12, 0, 0) };
@@ -33,13 +33,14 @@ namespace LumasharpChecker.view
                 var options = candidates.Where(c => c.Station == station).ToList();
                 int candidateCount = options.Count;
                 options.Insert(0, new TrainingImageCandidate { Station = station });
+                options.Insert(1, new TrainingImageCandidate { Station = station, ClearPaths = true });
                 var row = new Grid { Margin = new Thickness(0, 0, 0, 8) };
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(60) });
                 row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
                 var label = new TextBlock { Text = $"第 {station:00} 站", VerticalAlignment = VerticalAlignment.Center };
                 var combo = new ComboBox { ItemsSource = options, DisplayMemberPath = "Display", MinHeight = 32,
-                    ToolTip = candidateCount == 0 ? "沒有符合的原始圖庫" : "選擇不變更可保留本站現有路徑", IsEnabled = candidateCount > 0 };
-                combo.SelectedIndex = candidateCount == 1 ? 1 : 0;
+                    ToolTip = "不變更會保留現有路徑；清空會移除 ALL／OK／NG 路徑，保留原始圖片。" };
+                combo.SelectedIndex = candidateCount == 1 ? 2 : 0;
                 Grid.SetColumn(combo, 1); row.Children.Add(label); row.Children.Add(combo); panel.Children.Add(row); _choices.Add(station, combo);
             }
             layout.Children.Add(new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto });

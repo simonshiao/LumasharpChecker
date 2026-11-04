@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -98,6 +98,9 @@ namespace LumasharpChecker.viewmodel
         public string OkPath { get; init; } = string.Empty;
         public string NgPath { get; init; } = string.Empty;
         public string AllPath { get; init; } = string.Empty;
+        public bool HasOkPath => !string.IsNullOrWhiteSpace(OkPath);
+        public bool HasNgPath => !string.IsNullOrWhiteSpace(NgPath);
+        public bool HasAnyPath => HasOkPath || HasNgPath || !string.IsNullOrWhiteSpace(AllPath);
         public bool OkDirectoryExists { get; init; }
         public bool NgDirectoryExists { get; init; }
         public bool AllDirectoryExists { get; init; }
@@ -768,14 +771,15 @@ namespace LumasharpChecker.viewmodel
             {
                 const string defaultPath = @"D:\2-新任務\welding\DIAChip8Side\TrainingImage";
                 string? folder = ExplorerFolderPicker.PickFolder(owner,
-                    "選擇產品 CCD 資料夾，例如 R002-CCD1", Directory.Exists(defaultPath) ? defaultPath : Environment.CurrentDirectory);
+                    "選擇 TrainingImage 或產品 CCD 資料夾，例如 20160H-CCD01", Directory.Exists(defaultPath) ? defaultPath : Environment.CurrentDirectory);
                 if (folder == null) return;
                 var found = TrainingImageDiscovery.Discover(folder, CurrentRecipe.StationCount);
                 var dialog = new TrainingImageSelectionWindow(owner, found.Product, found.Candidates, CurrentRecipe.StationCount);
                 if (dialog.ShowDialog() != true) return;
                 var selected = dialog.SelectedCandidates;
-                string summary = string.Join("\n", selected.Select(item =>
-                    $"第 {item.Station:00} 站：{item.FolderName}（OK {item.OkCount}／NG {item.NgCount}）"));
+                string summary = string.Join("\n", selected.Select(item => item.ClearPaths
+                    ? $"第 {item.Station:00} 站：清空 ALL／OK／NG 圖庫路徑"
+                    : $"第 {item.Station:00} 站：{item.FolderName}（OK {item.OkCount}／NG {item.NgCount}）"));
                 if (MessageBox.Show(owner, $"將下列圖庫路徑套用到目前配方「{CurrentRecipe.Name}」：\n\n{summary}\n\n所選站別原有 OK／NG 路徑會被替換；沒有圖片的分類會清空，ALL 路徑也會清空並改由 OK＋NG 計算。其他站別及檢測參數不變。\n\n是否套用？",
                     "確認訓練圖庫", MessageBoxButton.YesNo, MessageBoxImage.Question) != MessageBoxResult.Yes) return;
                 var recipe = CurrentRecipe;
@@ -814,9 +818,14 @@ namespace LumasharpChecker.viewmodel
                     throw;
                 }
                 DatabaseDayFolderDisplay = found.Root;
+                foreach (var item in selected) InvalidateStationDatabaseResults(recipe.Id, item.Station);
                 RefreshStationDatabasePaths(); RefreshStationSlots();
-                if (_activeStationDatabase != null && selected.Any(item => item.Station == CurrentStationNumber))
-                { ResetTestImageState(); LoadStationDatabase(_activeStationDatabase); }
+                if (selected.Any(item => item.Station == CurrentStationNumber))
+                {
+                    string? active = _activeStationDatabase;
+                    ResetTestImageState();
+                    if (active != null && !LoadStationDatabase(active)) _activeStationDatabase = null;
+                }
                 DatabaseSaveMessage = $"已套用 {selected.Count} 站訓練圖庫。";
                 MessageBox.Show(owner, DatabaseSaveMessage, "訓練圖庫", MessageBoxButton.OK, MessageBoxImage.Information);
             }
@@ -1467,15 +1476,12 @@ namespace LumasharpChecker.viewmodel
                     if (configured) configured = File.Exists(profilePath) && patternPath != null;
                 }
                 Func<int, int>? saveRecentImageCount = null;
-                Func<string, string>? saveRecentImageSource = null;
                 if (station != null && CurrentRecipe != null)
                 {
                     var recipeForSetting = CurrentRecipe;
                     var stationForSetting = station;
                     saveRecentImageCount = count => SaveStationRecentImageCount(
                         recipeForSetting, stationForSetting, count);
-                    saveRecentImageSource = source => SaveStationRecentImageSource(
-                        recipeForSetting, stationForSetting, source);
                 }
                 var slot = new StationSlotViewModel(number, configured,
                     CurrentRecipe != null && number == CurrentStationNumber,
@@ -1485,8 +1491,8 @@ namespace LumasharpChecker.viewmodel
                     station?.VendorAiModelFiles?.ToArray(),
                     station?.RecentImageCount ?? 1,
                     saveRecentImageCount,
-                    station?.RecentImageSource ?? "ALL",
-                    saveRecentImageSource,
+                    CurrentRecipe?.RecentImageSource ?? "OK",
+                    null,
                     previewOnlyPath,
                     allDatabasePath);
                 if (previousSlots.TryGetValue(number, out var previous))
@@ -1533,27 +1539,26 @@ namespace LumasharpChecker.viewmodel
             }
         }
 
-        private string SaveStationRecentImageSource(
-            RecipeManager.RecipeManifest recipe,
-            RecipeManager.RecipeStation station,
-            string recentImageSource)
+        public string GlobalRecentImageSource
         {
-            string source = recentImageSource is "ALL" or "OK" or "NG" ? recentImageSource : "ALL";
-            if (station.RecentImageSource == source) return source;
-
-            string previous = station.RecentImageSource;
-            station.RecentImageSource = source;
-            try
+            get => CurrentRecipe?.RecentImageSource ?? "OK";
+            set
             {
-                recipeManager.SaveManifest(recipe);
-                SaveSettingsMessage = $"已儲存第 {station.Number:00} 站的最新圖片來源：{GetRecentImageSourceLabel(source)}。";
-                return source;
-            }
-            catch (Exception ex)
-            {
-                station.RecentImageSource = previous;
-                SaveSettingsMessage = $"儲存第 {station.Number:00} 站圖片來源失敗：{ex.GetBaseException().Message}";
-                return previous;
+                if (CurrentRecipe == null) return;
+                if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting || IsNativeOperationBusy?.Invoke() == true)
+                {
+                    SaveSettingsMessage = "請先完成目前檢測，再變更全站圖片來源。";
+                    OnPropertyChanged(nameof(GlobalRecentImageSource));
+                    return;
+                }
+                try
+                {
+                    recipeManager.SetRecentImageSource(CurrentRecipe, value);
+                    RefreshStationSlots();
+                    SaveSettingsMessage = $"已儲存「{CurrentRecipe.Name}」全站最新圖片來源：{GetRecentImageSourceLabel(value)}。";
+                }
+                catch (Exception ex) { SaveSettingsMessage = "儲存全站圖片來源失敗：" + ex.GetBaseException().Message; }
+                OnPropertyChanged(nameof(GlobalRecentImageSource));
             }
         }
 
@@ -1749,6 +1754,30 @@ namespace LumasharpChecker.viewmodel
         }
 
         // 各站 OK／NG 可個別指定；只改對應站別與分類，不搬移或修改來源圖片。
+        private void InvalidateStationDatabaseResults(string recipeId, int stationNumber)
+        {
+            _multiStationResults.Remove((recipeId, stationNumber));
+            foreach (var key in _singleFlowDetails.Keys.Where(k => k.RecipeId == recipeId && k.Station == stationNumber).ToArray())
+                _singleFlowDetails.Remove(key);
+        }
+
+        public async Task ClearStationDatabaseAsync(int stationNumber, string category)
+        {
+            var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入配方。");
+            if (IsAnalyzingTestImages || IsContinuousTestRunning || IsMultiStationTesting || IsNativeOperationBusy?.Invoke() == true)
+                throw new InvalidOperationException("檢測或參數作業進行中，請完成後再清除圖庫路徑。");
+            recipeManager.ClearStationDatabase(recipe, stationNumber, category);
+            InvalidateStationDatabaseResults(recipe.Id, stationNumber);
+            RefreshStationDatabasePaths(); RefreshStationSlots();
+            if (stationNumber == CurrentStationNumber)
+            {
+                string? active = _activeStationDatabase;
+                ResetTestImageState();
+                if (active != null && !await LoadStationDatabaseAsync(active)) _activeStationDatabase = null;
+            }
+            DatabaseSaveMessage = $"已清除第 {stationNumber:00} 站{(category == "STATION" ? " ALL／OK／NG" : " " + category)} 圖庫路徑，原始圖片保留。";
+        }
+
         public void SetStationDatabaseFolder(int stationNumber, bool isOk, string selectedFolder, bool reloadActiveDatabase = true)
         {
             var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入配方。");
@@ -2164,7 +2193,7 @@ namespace LumasharpChecker.viewmodel
         [ObservableProperty]
         private bool showOnlyNgThumbnails = false;
         [ObservableProperty]
-        private string batchPreviewMode = BatchPreviewModes.NgOnly;
+        private string batchPreviewMode = BatchPreviewModes.All;
         [ObservableProperty]
         private double selectedBaselinePercentile = 2.5;
         [ObservableProperty]
@@ -2386,6 +2415,7 @@ namespace LumasharpChecker.viewmodel
             OnPropertyChanged(nameof(CurrentInspectionName));
             OnPropertyChanged(nameof(CurrentStationSettingsLabel));
             RefreshStationSlots();
+            OnPropertyChanged(nameof(GlobalRecentImageSource));
             GlobalRecentImageCount = value?.Stations.FirstOrDefault(station => station.Number == 1)?.RecentImageCount ?? 1;
             RefreshStationDatabasePaths();
             DatabaseDayFolderDisplay = value?.DatabaseDayFolder ?? value?.TrainingImageRoot ?? string.Empty;

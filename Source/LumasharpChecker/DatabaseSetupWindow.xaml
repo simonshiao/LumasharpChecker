@@ -1,4 +1,4 @@
-<Window x:Class="LumasharpChecker.DatabaseSetupWindow"
+﻿<Window x:Class="LumasharpChecker.DatabaseSetupWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="作業圖庫" Width="1000" Height="650" MinWidth="800" MinHeight="520"
@@ -197,11 +197,17 @@
                                                              IsReadOnly="True" VerticalContentAlignment="Center"
                                                              ToolTip="{Binding AllPath}" FontSize="11"
                                                              Padding="7,5" AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 ALL 路徑}"/>
-                                                    <Button Grid.Column="2" Content="選擇 ALL" Click="ChooseAllFolder_Click"
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                    <Button Content="選擇 ALL" Click="ChooseAllFolder_Click"
                                                             Style="{DynamicResource HudSecondaryButton}"
                                                             Margin="6,0,1,0" MinHeight="30" Padding="10,4"
                                                             ToolTip="選擇後會自動帶入其中的 OK／NG 子資料夾。"
                                                             AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 ALL 圖庫}"/>
+                                                        <Button Content="清空本站" Tag="STATION" Click="ClearFolder_Click"
+                                                                IsEnabled="{Binding HasAnyPath}" Margin="5,0,0,0" Padding="8,4" MinHeight="30"
+                                                                Style="{DynamicResource HudSecondaryButton}" ToolTip="清除本站 ALL／OK／NG 路徑，保留原始圖片。"
+                                                                AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站清空全部圖庫路徑}"/>
+                                                    </StackPanel>
                                                 </Grid>
                                                 <StackPanel Grid.Column="2" Orientation="Horizontal"
                                                             HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -237,10 +243,16 @@
                                                          IsReadOnly="True" VerticalContentAlignment="Center"
                                                          ToolTip="{Binding OkPath}" FontSize="11" Padding="7,5"
                                                          AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 OK 路徑}"/>
-                                                <Button Grid.Column="2" Content="選擇" Click="ChooseOkFolder_Click"
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Content="選擇" Click="ChooseOkFolder_Click"
                                                         Style="{DynamicResource HudSecondaryButton}"
                                                         Margin="6,0,1,0" MinHeight="30" Padding="10,4"
                                                         AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 OK 圖庫}"/>
+                                                    <Button Content="清除" Tag="OK" Click="ClearFolder_Click"
+                                                            IsEnabled="{Binding HasOkPath}" Margin="5,0,0,0" Padding="8,4" MinHeight="30"
+                                                            Style="{DynamicResource HudSecondaryButton}" ToolTip="清除分類路徑及舊 ALL 指定，保留原始圖片。"
+                                                            AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站清除 OK 圖庫路徑}"/>
+                                                </StackPanel>
                                             </Grid>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
@@ -254,10 +266,16 @@
                                                          IsReadOnly="True" VerticalContentAlignment="Center"
                                                          ToolTip="{Binding NgPath}" FontSize="11" Padding="7,5"
                                                          AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站 NG 路徑}"/>
-                                                <Button Grid.Column="2" Content="選擇" Click="ChooseNgFolder_Click"
+                                                <StackPanel Grid.Column="2" Orientation="Horizontal">
+                                                <Button Content="選擇" Click="ChooseNgFolder_Click"
                                                         Style="{DynamicResource HudSecondaryButton}"
                                                         Margin="6,0,1,0" MinHeight="30" Padding="10,4"
                                                         AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站選擇 NG 圖庫}"/>
+                                                    <Button Content="清除" Tag="NG" Click="ClearFolder_Click"
+                                                            IsEnabled="{Binding HasNgPath}" Margin="5,0,0,0" Padding="8,4" MinHeight="30"
+                                                            Style="{DynamicResource HudSecondaryButton}" ToolTip="清除分類路徑及舊 ALL 指定，保留原始圖片。"
+                                                            AutomationProperties.Name="{Binding Number, StringFormat=第 {0} 站清除 NG 圖庫路徑}"/>
+                                                </StackPanel>
                                             </Grid>
                                         </StackPanel>
                                     </Expander>

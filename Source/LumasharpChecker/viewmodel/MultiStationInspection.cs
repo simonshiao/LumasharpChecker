@@ -1,4 +1,4 @@
-using CommunityToolkit.Mvvm.Input;
+﻿using CommunityToolkit.Mvvm.Input;
 using LumasharpChecker.model;
 using System;
 using System.Collections.Generic;
@@ -169,7 +169,7 @@ namespace LumasharpChecker.viewmodel
                     }
 
                     List<string> imageFiles;
-                    string requestedImageSource = latestImagesOnly ? slot.RecentImageSource : databaseSelection;
+                    string requestedImageSource = latestImagesOnly ? recipe.RecentImageSource : databaseSelection;
                     string effectiveImageSource = requestedImageSource;
                     bool usedAllImageFallback = false;
                     try

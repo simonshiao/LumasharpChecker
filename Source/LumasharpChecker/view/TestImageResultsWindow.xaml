@@ -21,6 +21,7 @@
     <Grid Background="{DynamicResource Bg}" Margin="18">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
@@ -30,8 +31,23 @@
                    Foreground="{DynamicResource Text}"
                    Margin="0,0,0,14"/>
 
+        <DockPanel Grid.Row="1" Margin="0,0,0,10">
+            <TextBlock Text="顯示結果" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <ComboBox x:Name="ResultFilter" Width="150" SelectedValuePath="Tag" SelectedIndex="0"
+                      SelectionChanged="ResultOptions_Changed" AutomationProperties.Name="結果篩選">
+                <ComboBoxItem Content="全部" Tag="ALL"/>
+                <ComboBoxItem Content="OK" Tag="OK"/>
+                <ComboBoxItem Content="NG（含 Retest）" Tag="NG"/>
+                <ComboBoxItem Content="僅 Retest" Tag="Retest"/>
+            </ComboBox>
+            <CheckBox x:Name="ShowThumbnails" Content="顯示縮圖" IsChecked="True" Margin="18,0,16,0"
+                      VerticalAlignment="Center" Checked="ThumbnailOptions_Changed" Unchecked="ThumbnailOptions_Changed"
+                      ToolTip="僅影響結果視窗載圖，不影響檢測時間。"/>
+            <TextBlock x:Name="ResultCount" HorizontalAlignment="Right" VerticalAlignment="Center"/>
+        </DockPanel>
+
         <DataGrid x:Name="ResultsGrid"
-                  Grid.Row="1"
+                  Grid.Row="2"
                   ItemsSource="{Binding}"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
@@ -52,7 +68,7 @@
                   ScrollViewer.CanContentScroll="True"
                   MouseDoubleClick="ResultsGrid_MouseDoubleClick">
             <DataGrid.Columns>
-                <DataGridTemplateColumn Header="縮圖" Width="86">
+                <DataGridTemplateColumn x:Name="ThumbnailColumn" Header="縮圖" Width="86">
                     <DataGridTemplateColumn.CellTemplate>
                         <DataTemplate>
                             <Border Width="78"
@@ -70,9 +86,11 @@
                 </DataGridTemplateColumn>
                 <DataGridTextColumn Header="站別" Binding="{Binding StationDisplay}" Width="92"/>
                 <DataGridTextColumn Header="檔名" Binding="{Binding FileName}" Width="2*"/>
-                <DataGridTextColumn Header="亮度" Binding="{Binding BrightnessDisplay}" Width="*"/>
-                <DataGridTextColumn Header="結果" Binding="{Binding Result}" Width="*" ElementStyle="{StaticResource ResultStatusCellStyle}"/>
-                <DataGridTextColumn Header="備註" Binding="{Binding Message}" Width="3*"/>
+                <DataGridTextColumn Header="亮度" Binding="{Binding BrightnessDisplay}" Width="86"/>
+                <DataGridTextColumn Header="下限" Binding="{Binding MinimumDisplay}" Width="86"/>
+                <DataGridTextColumn Header="上限" Binding="{Binding MaximumDisplay}" Width="86"/>
+                <DataGridTextColumn Header="結果" Binding="{Binding Result}" Width="86" ElementStyle="{StaticResource ResultStatusCellStyle}"/>
+                <DataGridTextColumn Header="備註" Binding="{Binding Message}" Width="2*"/>
             </DataGrid.Columns>
         </DataGrid>
     </Grid>
