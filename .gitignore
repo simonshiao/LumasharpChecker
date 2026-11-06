@@ -1,4 +1,4 @@
-﻿# LumasharpChecker-Slim: source-only GitHub branch.
+# LumasharpChecker-Slim: source-only GitHub branch.
 # Do not upload private original DIA images, models, runtime profiles or app binaries.
 
 # Published and diagnostic builds
@@ -13,6 +13,7 @@
 /Source/lumasharp_cognex_analyzer_ux_roi_export.py
 **/bin/
 **/obj/
+*_wpftmp.csproj
 **/.vs/
 **/packages/
 **/TestResults/

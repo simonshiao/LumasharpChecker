@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
@@ -80,6 +80,9 @@ public sealed class RecipeManager
         public string? OkDatabasePath { get; set; }
         public string? NgDatabasePath { get; set; }
         public string? AllDatabasePath { get; set; }
+        // Exported AOI galleries can use arbitrary status-folder names. When enabled,
+        // only images below a folder named OK are OK; all remaining images are NG.
+        public bool ClassifyDatabaseByOkFolder { get; set; }
         // 僅供原廠 AI 模型來源追溯，不表示 LumasharpChecker 可直接使用這些格式。
         public List<string> VendorAiModelFiles { get; set; } = new();
     }
@@ -562,17 +565,21 @@ public sealed class RecipeManager
             throw new ArgumentException("無效的圖庫分類。", nameof(category));
         var station = recipe.Stations.Single(s => s.Number == stationNumber);
         string? all = station.AllDatabasePath, ok = station.OkDatabasePath, ng = station.NgDatabasePath;
+        bool classifyByOkFolder = station.ClassifyDatabaseByOkFolder;
         string updated = recipe.UpdatedAt;
         // Removing a category also removes the explicit ALL override, so ALL cannot
         // silently reload the category that the operator just cleared.
         station.AllDatabasePath = null;
+        station.ClassifyDatabaseByOkFolder = false;
         if (category == "STATION" || category == "OK") station.OkDatabasePath = null;
         if (category == "STATION" || category == "NG") station.NgDatabasePath = null;
-        if (all == station.AllDatabasePath && ok == station.OkDatabasePath && ng == station.NgDatabasePath) return false;
+        if (all == station.AllDatabasePath && ok == station.OkDatabasePath && ng == station.NgDatabasePath
+            && classifyByOkFolder == station.ClassifyDatabaseByOkFolder) return false;
         try { SaveManifest(recipe); }
         catch
         {
             station.AllDatabasePath = all; station.OkDatabasePath = ok; station.NgDatabasePath = ng;
+            station.ClassifyDatabaseByOkFolder = classifyByOkFolder;
             recipe.UpdatedAt = updated;
             throw;
         }
@@ -711,6 +718,79 @@ public sealed class RecipeManager
         station.PatternFileName = Path.GetFileName(patternPath);
         station.IsConfigured = true;
         SaveManifest(recipe);
+    }
+
+    // 配方管理的「清理」不是永久刪除：使用同一 App 磁碟的資料夾移動，
+    // 原廠來源路徑及其他外部圖庫只是 manifest 參照，永不跟著移動或刪除。
+    public string RecipeCleanupArchivePath =>
+        Path.Combine(Directory.GetParent(BasePath)!.FullName, "recipe-cleanup-archive");
+
+    public sealed class CleanedRecipeInfo
+    {
+        public string DirectoryPath { get; set; } = "";
+        public string Name { get; set; } = "";
+        public string Id { get; set; } = "";
+        public string Display => Name + "  (" + Id.Substring(0, 8) + ")";
+    }
+
+    public string MoveRecipeToCleanupArchive(RecipeManifest recipe)
+    {
+        string path = Path.GetFullPath(GetRecipeDirectory(recipe));
+        string basePath = Path.GetFullPath(BasePath).TrimEnd(Path.DirectorySeparatorChar);
+        if (!string.Equals(Path.GetDirectoryName(path)?.TrimEnd(Path.DirectorySeparatorChar),
+                basePath, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("配方不在管理目錄中，已停止清理。");
+        if (!Directory.Exists(path) || !File.Exists(Path.Combine(path, "recipe.json")))
+            throw new FileNotFoundException("配方資料夾或 manifest 不存在。", path);
+        if ((File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0)
+            throw new InvalidOperationException("不允許清理連結資料夾。");
+
+        string root = RecipeCleanupArchivePath;
+        Directory.CreateDirectory(root);
+        string destination = Path.Combine(root,
+            recipe.Id + "_" + DateTime.Now.ToString("yyyyMMdd-HHmmss") + "_" + Guid.NewGuid().ToString("N").Substring(0, 8));
+        Directory.Move(path, destination);
+        return destination;
+    }
+
+    public List<CleanedRecipeInfo> ListCleanedRecipes()
+    {
+        if (!Directory.Exists(RecipeCleanupArchivePath)) return new List<CleanedRecipeInfo>();
+        var entries = new List<CleanedRecipeInfo>();
+        foreach (string directory in Directory.GetDirectories(RecipeCleanupArchivePath))
+        {
+            try
+            {
+                string manifest = Path.Combine(directory, "recipe.json");
+                if (!File.Exists(manifest)) continue;
+                var recipe = JsonSerializer.Deserialize<RecipeManifest>(File.ReadAllText(manifest), JsonOptions);
+                if (recipe == null || !Guid.TryParseExact(recipe.Id, "N", out _) ||
+                    !Path.GetFileName(directory).StartsWith(recipe.Id + "_", StringComparison.OrdinalIgnoreCase))
+                    continue;
+                entries.Add(new CleanedRecipeInfo { Name = recipe.Name, Id = recipe.Id, DirectoryPath = directory });
+            }
+            catch (IOException) { } catch (UnauthorizedAccessException) { } catch (JsonException) { }
+        }
+        return entries.OrderByDescending(e => e.DirectoryPath, StringComparer.Ordinal).ToList();
+    }
+
+    public RecipeManifest RestoreCleanedRecipe(CleanedRecipeInfo entry)
+    {
+        string root = Path.GetFullPath(RecipeCleanupArchivePath).TrimEnd(Path.DirectorySeparatorChar);
+        string source = Path.GetFullPath(entry.DirectoryPath);
+        if (!string.Equals(Path.GetDirectoryName(source)?.TrimEnd(Path.DirectorySeparatorChar),
+                root, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("指定資料夾不是配方保留區內的項目。");
+        string manifestPath = Path.Combine(source, "recipe.json");
+        var recipe = JsonSerializer.Deserialize<RecipeManifest>(File.ReadAllText(manifestPath), JsonOptions)
+            ?? throw new InvalidDataException("封存配方資料無法讀取。");
+        if (recipe.Id != entry.Id || !Guid.TryParseExact(recipe.Id, "N", out _))
+            throw new InvalidDataException("封存配方識別碼不一致。");
+        string target = GetRecipeDirectory(recipe);
+        if (Directory.Exists(target))
+            throw new IOException("目前已有相同 ID 的配方，請先處理衝突，沒有覆蓋任何檔案。");
+        Directory.Move(source, target);
+        return recipe;
     }
 
     public void DeleteRecipe(RecipeManifest recipe)

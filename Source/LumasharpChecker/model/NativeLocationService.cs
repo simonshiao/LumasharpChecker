@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.IO;
 using System.Xml.Linq;
 
@@ -12,6 +13,15 @@ internal static class NativeLocationService
         public string ImagePath { get; set; } = "";
         public int OriginX { get; set; }
         public int OriginY { get; set; }
+    }
+    internal static Frame LoadFullImageFrame(string image)
+    {
+        if (string.IsNullOrWhiteSpace(image) || !File.Exists(image))
+            throw new FileNotFoundException("請先載入要檢測的圖片。", image);
+        using var bitmap = Image.FromFile(image);
+        if (bitmap.Width < 2 || bitmap.Height < 2)
+            throw new InvalidDataException("影像尺寸不足，無法執行光源檢測。");
+        return new Frame { Bounds = new Rectangle(0, 0, bitmap.Width, bitmap.Height), ImagePath = image };
     }
     internal static async Task<System.Drawing.Rectangle> LocateAsync(string snapshot, int station, string image) => (await LocateFrameAsync(snapshot, station, image)).Bounds;
     internal static async Task<Frame> LocateFrameAsync(string snapshot, int station, string image)

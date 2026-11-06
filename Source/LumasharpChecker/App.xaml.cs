@@ -74,8 +74,9 @@ namespace LumasharpChecker
         }
         protected override void OnExit(ExitEventArgs e)
         {
+            // 只釋放常駐 Worker；WPF OnLoad 圖片由 RAM/GC 釋放。
+            // 不在關閉時執行磁碟暫存清理，保留原始影像及必要的檢測產物。
             LumasharpChecker.model.NativeRecipeBridge.ShutdownWorker();
-            LumasharpChecker.model.NativeRecipeBridge.CleanupSessionArtifacts();
             base.OnExit(e);
         }
 

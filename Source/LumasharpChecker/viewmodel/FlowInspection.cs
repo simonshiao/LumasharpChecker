@@ -83,7 +83,11 @@ partial class mainViewModel
             $"來源 OK {classifiedOk}／NG {classifiedNg}；新版流程判定 OK {completedOk}／NG {completedNg}", completedResults);
         var currentStationSlot = StationSlots.FirstOrDefault(slot => slot.Number == CurrentStationNumber);
         if (CurrentRecipe != null && currentStationSlot != null)
-            StoreResult(currentStationSlot, CurrentRecipe.Id, stationSummary);
+        {
+            string selection = LoadFlowSelection();
+            StoreResult(currentStationSlot, CurrentRecipe.Id, stationSummary,
+                updateOverviewPreview: selection.Length == 3 && selection[0] == '0');
+        }
         var last = rows[rows.Count - 1];
         SelectFlowImage(last.FilePath);
         var labeled = rows.Where(row => row.ReferenceClass is "OK" or "NG").ToArray();
@@ -120,6 +124,8 @@ partial class mainViewModel
 
     internal async Task<NativeLocationService.Frame> PrepareLightFrameAsync(string image)
     {
+        if (LightFlowSelection.Length == 3 && LightFlowSelection[0] == '0')
+            return NativeLocationService.LoadFullImageFrame(image);
         var recipe = CurrentRecipe ?? throw new InvalidOperationException("請先載入配方。");
         var report = await NativeRecipeBridge.RunPreLightAsync(recipe, CurrentStationNumber, image,
             AppDomain.CurrentDomain.BaseDirectory, "way", LightFlowSelection);
@@ -163,6 +169,8 @@ partial class mainViewModel
             total.Stop(); report.TotalMs = total.Elapsed.TotalMilliseconds;
             return report;
         }
+        if (selection.Length == 3 && selection[0] == '0')
+            UpdateFullImageModeOverviewPreview(recipe.Id, station, image);
         // Browsing/retesting is a preview. Batch results and yield belong only to a continuous run.
         var presentation = Stopwatch.StartNew();
         RecordFlowStatistics(row, accumulate);
@@ -201,14 +209,33 @@ partial class mainViewModel
         var total = Stopwatch.StartNew();
         LightInspectionSettings? settings = null;
         (double Min, double Max) limits = (0, 255);
+        bool fullImageRoi = selection.Length == 3 && selection[0] == '0';
         if (lightInspectionEnabled)
         {
             settings = LoadLightSettings(recipe, station);
-            if (!settings.HasRoi) throw new InvalidOperationException("請先在右側「光源檢測」拖曳 ROI 並儲存本站光源設定。");
-            limits = settings.EffectiveLimits();
+            bool hasRoi = fullImageRoi ? settings.HasFullImageRoi : settings.HasRoi;
+            if (!hasRoi) throw new InvalidOperationException(fullImageRoi
+                ? "請先在「光源檢測」以整張圖模式設定 ROI 並儲存本站設定。"
+                : "請先在「光源檢測」拖曳定位後 ROI 並儲存本站光源設定。");
+            limits = settings.EffectiveLimits(fullImageRoi);
         }
-        var report = await NativeRecipeBridge.RunPreLightAsync(recipe, station, image,
-            AppDomain.CurrentDomain.BaseDirectory, "face", selection).ConfigureAwait(false);
+        NativeRecipeBridge.StageReport report;
+        NativeLocationService.Frame? fullFrame = null;
+        if (fullImageRoi)
+        {
+            fullFrame = NativeLocationService.LoadFullImageFrame(image);
+            report = new NativeRecipeBridge.StageReport
+            {
+                Recipe = recipe.Name, Station = station, Image = image, Exit = 0,
+                Locate = "SKIPPED_RECIPE_OFF", SelectWay = "SKIPPED_RECIPE_OFF", SelectFace = "SKIPPED_RECIPE_OFF",
+                OutputImage = image, Width = fullFrame.Bounds.Width, Height = fullFrame.Bounds.Height
+            };
+        }
+        else
+        {
+            report = await NativeRecipeBridge.RunPreLightAsync(recipe, station, image,
+                AppDomain.CurrentDomain.BaseDirectory, "face", selection).ConfigureAwait(false);
+        }
         if (report.IsConfigurationError)
         {
             report.Light = "NOT_RUN";
@@ -216,6 +243,7 @@ partial class mainViewModel
         }
         var row = new TestImageResultRow { FilePath = image, FileName = Path.GetFileName(image), InspectionPipeline = "新版流程", BrightnessMeasured = false, IncludeSharpness = false,
             ReferenceClass = GetReferenceClassForImage(image),
+            BrightnessBaseValue = lightInspectionEnabled ? (fullImageRoi ? settings!.FullImageBaseValue : settings!.BaseValue) : null,
             BrightnessMin = limits.Min, BrightnessMax = limits.Max, BrightnessDeltaPercent = double.NaN,
             IsMatched = report.Exit == 0, Message = report.Summary + " " + report.Error };
         if (report.Exit != 0)
@@ -229,7 +257,7 @@ partial class mainViewModel
         NativeLocationService.Frame frame;
         try
         {
-            frame = CheckedFrame(report);
+            frame = fullFrame ?? CheckedFrame(report);
         }
         catch (Exception ex)
         {
@@ -262,7 +290,7 @@ partial class mainViewModel
         System.Drawing.Rectangle roi;
         try
         {
-            roi = settings!.GetRoi(frame.Bounds);
+            roi = fullImageRoi ? settings!.GetFullImageRoi(frame.Bounds) : settings!.GetRoi(frame.Bounds);
         }
         catch (Exception ex)
         {
@@ -277,10 +305,11 @@ partial class mainViewModel
         var timer = Stopwatch.StartNew();
         try
         {
-            row.Brightness = LightBrightnessMeasurement.Measure(frame, settings);
+            row.Brightness = LightBrightnessMeasurement.Measure(frame, settings, fullImageRoi);
             row.BrightnessMeasured = true;
             row.BrightnessSafe = row.Brightness >= limits.Min && row.Brightness <= limits.Max;
-            row.BrightnessDeltaPercent = settings.BaseValue > 0 ? (row.Brightness / settings.BaseValue - 1) * 100 : double.NaN;
+            double baseline = fullImageRoi ? settings.FullImageBaseValue : settings.BaseValue;
+            row.BrightnessDeltaPercent = baseline > 0 ? (row.Brightness / baseline - 1) * 100 : double.NaN;
         }
         catch (Exception ex)
         {

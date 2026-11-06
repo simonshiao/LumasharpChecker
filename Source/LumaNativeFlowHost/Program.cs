@@ -342,6 +342,9 @@ internal static class Program
     private static int Finish(string path, int code)
     {
         State["exit"] = code;
+        // Worker 的檢測結果已由 Main() 透過 stdout JSON line 回傳。
+        // 常駐模式無須再寫入一份 flow-*.json 檔案。
+        if (WorkerMode) return code;
         try
         {
             if (!IsAllowedResultPath(path))

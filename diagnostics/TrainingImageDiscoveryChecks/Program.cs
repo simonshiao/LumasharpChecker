@@ -1,4 +1,4 @@
-﻿using LumasharpChecker.model;
+using LumasharpChecker.model;
 class Program {
  static void Check(bool ok,string text){if(!ok)throw new Exception(text);Console.WriteLine("PASS "+text);}
  static void Image(string root,string path){string f=Path.Combine(root,path,"one.PNG");Directory.CreateDirectory(Path.GetDirectoryName(f)!);File.WriteAllBytes(f,new byte[]{0});}

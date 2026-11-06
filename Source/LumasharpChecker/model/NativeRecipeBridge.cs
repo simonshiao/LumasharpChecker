@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -553,8 +553,8 @@ namespace LumasharpChecker.model
                     throw new ArgumentException("無效的工具選擇。", nameof(selection));
                 if (string.IsNullOrWhiteSpace(image) || !File.Exists(image))
                     throw new FileNotFoundException("請先載入本站 OK DB 圖片。", image);
-                // Defer old probe cleanup until a user starts an inspection. Startup stays read-only.
-                CleanupStaleArtifacts();
+                // 一般檢測不執行跨工作階段的磁碟刪除。
+                // 原生定位仍需要輸出處理後 BMP；待原生端支援記憶體影像通訊後再移除。
                 var total = Stopwatch.StartNew();
                 PreparedRecipe native = Prepare(recipe, appBase);
                 double preparationMs = total.Elapsed.TotalMilliseconds;

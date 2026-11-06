@@ -18,6 +18,12 @@ public partial class RecipeManagerWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 
+    private void CleanupRecipes_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not mainViewModel viewModel) return;
+        new RecipeCleanupWindow(this, viewModel).ShowDialog();
+    }
+
     private void RecipeItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
         if (sender is ListBoxItem { DataContext: RecipeManager.RecipeManifest recipe }

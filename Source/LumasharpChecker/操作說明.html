@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>LumasharpChecker 操作說明</title>
+  <style>
+    :root{--ink:#12314b;--muted:#55718a;--blue:#0789cf;--cyan:#21bce7;--line:#d6e6f0;--panel:#fff;--wash:#f2f9fd;--navy:#0b2334;--green:#168557;--amber:#a65a08;--red:#b33442;--shadow:0 12px 36px #12314b12}
+    *{box-sizing:border-box}html{scroll-behavior:smooth;scroll-padding-top:28px}body{margin:0;background:linear-gradient(135deg,#eaf7fd,#f7fbfe 42%,#edf7fb);color:var(--ink);font:15px/1.72 "Microsoft JhengHei UI","Microsoft JhengHei",sans-serif;text-wrap:pretty}
+    a{color:#087db9;text-decoration:none}a:hover{text-decoration:underline}.shell{max-width:1240px;margin:0 auto;padding:34px 22px 70px}.hero{position:relative;overflow:hidden;padding:38px 42px;border-radius:20px;color:#fff;background:linear-gradient(115deg,#07304c,#07527a 58%,#087fa7);box-shadow:var(--shadow)}.hero:after{content:"";position:absolute;width:350px;height:350px;border:1px solid #ffffff28;border-radius:50%;right:-90px;top:-190px;box-shadow:0 0 0 34px #ffffff0b,0 0 0 68px #ffffff08}.eyebrow{font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:#9ce8fa;font-weight:700}.hero h1{margin:9px 0 4px;font-size:clamp(27px,4vw,40px);line-height:1.25}.hero p{max-width:760px;margin:12px 0 0;color:#d8edf6}.version{position:absolute;right:28px;bottom:25px;border:1px solid #ffffff4a;border-radius:99px;padding:5px 12px;font-size:12px;color:#e6f8ff}.layout{display:grid;grid-template-columns:240px minmax(0,1fr);gap:24px;margin-top:24px;align-items:start}.nav{position:sticky;top:18px;border:1px solid var(--line);border-radius:16px;background:#ffffffd9;padding:16px;box-shadow:var(--shadow)}.nav strong{display:block;margin:0 8px 9px;font-size:12px;color:var(--muted);letter-spacing:.08em}.nav a{display:block;padding:8px 10px;border-radius:9px;font-size:13px;color:#315570}.nav a:hover{background:#eaf7fd;text-decoration:none;color:#066da7}.content{min-width:0}.section{margin-bottom:18px;padding:25px 28px;border:1px solid var(--line);border-radius:16px;background:var(--panel);box-shadow:var(--shadow)}.section h2{display:flex;align-items:center;gap:11px;margin:0 0 15px;font-size:21px;line-height:1.4}.section h2:before{content:"";width:4px;height:24px;border-radius:6px;background:linear-gradient(var(--cyan),var(--blue))}.section h3{margin:20px 0 7px;font-size:16px}.section p{margin:8px 0}.section ul,.section ol{padding-left:22px;margin:9px 0}.section li{margin:5px 0}.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:13px}.card{padding:15px 17px;border:1px solid var(--line);border-radius:12px;background:var(--wash)}.card b{display:block;margin-bottom:4px}.key{display:inline-block;border:1px solid #c8e2f0;border-radius:6px;padding:0 7px;background:#effaff;color:#075783;font-size:13px;font-weight:700}.callout{margin:13px 0;padding:12px 15px;border-left:3px solid var(--blue);border-radius:0 9px 9px 0;background:#edf8fd;color:#315570}.callout.warn{border-color:#e2a13a;background:#fff8e9;color:#744806}.callout.ok{border-color:#35a97b;background:#effaf4;color:#256449}.table-wrap{overflow-x:auto;margin:12px 0}table{width:100%;border-collapse:collapse;min-width:560px;font-size:13px}th,td{text-align:left;vertical-align:top;padding:9px 11px;border-bottom:1px solid var(--line)}th{background:#eff8fc;color:#315570;font-weight:700}.pill{display:inline-block;border-radius:99px;padding:1px 8px;font-size:12px;font-weight:700}.pill.green{background:#e9f8ef;color:var(--green)}.pill.orange{background:#fff4df;color:var(--amber)}.footer{text-align:center;padding:14px;color:var(--muted);font-size:12px}.toplink{float:right;font-size:12px;font-weight:600}.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;counter-reset:step;margin-top:15px}.flow div{position:relative;padding:12px 10px 12px 36px;border:1px solid var(--line);border-radius:10px;background:var(--wash);font-size:13px}.flow div:before{counter-increment:step;content:counter(step);position:absolute;left:10px;top:11px;width:19px;height:19px;border-radius:50%;display:grid;place-items:center;color:white;background:var(--blue);font-size:11px;font-weight:bold}
+    @media(max-width:850px){.layout{grid-template-columns:1fr}.nav{position:static;display:flex;gap:3px;overflow:auto;white-space:nowrap;padding:9px}.nav strong{display:none}.nav a{display:inline-block}.flow{grid-template-columns:repeat(2,minmax(0,1fr))}.version{position:static;display:inline-block;margin-top:16px}.hero{padding:29px 25px}.section{padding:21px}}
+    @media(max-width:560px){.shell{padding:14px 10px 40px}.hero{border-radius:14px;padding:25px 19px}.cards{grid-template-columns:1fr}.flow{grid-template-columns:1fr}.section h2{font-size:19px}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+    @media print{body{background:#fff}.shell{max-width:none;padding:0}.hero,.section,.nav{box-shadow:none}.layout{grid-template-columns:1fr}.nav{position:static;display:grid;grid-template-columns:repeat(3,1fr)}.nav strong{grid-column:1/-1}.hero{break-inside:avoid}.section{break-inside:avoid-page}.toplink{display:none}}
+  </style>
+</head>
+<body>
+  <main class="shell" id="top">
+    <header class="hero">
+      <div class="eyebrow">LumasharpChecker · 點檢操作</div>
+      <h1>操作說明</h1>
+      <p>依序完成配方、圖庫、各站檢測設定與測試；品保可從 Excel 報表查看每張圖片的光源量測值及允收範圍。本頁隨程式安裝，可離線閱讀。</p>
+      <span class="version">適用版本 1.1.0.27</span>
+    </header>
+    <div class="layout">
+      <nav class="nav" aria-label="本頁目錄">
+        <strong>快速前往</strong>
+        <a href="#toolbar">上方工具列</a><a href="#start">開始點檢</a><a href="#station">設定站別</a><a href="#localization">有定位／無定位</a><a href="#light">光源 ROI 與基準</a><a href="#inspect">執行檢測</a><a href="#results">查看結果與報表</a><a href="#troubleshoot">常見狀況</a>
+      </nav>
+      <div class="content">
+        <section class="section" id="toolbar">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>上方工具列</h2>
+          <div class="table-wrap"><table><thead><tr><th>按鈕</th><th>用途</th></tr></thead><tbody>
+            <tr><td><span class="key">配方</span></td><td>新增、載入或匯入產品配方。從外觀機預設位置匯入用「自動匯入」；其他位置用「其他匯入」。</td></tr>
+            <tr><td><span class="key">圖庫</span></td><td>設定目前配方各站 OK／NG／ALL 圖片資料夾。匯入設備匯出的站別資料夾也在此處。</td></tr>
+            <tr><td><span class="key">報表</span></td><td>匯出目前配方已有檢測結果的 Excel 報表。</td></tr>
+            <tr><td><span class="key">結果</span></td><td>檢視目前配方全部站別的逐張檢測結果，可篩選結果及縮圖。</td></tr>
+            <tr><td><span class="key">說明</span></td><td>在預設瀏覽器開啟這份離線 HTML 操作說明。</td></tr>
+            <tr><td><span class="key">齒輪</span></td><td>程式與站別設定；總覽右側的齒輪可調整多站最新圖片點檢的來源和各站張數。</td></tr>
+          </tbody></table></div>
+        </section>
+
+        <section class="section" id="start">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>開始點檢</h2>
+          <div class="flow"><div>按上方「配方」載入或匯入 Recipe</div><div>按「圖庫」確認各站圖片來源</div><div>點選總覽站卡，檢查站別設定</div><div>選擇要執行的流程和光源檢測</div><div>執行單顆或連續點檢</div></div>
+          <div class="cards">
+            <div class="card"><b>選擇配方</b>配方管理視窗可新增、載入、刪除或從設備來源匯入配方。載入後，名稱會顯示在視窗上方；各配方的站別參數分開保存。</div>
+            <div class="card"><b>設定圖庫</b>在「圖庫」設定各站 OK／NG 圖片來源。總覽卡上的核取方塊用來選擇本次要點檢的站別；未勾選的站別不參加多站點檢。</div>
+          </div>
+          <div class="callout">若要讀取設備匯出的數字站別資料夾，開啟「圖庫」後使用左側「讀取」，選擇包含 1、2…站別資料夾的目錄並確認預覽。讀取只登錄原圖路徑，不搬移圖片；名稱為 OK 的資料夾標記 OK，其餘類別標記 NG。</div>
+        </section>
+
+        <section class="section" id="station">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>設定站別與檢測流程</h2>
+          <ol>
+            <li>在「總覽」點要設定的站別卡，進入本站 AOI 工具頁。</li>
+            <li>在右側流程面板，確認是否勾選「啟用定位」、「選向」、「選面」及光源檢測的「使用」。設定會依配方與站別保存。</li>
+            <li>點「定位」或「選向／選面」工具卡，可開啟相應設定。需要量測光源時點「光源檢測」，調整 ROI 和允收規格後按「儲存本站設定」。</li>
+            <li>光源檢測是否納入正式判定，由流程面板的「使用」控制。取消時會略過光源步驟，並依程式流程標示為 Retest。</li>
+          </ol>
+          <div class="callout warn">「儲存樣本」會用目前圖片建立該模式的亮度基準及樣本還原點；一般「儲存本站設定」則保存 ROI 和允收設定。兩種用途不同。</div>
+        </section>
+
+        <section class="section" id="localization">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>有定位與無定位</h2>
+          <div class="table-wrap"><table><thead><tr><th>流程面板設定</th><th>光源量測範圍</th><th>使用情境</th></tr></thead><tbody>
+            <tr><td>勾選「啟用定位」</td><td>定位後的影像區域，使用有定位 ROI 與基準。</td><td>物件位置會改變，需要先定位再量測。</td></tr>
+            <tr><td>取消勾選「啟用定位」</td><td>整張原圖作為座標，使用獨立的無定位 ROI 與基準。</td><td>原圖位置固定，或需要直接在原圖指定量測區域。</td></tr>
+          </tbody></table></div>
+          <p>兩種模式的 ROI、基準亮度與樣本還原點分開保存。切換定位勾選只切換目前使用模式，不會覆蓋另一組設定；無定位樣本也不會取代有定位標準圖。</p>
+          <div class="callout ok">無定位設定方式：取消「啟用定位」→ 開啟「光源檢測」→ 在整張原圖調整 ROI → 按「儲存無定位樣本」建立基準，或按「儲存本站設定」先保存 ROI。之後可用「測試本張」量測。</div>
+        </section>
+
+        <section class="section" id="light">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>設定光源 ROI 與基準</h2>
+          <ol>
+            <li>在總覽選擇站別，進入 AOI 工具頁。依要設定的模式勾選或取消「啟用定位」，再開啟「光源檢測」。</li>
+            <li>確認畫面上方顯示「有定位 ROI」或「無定位 ROI」，在圖片上拖曳 ROI 邊框與控制點，將框放在要量測的區域。</li>
+            <li>按「測試本張」查看目前 HSV V 亮度。百分比允收模式下，以「儲存有定位樣本」或「儲存無定位樣本」計算目前模式的基準亮度。</li>
+            <li>選擇「百分比偏差」並設定上下偏差，或選「固定上下限」輸入亮度範圍。確認有效允收範圍後按「儲存本站設定」。</li>
+          </ol>
+          <div class="cards">
+            <div class="card"><b>儲存有定位樣本／無定位樣本</b>使用目前圖片和目前模式 ROI 計算基準，並保存該類樣本還原點。按鈕會隨定位模式切換。</div>
+            <div class="card"><b>還原有定位樣本／無定位樣本</b>只列出目前模式的還原點，可還原之前保存的圖片與光源參數。</div>
+            <div class="card"><b>重設 ROI</b>依目前模式重新建立預設框。調整後仍須儲存，才會寫入目前 Recipe。</div>
+            <div class="card"><b>基準尚未設定</b>仍可保存 ROI 與允收範圍，也能量測 ROI；百分比模式在有效基準建立前不會判定 OK／NG。</div>
+          </div>
+        </section>
+
+        <section class="section" id="inspect">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>執行檢測</h2>
+          <h3>總覽上的多站點檢</h3>
+          <ul>
+            <li>先在總覽卡勾選本次要執行的站別。</li>
+            <li>「連續測試」依上方 ALL DB／OK DB／NG DB 選擇，逐站檢測勾選站別的全部圖片；尚未校準的站會跳過。</li>
+            <li>「單顆點檢」使用齒輪內設定的各站來源與張數，檢測勾選站別最新的圖片。指定的 OK／NG 圖庫沒有圖片時，程式會回退使用 ALL DB。</li>
+            <li>點「停止」可中止多站測試。執行中請等候完成，或先按停止，再切換配方或圖庫設定。</li>
+          </ul>
+          <h3>本站 AOI 工具頁</h3>
+          <ul>
+            <li>使用上方 OK DB、NG DB 或 ALL DB 載入目前站圖片；也可選擇資料夾或單張圖片。</li>
+            <li>選擇資料夾或單張圖片只會載入清單／預覽。按工具面板的「連續檢測」開始依序執行目前清單；再次按下可停止。</li>
+            <li>檢測單張目前圖片可用流程面板「連續檢測」，清單只有一張時只會執行該張。</li>
+          </ul>
+          <div class="callout">本站流程會依序執行已啟用的定位、選向、選面與光源檢測。定位未勾選時會略過定位相關流程；若光源已啟用，仍會以整張圖的無定位 ROI 量測。</div>
+        </section>
+
+        <section class="section" id="results">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>查看結果與匯出報表</h2>
+          <ul>
+            <li>上方「結果」開啟目前配方所有站別的逐張結果；本站 AOI 工具卡的「結果」只查看本站。</li>
+            <li>按上方「報表」匯出目前配方已有結果的 Excel 檔。檔案存到 <span class="key">D:\光源點檢\年份</span>，檔名含日期與配方名稱，完成後會自動開啟。</li>
+            <li>多站報表的「多站總覽」提供各站圖片數、OK／NG 與良率；「多站檢測紀錄」逐張列出品保所需的光源數據。</li>
+          </ul>
+          <div class="table-wrap"><table><thead><tr><th>多站檢測紀錄欄位</th><th>說明</th></tr></thead><tbody>
+            <tr><td>站別、檔名</td><td>本筆量測所屬站別及圖片。</td></tr>
+            <tr><td>基準亮度、亮度實測值</td><td>檢測當時該模式的基準及量測結果；未啟用或未量測時會標示狀態。</td></tr>
+            <tr><td>下限、上限、差異(%)</td><td>當次有效允收範圍及相對基準的差異。</td></tr>
+            <tr><td>光源判定</td><td>光源步驟的判定結果；未執行時會標示未執行。</td></tr>
+          </tbody></table></div>
+          <p>每站亮度頁另有該站的 OK／NG、良率、光源規格與亮度分布圖。未完成檢測的站別不會建立報表工作表。</p>
+        </section>
+
+        <section class="section" id="troubleshoot">
+          <a class="toplink" href="#top">回到頂端 ↑</a>
+          <h2>常見狀況</h2>
+          <h3>總覽站卡顯示「未設定」或連續測試略過該站</h3>
+          <p>進入本站 AOI 工具頁確認參數與圖庫；需量測光源時設定該定位模式的 ROI 和基準。完成後儲存本站光源設定，並確認總覽卡的站別核取方塊已勾選。</p>
+          <h3>百分比模式只能量測，沒有 OK／NG</h3>
+          <p>目前定位模式尚無有效基準。建立對應的有定位或無定位樣本基準，再儲存本站設定。固定上下限模式可在輸入有效範圍後直接判定。</p>
+          <h3>測試結果沒有光源數值</h3>
+          <p>確認本站流程面板「光源檢測」的「使用」已勾選，並且目前配方、站別及定位模式有各自的 ROI 設定。</p>
+          <h3>站別沒有圖片可測</h3>
+          <p>按上方「圖庫」檢查該站 OK／NG／ALL 來源路徑是否正確，並確認來源資料夾內有可讀圖片。</p>
+        </section>
+        <div class="footer">LumasharpChecker 1.1.0.27 · 離線操作說明</div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

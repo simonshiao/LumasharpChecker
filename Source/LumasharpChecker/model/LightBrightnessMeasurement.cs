@@ -7,9 +7,9 @@ namespace LumasharpChecker.model;
 
 internal static class LightBrightnessMeasurement
 {
-    internal static double Measure(NativeLocationService.Frame frame, LightInspectionSettings settings)
+    internal static double Measure(NativeLocationService.Frame frame, LightInspectionSettings settings, bool fullImage = false)
     {
-        var roi = settings.GetRoi(frame.Bounds);
+        var roi = fullImage ? settings.GetFullImageRoi(frame.Bounds) : settings.GetRoi(frame.Bounds);
         if (TryMeasureBitmap(frame.ImagePath, roi, out double brightness)) return brightness;
         using var image = new Mat();
         CvInvoke.Imdecode(File.ReadAllBytes(frame.ImagePath), ImreadModes.Color, image);

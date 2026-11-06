@@ -18,6 +18,7 @@ internal static class LightSampleHistory
         public string RecipeId { get; set; } = "";
         public int Station { get; set; }
         public string OriginalName { get; set; } = "";
+        public bool? FullImageMode { get; set; }
         public string ImageHash { get; set; } = "";
         public string SettingsHash { get; set; } = "";
         public DateTime CreatedUtc { get; set; }
@@ -29,6 +30,30 @@ internal static class LightSampleHistory
     internal static string Folder(string recipeDirectory, int station)
         => Path.Combine(recipeDirectory, "light-sample-history", RecipeManager.GetStationDirectoryName(station));
 
+    internal static string Folder(string recipeDirectory, int station, bool fullImageMode)
+        => Path.Combine(Folder(recipeDirectory, station), fullImageMode ? "without-localization" : "with-localization");
+
+    internal static void ImportLegacyArchives(string directory, string recipeId, int station, bool fullImageMode)
+    {
+        string legacyDirectory = Path.GetDirectoryName(directory)!;
+        if (!Directory.Exists(legacyDirectory)) return;
+        foreach (string archive in Directory.GetFiles(legacyDirectory, "sample-*.zip"))
+        {
+            try
+            {
+                var sample = Read(archive, recipeId, station, fullImageMode);
+                if (sample.FullImageMode != fullImageMode) continue;
+                Directory.CreateDirectory(directory);
+                string destination = Path.Combine(directory, Path.GetFileName(archive));
+                if (!File.Exists(destination)) File.Copy(archive, destination);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException or JsonException or ArgumentException)
+            {
+                // Keep legacy or invalid archives untouched; only compatible, verified samples are copied.
+            }
+        }
+    }
+
     private static string Hash(byte[] bytes)
     {
         using var sha = SHA256.Create();
@@ -37,23 +62,23 @@ internal static class LightSampleHistory
 
     private static byte[] SettingsBytes(LightInspectionSettings settings) => JsonSerializer.SerializeToUtf8Bytes(settings);
 
-    internal static Sample Capture(string recipeId, int station, string image, LightInspectionSettings settings)
+    internal static Sample Capture(string recipeId, int station, string image, LightInspectionSettings settings, bool fullImageMode)
     {
         settings.Validate();
-        if (!settings.HasRoi) throw new InvalidDataException("樣本缺少光源 ROI。");
+        if (fullImageMode ? !settings.HasFullImageRoi : !settings.HasRoi) throw new InvalidDataException("樣本缺少目前模式的光源 ROI。");
         string extension = Path.GetExtension(image).ToLowerInvariant();
         if (!new[] { ".bmp", ".png", ".jpg", ".jpeg", ".tif", ".tiff" }.Contains(extension))
             throw new InvalidDataException("不支援的樣本圖片格式。");
         var bytes = File.ReadAllBytes(image);
         if (bytes.Length == 0 || bytes.LongLength > 512L * 1024 * 1024) throw new InvalidDataException("樣本圖片大小無效。");
-        settings.EffectiveLimits();
+        settings.EffectiveLimits(fullImageMode);
         var copy = JsonSerializer.Deserialize<LightInspectionSettings>(SettingsBytes(settings))!;
-        return new Sample { RecipeId = recipeId, Station = station, OriginalName = Path.GetFileName(image),
+        return new Sample { RecipeId = recipeId, Station = station, OriginalName = Path.GetFileName(image), FullImageMode = fullImageMode,
             Image = bytes, ImageHash = Hash(bytes), SettingsHash = Hash(SettingsBytes(copy)),
             Settings = copy, CreatedUtc = DateTime.UtcNow };
     }
 
-    internal static Sample Read(string archive, string recipeId, int station)
+    internal static Sample Read(string archive, string recipeId, int station, bool? legacyModeFallback = null)
     {
         using var zip = ZipFile.OpenRead(archive);
         if (zip.Entries.Count != 2) throw new InvalidDataException("樣本還原點內容不完整。");
@@ -61,6 +86,10 @@ internal static class LightSampleHistory
         if (metadata.Length > 1024 * 1024) throw new InvalidDataException("樣本資訊過大。");
         Sample sample;
         using (var input = metadata.Open()) sample = JsonSerializer.Deserialize<Sample>(input) ?? throw new InvalidDataException("無法讀取樣本資訊。");
+        bool fullImageMode = sample.FullImageMode
+            ?? legacyModeFallback
+            ?? (!sample.Settings.HasRoi && sample.Settings.HasFullImageRoi);
+        sample.FullImageMode = fullImageMode;
         if (sample.Version != 1 || sample.RecipeId != recipeId || sample.Station != station ||
             string.IsNullOrWhiteSpace(sample.OriginalName) || sample.OriginalName != Path.GetFileName(sample.OriginalName))
             throw new InvalidDataException("還原點不屬於目前配方與站別。");
@@ -72,8 +101,9 @@ internal static class LightSampleHistory
         using (var input = image.Open())
         using (var bytes = new MemoryStream()) { input.CopyTo(bytes); sample.Image = bytes.ToArray(); }
         sample.Settings.Validate();
-        sample.Settings.EffectiveLimits();
-        if (!sample.Settings.HasRoi || Hash(sample.Image) != sample.ImageHash || Hash(SettingsBytes(sample.Settings)) != sample.SettingsHash)
+        sample.Settings.EffectiveLimits(fullImageMode);
+        bool hasModeRoi = fullImageMode ? sample.Settings.HasFullImageRoi : sample.Settings.HasRoi;
+        if (!hasModeRoi || Hash(sample.Image) != sample.ImageHash || Hash(SettingsBytes(sample.Settings)) != sample.SettingsHash)
             throw new InvalidDataException("樣本還原點校驗失敗，未修改目前設定。");
         return sample;
     }
@@ -81,12 +111,13 @@ internal static class LightSampleHistory
     // Call inside FileTransaction, so failed archive publication rolls back the active sample too.
     internal static bool Save(string directory, Sample sample, Action<Sample, string> apply)
     {
+        ImportLegacyArchives(directory, sample.RecipeId, sample.Station, sample.FullImageMode == true);
         Directory.CreateDirectory(directory);
         string? latest = Directory.GetFiles(directory, "sample-*.zip").OrderByDescending(Path.GetFileName, StringComparer.Ordinal).FirstOrDefault();
         bool duplicate = false;
         if (latest != null)
         {
-            var previous = Read(latest, sample.RecipeId, sample.Station);
+            var previous = Read(latest, sample.RecipeId, sample.Station, sample.FullImageMode);
             duplicate = previous.ImageHash == sample.ImageHash && previous.SettingsHash == sample.SettingsHash;
         }
         string pending = Path.Combine(directory, ".pending-" + Guid.NewGuid().ToString("N"));
@@ -100,7 +131,7 @@ internal static class LightSampleHistory
                     using (var output = zip.CreateEntry("image" + Path.GetExtension(sample.OriginalName).ToLowerInvariant(), CompressionLevel.Optimal).Open())
                         output.Write(sample.Image, 0, sample.Image.Length);
                 }
-                Read(pending, sample.RecipeId, sample.Station);
+                Read(pending, sample.RecipeId, sample.Station, sample.FullImageMode);
             }
             Apply(sample, directory, apply);
             if (!duplicate) File.Move(pending, Path.Combine(directory, "sample-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fffffff") + "-" + Guid.NewGuid().ToString("N") + ".zip"));

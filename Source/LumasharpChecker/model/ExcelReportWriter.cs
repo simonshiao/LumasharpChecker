@@ -50,7 +50,8 @@ namespace LumasharpChecker.model
 
             var sheets = new List<WorksheetData>
             {
-                new("多站總覽", BuildMultiStationOverviewRows(stationRows), new List<ChartData>())
+                new("多站總覽", BuildMultiStationOverviewRows(stationRows), new List<ChartData>()),
+                new("多站檢測紀錄", BuildMultiStationRecordRows(stationRows), new List<ChartData>())
             };
             foreach (var station in stationRows)
             {
@@ -132,6 +133,35 @@ namespace LumasharpChecker.model
                 totalNg.ToString(CultureInfo.InvariantCulture),
                 totalImages == 0 ? "0.00%" : $"{totalOk * 100.0 / totalImages:F2}%"
             });
+            return rows;
+        }
+
+        private static List<string[]> BuildMultiStationRecordRows(IReadOnlyList<StationExcelReportData> stations)
+        {
+            var rows = new List<string[]>
+            {
+                new[] { "站別", "檔名", "基準亮度", "亮度實測值", "下限", "上限", "差異(%)", "光源判定" }
+            };
+
+            foreach (var station in stations)
+            foreach (var result in station.Results)
+            {
+                rows.Add(new[]
+                {
+                    $"第 {station.StationNumber:00} 站",
+                    result.FileName,
+                    result.LightInspectionSkipped ? "未啟用"
+                    : result.BrightnessBaseValue is > 0
+                        ? FormatNumber(result.BrightnessBaseValue.Value)
+                        : "未設定",
+                    result.BrightnessMeasured ? FormatNumber(result.Brightness) : "未量測",
+                    result.LightInspectionSkipped ? "未執行" : result.BrightnessMin.HasValue ? FormatNumber(result.BrightnessMin.Value) : "—",
+                    result.LightInspectionSkipped ? "未執行" : result.BrightnessMax.HasValue ? FormatNumber(result.BrightnessMax.Value) : "—",
+                    result.BrightnessMeasured ? FormatPercent(result.BrightnessDeltaPercent) : "—",
+                    result.BrightnessResult
+                });
+            }
+
             return rows;
         }
 

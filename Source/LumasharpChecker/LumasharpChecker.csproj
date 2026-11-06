@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -11,15 +11,16 @@
     <UseWPF>true</UseWPF>
 	<PublishSingleFile>false</PublishSingleFile>
 	<GeneratePackageOnBuild>False</GeneratePackageOnBuild> <!-- 可选：生成单个文件 -->
-	<Version>1.1.0.18</Version>
-	<AssemblyVersion>1.1.0.18</AssemblyVersion>
-	<FileVersion>1.1.0.18</FileVersion>
-	<InformationalVersion>1.1.0.18</InformationalVersion>
+	<Version>1.1.0.37</Version>
+	<AssemblyVersion>1.1.0.37</AssemblyVersion>
+	<FileVersion>1.1.0.37</FileVersion>
+	<InformationalVersion>1.1.0.37</InformationalVersion>
 	<ApplicationIcon>Icons\CyntecAppIcon.ico</ApplicationIcon>
 	<Product>$(AssemblyName)</Product>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" Version="1.0.3" PrivateAssets="all" />
     <ProjectReference Include="..\InspToolsLocator\InspToolsLocator.csproj" ReferenceOutputAssembly="false" />
     <None Remove="Icons\Computers.ico" />
   </ItemGroup>
@@ -37,6 +38,13 @@
 
   <ItemGroup>
     <Content Include="Icons\CyntecAppIcon.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="操作說明.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
   </ItemGroup>
 
   <ItemGroup>

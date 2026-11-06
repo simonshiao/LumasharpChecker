@@ -403,13 +403,7 @@ public class ProfileManager
 
     public static BitmapImage LoadBitmapFromPath(string imagePath)
     {
-        BitmapImage bitmap = new BitmapImage();
-        bitmap.BeginInit();
-        bitmap.UriSource = new Uri(imagePath, UriKind.RelativeOrAbsolute);
-        bitmap.CacheOption = BitmapCacheOption.OnLoad; // 强制加载到内存
-        bitmap.EndInit();
-        bitmap.Freeze();
-        return bitmap;
+        return InMemoryImageLoader.Load(imagePath);
     }
 
     private static string? ResolveImagePath(string? imagePath, string? profileDirectory)

@@ -1,4 +1,4 @@
-﻿# LumasharpChecker Agent 接手規則
+# LumasharpChecker Agent 接手規則
 
 先讀 `README.md`、`HANDOFF.md`，再操作本專案。
 

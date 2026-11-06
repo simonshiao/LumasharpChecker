@@ -80,7 +80,7 @@ namespace LumasharpChecker.view
             Content = "使用", IsChecked = true, FontSize = 9,
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "勾選：執行亮度檢測；取消勾選：略過亮度判定，結果列為 Retest"
+            ToolTip = "勾選：本次流程執行光源檢測；取消勾選：略過光源並列為 Retest。此選項不影響有定位／無定位樣本的設定與保存。"
         };
         public event Action<string>? PipelineStatusChanged;
         public void SetPipelineStatus(string message) => PipelineStatusChanged?.Invoke(message);
@@ -147,7 +147,7 @@ namespace LumasharpChecker.view
             grid.Children.Add(ToolCard("選面", "\uE77B", "使用原生 SelectFaceTool 檢查目前站別／圖片", true,
                 () => SelectFaceRequested?.Invoke(this, EventArgs.Empty)));
             // 此版本聚焦光源點檢；保留前置定位工具與光源結果節點。
-            grid.Children.Add(ToolCard("光源檢測", "\uEA80", "取代原廠流程的燈泡節點；原生定位／選向／選面後使用 Luma 亮度檢測", true, () => LightRequested?.Invoke(this, EventArgs.Empty)));
+        grid.Children.Add(ToolCard("光源檢測", "\uEA80", "定位啟用時使用定位後 ROI；定位未啟用時改用整張圖的獨立 ROI", true, () => LightRequested?.Invoke(this, EventArgs.Empty)));
             grid.Children.Add(ToolCard("結果", "\uE9D9", "查看本站檢測結果", true,
                 () => ResultsRequested?.Invoke(this, EventArgs.Empty)));
             int toolCount = grid.Children.Count;

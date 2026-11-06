@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.Input;
 using LumasharpChecker.model;
 using System;
 using System.Collections.Generic;
@@ -30,6 +30,7 @@ namespace LumasharpChecker.viewmodel
     partial class mainViewModel
     {
         private readonly Dictionary<(string RecipeId, int Station), StationRunSummary> _multiStationResults = new();
+        private readonly Dictionary<(string RecipeId, int Station), string> _overviewFullImagePreviewPaths = new();
         private CancellationTokenSource? _multiStationCancellation;
         private bool _isMultiStationTesting;
         public bool IsMultiStationTesting
@@ -150,15 +151,21 @@ namespace LumasharpChecker.viewmodel
                     try
                     {
                         selection = recipeManager.LoadFlowSelection(recipe, stationNumber);
-                        if (selection.Length != 3 || selection[0] != '1')
-                            throw new InvalidOperationException("原生流程必須啟用定位。請在該站勾選定位並儲存。");
+                        if (selection.Length != 3)
+                            throw new InvalidOperationException("本站流程工具設定格式無效，請重新儲存流程設定。");
                         lightInspectionEnabled = recipeManager.LoadLightInspectionEnabled(recipe, stationNumber);
+                        bool fullImageRoi = selection[0] == '0';
+                        if (fullImageRoi && !lightInspectionEnabled)
+                            throw new InvalidOperationException("本站未啟用定位或光源檢測，無可執行的檢查項目。");
                         if (lightInspectionEnabled)
                         {
                             lightSettings = LoadLightSettings(recipe, stationNumber);
-                            if (!lightSettings.HasRoi)
-                                throw new InvalidOperationException("尚未設定該站光源 ROI；請先到單站設定並儲存。");
-                            lightSettings.EffectiveLimits();
+                            bool hasRoi = fullImageRoi ? lightSettings.HasFullImageRoi : lightSettings.HasRoi;
+                            if (!hasRoi)
+                                throw new InvalidOperationException(fullImageRoi
+                                    ? "尚未設定該站整張圖光源 ROI；請先到單站設定並儲存。"
+                                    : "尚未設定該站定位後光源 ROI；請先到單站設定並儲存。");
+                            lightSettings.EffectiveLimits(fullImageRoi);
                         }
                     }
                     catch (Exception ex)
@@ -265,7 +272,7 @@ namespace LumasharpChecker.viewmodel
                         skipped++;
                         continue;
                     }
-                    StoreResult(slot, recipe.Id, result);
+                    StoreResult(slot, recipe.Id, result, updateOverviewPreview: selection[0] == '0');
                     totalOk += result.Ok;
                     totalNg += result.Ng;
                     totalRetest += result.Results.Count(row => row.IsRetest);
@@ -346,11 +353,18 @@ namespace LumasharpChecker.viewmodel
             catch { return DateTime.MinValue; }
         }
 
-        private void StoreResult(StationSlotViewModel slot, string recipeId, StationRunSummary result)
+        private void StoreResult(StationSlotViewModel slot, string recipeId, StationRunSummary result,
+            bool updateOverviewPreview = false)
         {
             _multiStationResults[(recipeId, slot.Number)] = result;
             int retestCount = result.Results.Count(row => row.IsRetest);
             slot.ApplyBatchResult(result.Ok, result.Ng, result.Status, result.Details, retestCount);
+            if (updateOverviewPreview)
+            {
+                string? latestImage = result.Results.LastOrDefault(row => File.Exists(row.FilePath))?.FilePath;
+                if (latestImage != null && !string.IsNullOrWhiteSpace(latestImage))
+                    UpdateFullImageModeOverviewPreview(recipeId, slot.Number, latestImage);
+            }
             // 使用者測試期間可能切入單站頁再返回，總覽集合會重建。
             // 結果同時同步目前畫面上的卡片，避免看板顯示舊狀態。
             if (CurrentRecipe?.Id == recipeId)
@@ -359,6 +373,15 @@ namespace LumasharpChecker.viewmodel
                 if (visible != null && !ReferenceEquals(visible, slot))
                     visible.ApplyBatchResult(result.Ok, result.Ng, result.Status, result.Details, retestCount);
             }
+        }
+
+        internal void UpdateFullImageModeOverviewPreview(string recipeId, int stationNumber, string imagePath)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath)) return;
+            _overviewFullImagePreviewPaths[(recipeId, stationNumber)] = imagePath;
+            if (CurrentRecipe?.Id != recipeId) return;
+            StationSlots.FirstOrDefault(slot => slot.Number == stationNumber)
+                ?.UpdateFullImageModePreview(imagePath);
         }
 
         private void RefreshCurrentStationBatchDisplay(IReadOnlyCollection<StationSlotViewModel> selected, string recipeId)

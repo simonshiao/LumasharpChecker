@@ -1,4 +1,4 @@
-﻿# 訓練圖庫辨識檢查
+# 訓練圖庫辨識檢查
 
 .NET 10 獨立檢查，連結正式 TrainingImageDiscovery，不啟動主程式或寫入配方。測試 fixture 為專用 artifacts 目錄內的空白假圖片檔，只檢查檔名／目錄辨識，不做影像解碼。
 

@@ -87,6 +87,17 @@
                                 <TextBlock Text="刪除"/>
                             </StackPanel>
                         </Button>
+                        <Separator Margin="4,12,4,8"/>
+                        <TextBlock Text="進階維護" Foreground="{StaticResource Muted}" FontSize="11"
+                                   Margin="12,0,0,4"/>
+                        <Button Style="{StaticResource RecipeSidebarAction}" Click="CleanupRecipes_Click"
+                                AutomationProperties.Name="清理配方"
+                                ToolTip="勾選多份配方移至可復原保留區，不影響外部圖庫或原廠來源">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="&#xE74D;" FontFamily="Segoe MDL2 Assets" Margin="0,0,10,0"/>
+                                <TextBlock Text="清理配方…"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
 
                 </DockPanel>

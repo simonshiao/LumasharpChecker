@@ -18,8 +18,19 @@ public sealed class StationSlotViewModel : ObservableObject
         : Directory.Exists(OkPath) ? "OK 圖庫 · 可用" : "OK 圖庫 · 目錄不存在";
     public string NgStatus => string.IsNullOrWhiteSpace(NgPath) ? "NG 圖庫 · 未設定"
         : Directory.Exists(NgPath) ? "NG 圖庫 · 可用" : "NG 圖庫 · 目錄不存在";
-    public BitmapImage? PreviewImage { get; }
-    public string PreviewLabel { get; }
+    private BitmapImage? _previewImage;
+    public BitmapImage? PreviewImage
+    {
+        get => _previewImage;
+        private set => SetProperty(ref _previewImage, value);
+    }
+
+    private string _previewLabel = string.Empty;
+    public string PreviewLabel
+    {
+        get => _previewLabel;
+        private set => SetProperty(ref _previewLabel, value);
+    }
     public string AiModelStatus { get; }
     public string AiModelPathHint { get; }
     private bool _includeInBatch = true;
@@ -160,7 +171,7 @@ public sealed class StationSlotViewModel : ObservableObject
         string[]? vendorAiModels = null, int recentImageCount = 1,
         Func<int, int>? saveRecentImageCount = null, string recentImageSource = "ALL",
         Func<string, string>? saveRecentImageSource = null, string? previewOnlyPath = null,
-        string? allDatabasePath = null)
+        string? allDatabasePath = null, string? latestPreviewPath = null)
     {
         Number = number;
         _isConfigured = isConfigured;
@@ -180,7 +191,9 @@ public sealed class StationSlotViewModel : ObservableObject
             : "原廠 AI 模型 · 未找到";
         AiModelPathHint = vendorAiModels == null ? string.Empty : string.Join(Environment.NewLine, vendorAiModels);
         // 只解碼總覽所需的縮圖，避免一次載入八張高解析度原圖。
-        string? previewPath = patternPath;
+        string? previewPath = latestPreviewPath;
+        bool isLatestPreview = !string.IsNullOrWhiteSpace(previewPath) && File.Exists(previewPath);
+        if (!isLatestPreview) previewPath = patternPath;
         if (string.IsNullOrWhiteSpace(previewPath) || !File.Exists(previewPath))
         {
             previewPath = Directory.Exists(OkPath)
@@ -207,26 +220,39 @@ public sealed class StationSlotViewModel : ObservableObject
             previewPath = previewOnlyPath;
             isPreviewOnly = true;
         }
-        PreviewLabel = IsConfigured ? "檢測基準圖"
+        PreviewLabel = isLatestPreview ? "無定位最新測試圖"
+            : IsConfigured ? "檢測基準圖"
             : isPreviewOnly ? "預覽圖 · 未校準" : "圖庫樣本 · 未校準";
         if (!string.IsNullOrWhiteSpace(previewPath) && File.Exists(previewPath))
         {
             try
             {
-                var image = new BitmapImage();
-                image.BeginInit();
-                image.CacheOption = BitmapCacheOption.OnLoad;
-                image.DecodePixelWidth = 240;
-                image.UriSource = new Uri(Path.GetFullPath(previewPath));
-                image.EndInit();
-                image.Freeze();
-                PreviewImage = image;
+                PreviewImage = LoadPreview(previewPath);
             }
             catch (Exception)
             {
                 // 無法讀取縮圖時不影響 Recipe 或單站檢測。
             }
         }
+    }
+
+    public void UpdateFullImageModePreview(string imagePath)
+    {
+        if (string.IsNullOrWhiteSpace(imagePath) || !File.Exists(imagePath)) return;
+        try
+        {
+            PreviewImage = LoadPreview(imagePath);
+            PreviewLabel = "無定位最新測試圖";
+        }
+        catch (Exception)
+        {
+            // A preview failure must not affect an already completed inspection.
+        }
+    }
+
+    private static BitmapImage LoadPreview(string imagePath)
+    {
+        return InMemoryImageLoader.Load(imagePath, 240);
     }
 
     private static bool IsPreviewImage(string path)
